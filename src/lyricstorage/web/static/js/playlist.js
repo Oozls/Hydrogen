@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
-import { confirmDialog } from "./dialog.js";
+import { confirmDialog, promptDialog, alertDialog } from "./dialog.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -9,10 +9,11 @@ function fmtDuration(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-const GLOBAL_NAME = "기본 플레이리스트";
+const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
 
 export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) {
   const selectEl = document.getElementById("playlist-select");
+  const sortSelect = document.getElementById("playlist-sort");
   const newBtn = document.getElementById("btn-new-playlist");
   const deleteBtn = document.getElementById("btn-delete-playlist");
   const addFileBtn = document.getElementById("btn-add-file");
@@ -29,18 +30,15 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   const pickerOk = document.getElementById("library-picker-ok");
   const pickerCancel = document.getElementById("library-picker-cancel");
 
-  let currentPlaylist = bootstrap.current_playlist;
+  let currentPlaylist = bootstrap.current_playlist || EMPTY_PLAYLIST;
   let playlistNames = bootstrap.playlist_names.slice();
   let selectedIds = new Set();
   let lastClickedIndex = null;
   let sortable = null;
+  let sortMode = "default";
 
   function updateToolbarMode() {
-    const isGlobal = currentPlaylist.is_global;
-    addFileBtn.style.display = isGlobal ? "" : "none";
-    addFolderBtn.style.display = isGlobal ? "" : "none";
-    addFromLibraryBtn.style.display = isGlobal ? "none" : "";
-    deleteBtn.style.display = isGlobal ? "none" : "";
+    deleteBtn.style.display = currentPlaylist.name ? "" : "none";
   }
 
   function renderSelect() {
@@ -54,10 +52,32 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
     }
   }
 
+  function sortedTracks() {
+    const tracks = currentPlaylist.tracks.slice();
+    if (sortMode === "title") {
+      tracks.sort((a, b) => (a.title || "").localeCompare(b.title || "", "ko"));
+    } else if (sortMode === "artist") {
+      tracks.sort((a, b) => (a.artist || "").localeCompare(b.artist || "", "ko"));
+    } else if (sortMode === "duration") {
+      tracks.sort((a, b) => (a.duration_ms || 0) - (b.duration_ms || 0));
+    }
+    return tracks;
+  }
+
   function renderList() {
     listEl.innerHTML = "";
+
+    if (!currentPlaylist.name) {
+      const empty = document.createElement("div");
+      empty.className = "playlist-empty-state";
+      empty.textContent = "플레이리스트를 선택하거나 새로 만들어보세요.";
+      listEl.appendChild(empty);
+      return;
+    }
+
     const playingTrackId = player.currentTrack ? player.currentTrack.track_id : null;
-    currentPlaylist.tracks.forEach((track, index) => {
+    sortedTracks().forEach((track) => {
+      const index = currentPlaylist.tracks.indexOf(track);
       const li = document.createElement("li");
       li.className = "playlist-row";
       li.dataset.trackId = track.track_id;
@@ -67,9 +87,18 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
-      let text = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
-      if (track.artist) text += `  ·  ${track.artist}`;
-      label.textContent = text;
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "playlist-row-title";
+      titleSpan.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
+      label.appendChild(titleSpan);
+
+      if (track.artist) {
+        const artistSpan = document.createElement("span");
+        artistSpan.className = "playlist-row-artist";
+        artistSpan.textContent = track.artist;
+        label.appendChild(artistSpan);
+      }
       li.appendChild(label);
 
       if (track.has_lyrics) {
@@ -119,22 +148,29 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
     if (sortable) sortable.destroy();
     sortable = window.Sortable.create(listEl, {
       animation: 150,
+      disabled: sortMode !== "default",
       onEnd: async (evt) => {
         if (evt.oldIndex === evt.newIndex) return;
         try {
           currentPlaylist = await api.reorderPlaylist(currentPlaylist.name, evt.oldIndex, evt.newIndex);
           player.syncTracks(currentPlaylist);
         } catch (err) {
-          alert(err.message);
+          await alertDialog(err.message);
         }
         renderList();
       },
     });
   }
 
+  sortSelect.addEventListener("change", () => {
+    sortMode = sortSelect.value;
+    if (sortable) sortable.option("disabled", sortMode !== "default");
+    renderList();
+  });
+
   async function refreshPlaylistNames() {
     const items = await api.listPlaylists();
-    playlistNames = items.map((p) => p.name);
+    playlistNames = items.filter((p) => !p.is_global).map((p) => p.name);
     renderSelect();
   }
 
@@ -150,7 +186,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   selectEl.addEventListener("change", () => loadPlaylist(selectEl.value));
 
   newBtn.addEventListener("click", async () => {
-    const name = window.prompt("새 플레이리스트 이름:");
+    const name = await promptDialog("새 플레이리스트 이름:");
     if (!name || !name.trim()) return;
     try {
       currentPlaylist = await api.createPlaylist(name.trim());
@@ -161,11 +197,12 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
       renderList();
       player.setPlaylist(currentPlaylist);
     } catch (err) {
-      alert(err.message);
+      await alertDialog(err.message);
     }
   });
 
   deleteBtn.addEventListener("click", async () => {
+    if (!currentPlaylist.name) return;
     if (
       !(await confirmDialog(
         `'${currentPlaylist.name}' 플레이리스트를 삭제할까요? (라이브러리의 곡 파일은 유지됩니다)`
@@ -175,10 +212,18 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
     try {
       await api.deletePlaylist(currentPlaylist.name);
       await refreshPlaylistNames();
-      const fallback = playlistNames.includes(GLOBAL_NAME) ? GLOBAL_NAME : playlistNames[0];
+      const fallback = playlistNames[0];
       if (fallback) await loadPlaylist(fallback);
+      else {
+        currentPlaylist = EMPTY_PLAYLIST;
+        selectedIds.clear();
+        updateToolbarMode();
+        renderSelect();
+        renderList();
+        player.setPlaylist(currentPlaylist);
+      }
     } catch (err) {
-      alert(err.message);
+      await alertDialog(err.message);
     }
   });
 
@@ -188,18 +233,20 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   async function handleUpload(fileList) {
     if (!fileList || !fileList.length) return;
     try {
-      const result = await api.uploadFiles(fileList);
+      const result = await api.uploadFiles(fileList, currentPlaylist.name);
       if (result.skipped && result.skipped.length) {
-        alert(
+        await alertDialog(
           "다음 파일을 건너뛰었습니다:\n" +
             result.skipped.map((s) => `${s.filename} (${s.reason})`).join("\n")
         );
       }
-      currentPlaylist = await api.getPlaylist(currentPlaylist.name);
-      renderList();
-      player.syncTracks(currentPlaylist);
+      if (currentPlaylist.name) {
+        currentPlaylist = await api.getPlaylist(currentPlaylist.name);
+        renderList();
+        player.syncTracks(currentPlaylist);
+      }
     } catch (err) {
-      alert(err.message);
+      await alertDialog(err.message);
     }
   }
 
@@ -213,7 +260,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   });
 
   removeBtn.addEventListener("click", async () => {
-    if (!selectedIds.size) return;
+    if (!currentPlaylist.name || !selectedIds.size) return;
     if (!(await confirmDialog(`${selectedIds.size}곡을 삭제할까요?`))) return;
     try {
       currentPlaylist = await api.removeTracks(currentPlaylist.name, Array.from(selectedIds));
@@ -221,21 +268,25 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
       renderList();
       player.syncTracks(currentPlaylist);
     } catch (err) {
-      alert(err.message);
+      await alertDialog(err.message);
     }
   });
 
-  // -- 기본 플레이리스트에서 추가 모달 ---------------------------------------
+  // -- 라이브러리에서 추가 모달 -----------------------------------------
   let pickerCandidates = [];
   let pickerChecked = new Set();
 
   addFromLibraryBtn.addEventListener("click", async () => {
+    if (!currentPlaylist.name) {
+      await alertDialog("먼저 플레이리스트를 만들거나 선택하세요.");
+      return;
+    }
     const library = await api.getLibrary();
     const existingIds = new Set(currentPlaylist.tracks.map((t) => t.track_id));
     pickerCandidates = library.tracks.filter((t) => !existingIds.has(t.track_id));
     pickerChecked = new Set();
     if (!pickerCandidates.length) {
-      alert("기본 플레이리스트에 추가할 수 있는 곡이 없습니다.");
+      await alertDialog("라이브러리에 추가할 수 있는 곡이 없습니다.");
       return;
     }
     pickerSearch.value = "";
@@ -274,11 +325,14 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
       renderList();
       player.syncTracks(currentPlaylist);
     } catch (err) {
-      alert(err.message);
+      await alertDialog(err.message);
     }
   });
 
-  player.addEventListener("trackchange", () => renderList());
+  player.addEventListener("trackchange", () => {
+    selectedIds.clear();
+    renderList();
+  });
 
   updateToolbarMode();
   renderSelect();
@@ -302,6 +356,19 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
         track.album = updated.album;
         renderList();
       }
+    },
+    refreshTracksInfo(updatedTracks) {
+      let changed = false;
+      for (const updated of updatedTracks) {
+        const track = currentPlaylist.tracks.find((t) => t.track_id === updated.track_id);
+        if (track) {
+          track.title = updated.title;
+          track.artist = updated.artist;
+          track.album = updated.album;
+          changed = true;
+        }
+      }
+      if (changed) renderList();
     },
     getCurrentPlaylist: () => currentPlaylist,
   };

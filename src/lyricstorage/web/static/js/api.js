@@ -40,9 +40,10 @@ export const api = {
       json: { track_ids: trackIds },
     }),
   getLibrary: () => request("GET", "/api/library"),
-  uploadFiles: (fileList) => {
+  uploadFiles: (fileList, playlistName) => {
     const formData = new FormData();
     for (const file of fileList) formData.append("files[]", file);
+    if (playlistName) formData.append("playlist", playlistName);
     return request("POST", "/api/library/upload", { formData });
   },
   getSettings: () => request("GET", "/api/settings"),
@@ -59,4 +60,18 @@ export const api = {
   },
   audioUrl: (trackId) => `/api/tracks/${trackId}/audio`,
   artUrl: (trackId) => `/api/tracks/${trackId}/art`,
+  logPlay: (trackId, title, artist, album, listenedMs) =>
+    request("POST", "/api/stats/plays", {
+      json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },
+    }),
+  getTopStats: (period, group, offset) =>
+    request("GET", `/api/stats/top?period=${period}&group=${group}&offset=${offset}`),
+  updateAlbum: (album, artist, newAlbum, artFile) => {
+    const formData = new FormData();
+    formData.append("album", album);
+    formData.append("artist", artist);
+    formData.append("new_album", newAlbum);
+    if (artFile) formData.append("art", artFile);
+    return request("POST", "/api/albums/update", { formData });
+  },
 };

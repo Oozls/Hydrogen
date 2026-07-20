@@ -15,7 +15,7 @@ from mutagen.wave import WAVE
 
 from lyricstorage import lyrics_io, storage
 
-GLOBAL_PLAYLIST_NAME = "기본 플레이리스트"
+GLOBAL_PLAYLIST_NAME = "글로벌 플레이리스트"
 SUPPORTED_EXTENSIONS = (".mp3", ".wav", ".m4a")
 
 

@@ -114,6 +114,7 @@ export class PlayerEngine extends EventTarget {
 
   setSeeking(seeking) {
     this._seeking = seeking;
+    this._emit("seeking", { seeking });
   }
 
   setVolume(v) {

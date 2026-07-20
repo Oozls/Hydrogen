@@ -23,6 +23,13 @@
         <div id="now-playing-title" class="track-title">재생 중인 곡 없음</div>
         <div id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</div>
       </div>
+      <div class="spacer"></div>
+      <button id="btn-browse" class="icon-btn" title="라이브러리 브라우즈">
+        <span class="icon" style="--icon: url(/static/icons/disc.svg)"></span>
+      </button>
+      <button id="btn-stats" class="icon-btn" title="재생 통계">
+        <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
+      </button>
     </header>
 
     <main class="main-columns">
@@ -35,20 +42,26 @@
         </div>
         <div class="panel-toolbar-row">
           <span class="section-title">재생목록</span>
+          <select id="playlist-sort" title="정렬">
+            <option value="default">기본순</option>
+            <option value="title">제목순</option>
+            <option value="artist">아티스트순</option>
+            <option value="duration">길이순</option>
+          </select>
           <div class="spacer"></div>
           <button id="btn-add-file" class="icon-btn" title="파일 추가">
-            <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
+            <span class="icon" style="--icon: url(/static/icons/upload.svg)"></span>
           </button>
           <button id="btn-add-folder" class="icon-btn" title="폴더 추가">
             <span class="icon" style="--icon: url(/static/icons/folder-plus.svg)"></span>
           </button>
-          <button id="btn-add-from-library" class="icon-btn" title="기본 플레이리스트에서 추가" style="display: none">
-            <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
+          <button id="btn-add-from-library" class="icon-btn" title="라이브러리에서 추가">
+            <span class="icon" style="--icon: url(/static/icons/music.svg)"></span>
           </button>
           <button id="btn-remove-selected" class="icon-btn" title="선택 삭제">
             <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
           </button>
-          <button id="btn-delete-playlist" class="icon-btn" title="플레이리스트 삭제" style="display: none">
+          <button id="btn-delete-playlist" class="icon-btn" title="플레이리스트 삭제">
             <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
           </button>
         </div>
@@ -133,8 +146,61 @@
     <audio id="audio-element" preload="metadata"></audio>
   </div>
 
+  <div id="stats-overlay" class="overlay-fullscreen" hidden>
+    <div class="overlay-header">
+      <span class="section-title">재생 통계</span>
+      <button id="btn-stats-close" class="icon-btn" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <div class="stats-controls-row">
+      <div class="tabs" id="stats-period-tabs">
+        <button class="tab-btn active" data-period="day" type="button">일간</button>
+        <button class="tab-btn" data-period="week" type="button">주간</button>
+        <button class="tab-btn" data-period="month" type="button">월간</button>
+      </div>
+      <div class="stats-period-nav">
+        <button id="btn-stats-prev" class="icon-btn" title="이전 기간">
+          <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+        </button>
+        <span id="stats-period-label" class="stats-period-label"></span>
+        <button id="btn-stats-next" class="icon-btn" title="다음 기간">
+          <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+        </button>
+      </div>
+      <div class="tabs" id="stats-group-tabs">
+        <button class="tab-btn active" data-group="track" type="button">곡</button>
+        <button class="tab-btn" data-group="artist" type="button">아티스트</button>
+        <button class="tab-btn" data-group="album" type="button">앨범</button>
+      </div>
+    </div>
+    <div id="stats-list" class="card-grid"></div>
+  </div>
+
+  <div id="browse-overlay" class="overlay-fullscreen" hidden>
+    <div class="overlay-header">
+      <span class="section-title">라이브러리 브라우즈</span>
+      <button id="btn-browse-close" class="icon-btn" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <div class="stats-controls-row">
+      <div class="tabs" id="browse-tabs">
+        <button class="tab-btn active" data-mode="song" type="button">곡</button>
+        <button class="tab-btn" data-mode="album" type="button">앨범</button>
+      </div>
+      <input type="text" id="browse-search" placeholder="검색..." />
+    </div>
+    <div id="browse-songs-panel" class="tab-panel active">
+      <ul id="browse-songs-list" class="playlist-list"></ul>
+    </div>
+    <div id="browse-albums-panel" class="tab-panel">
+      <div id="browse-albums-list" class="card-grid"></div>
+    </div>
+  </div>
+
   <dialog id="library-picker-dialog" class="library-picker-dialog">
-    <h3>기본 플레이리스트에서 추가</h3>
+    <h3>라이브러리에서 추가</h3>
     <input type="text" id="library-picker-search" placeholder="검색..." />
     <div id="library-picker-list" class="library-picker-list"></div>
     <div class="dialog-actions">
@@ -145,6 +211,7 @@
 
   <dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">
     <p id="confirm-dialog-message"></p>
+    <input type="text" id="confirm-dialog-input" class="dialog-input" hidden />
     <div class="dialog-actions">
       <button id="confirm-dialog-cancel" type="button">취소</button>
       <button id="confirm-dialog-ok" class="primary" type="button">확인</button>
@@ -161,12 +228,48 @@
       <button id="track-info-art-btn" type="button">표지 이미지 선택</button>
       <input type="file" id="track-info-art-input" accept="image/png,image/jpeg" hidden />
     </div>
-    <label class="track-info-field">제목<input type="text" id="track-info-title" /></label>
-    <label class="track-info-field">아티스트<input type="text" id="track-info-artist" /></label>
-    <label class="track-info-field">앨범<input type="text" id="track-info-album" /></label>
+    <label class="track-info-field">제목
+      <input type="text" id="track-info-title" autocomplete="off" />
+      <ul class="autocomplete-list" id="track-info-title-suggestions" hidden></ul>
+    </label>
+    <label class="track-info-field">아티스트
+      <input type="text" id="track-info-artist" autocomplete="off" />
+      <ul class="autocomplete-list" id="track-info-artist-suggestions" hidden></ul>
+    </label>
+    <label class="track-info-field">앨범
+      <input type="text" id="track-info-album" autocomplete="off" />
+      <ul class="autocomplete-list" id="track-info-album-suggestions" hidden></ul>
+    </label>
     <div class="dialog-actions">
       <button id="track-info-cancel" type="button">취소</button>
       <button id="track-info-save" class="primary" type="button">저장</button>
+    </div>
+  </dialog>
+
+  <dialog id="album-info-dialog" class="library-picker-dialog track-info-dialog">
+    <h3>앨범 정보 수정</h3>
+    <div class="track-info-art-row">
+      <div class="track-info-art-wrap">
+        <img id="album-info-art-preview" alt="" style="display: none" />
+        <span id="album-info-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
+      </div>
+      <button id="album-info-art-btn" type="button">표지 이미지 선택</button>
+      <input type="file" id="album-info-art-input" accept="image/png,image/jpeg" hidden />
+    </div>
+    <label class="track-info-field">앨범명
+      <input type="text" id="album-info-album" autocomplete="off" />
+    </label>
+    <div class="track-info-field">
+      아티스트
+      <div id="album-info-artist" class="album-info-readonly"></div>
+    </div>
+    <div class="track-info-field">
+      수록곡
+      <div id="album-info-track-list" class="album-info-track-list"></div>
+    </div>
+    <div class="dialog-actions">
+      <button id="album-info-cancel" type="button">취소</button>
+      <button id="album-info-save" class="primary" type="button">저장</button>
     </div>
   </dialog>
 

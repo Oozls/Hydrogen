@@ -7,6 +7,8 @@ from typing import Optional
 
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 
+_OLD_GLOBAL_PLAYLIST_NAME = "기본 플레이리스트"
+
 
 def find_playlist_path(name: str) -> Optional[Path]:
     for saved_name, path in PlaylistModel.list_saved_names():
@@ -22,7 +24,21 @@ def load_playlist(name: str) -> Optional[PlaylistModel]:
     return PlaylistModel.load(path)
 
 
+def _migrate_old_global_name() -> None:
+    """예전 이름("기본 플레이리스트")으로 저장된 파일이 있으면 새 이름으로 옮긴다."""
+    if find_playlist_path(GLOBAL_PLAYLIST_NAME) is not None:
+        return
+    old_path = find_playlist_path(_OLD_GLOBAL_PLAYLIST_NAME)
+    if old_path is None:
+        return
+    playlist = PlaylistModel.load(old_path)
+    playlist.name = GLOBAL_PLAYLIST_NAME
+    playlist.save()
+    old_path.unlink(missing_ok=True)
+
+
 def load_or_create_global() -> PlaylistModel:
+    _migrate_old_global_name()
     playlist = load_playlist(GLOBAL_PLAYLIST_NAME)
     if playlist is None:
         playlist = PlaylistModel(GLOBAL_PLAYLIST_NAME)

@@ -38,6 +38,27 @@ def settings_path() -> Path:
     return app_data_dir() / "settings.json"
 
 
+def play_history_path() -> Path:
+    return app_data_dir() / "play_history.json"
+
+
+def load_play_history() -> list[dict[str, Any]]:
+    path = play_history_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_play_history(history: list[dict[str, Any]]) -> None:
+    play_history_path().write_text(
+        json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
 def load_settings() -> dict[str, Any]:
     path = settings_path()
     if not path.exists():

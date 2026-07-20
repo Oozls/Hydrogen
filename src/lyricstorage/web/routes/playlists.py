@@ -37,7 +37,7 @@ def create_playlist():
     if not name:
         return jsonify({"error": "이름을 입력하세요."}), 400
     if name == GLOBAL_PLAYLIST_NAME:
-        return jsonify({"error": f"'{GLOBAL_PLAYLIST_NAME}'은(는) 예약된 이름입니다."}), 400
+        return jsonify({"error": "해당 이름은 예약되어 있습니다."}), 400
     if playlist_repo.find_playlist_path(name) is not None:
         return jsonify({"error": "이미 존재하는 이름입니다."}), 400
     playlist = PlaylistModel(name)
@@ -56,7 +56,7 @@ def get_playlist(name: str):
 @bp.delete("/<name>")
 def delete_playlist(name: str):
     if name == GLOBAL_PLAYLIST_NAME:
-        return jsonify({"error": "기본 플레이리스트는 삭제할 수 없습니다."}), 403
+        return jsonify({"error": "라이브러리는 삭제할 수 없습니다."}), 403
     path = playlist_repo.find_playlist_path(name)
     if path is None:
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
@@ -100,7 +100,7 @@ def remove_tracks(name: str):
 @bp.post("/<name>/tracks")
 def add_tracks_from_library(name: str):
     if name == GLOBAL_PLAYLIST_NAME:
-        return jsonify({"error": "기본 플레이리스트에는 업로드로만 추가할 수 있습니다."}), 403
+        return jsonify({"error": "라이브러리에는 이 방법으로 추가할 수 없습니다."}), 403
     playlist = playlist_repo.load_playlist(name)
     if playlist is None:
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404

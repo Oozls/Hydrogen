@@ -255,6 +255,15 @@ select#playlist-select {
   padding: 5px 8px;
 }
 
+select#playlist-sort {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 /* -- 재생목록 -------------------------------------------------------------- */
 .playlist-list {
   list-style: none;
@@ -283,12 +292,26 @@ select#playlist-select {
 .playlist-row.playing .playlist-row-label {
   color: var(--accent);
 }
+.playlist-row.playing .playlist-row-artist {
+  color: var(--accent-muted);
+}
 .playlist-row-label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.playlist-row-title {
+  color: inherit;
+}
+.playlist-row-artist {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.playlist-row-artist::before {
+  content: "  ·  ";
+  color: var(--text-muted);
 }
 .playlist-row-duration {
   color: var(--text-secondary);
@@ -297,6 +320,11 @@ select#playlist-select {
 }
 .playlist-row-more {
   flex-shrink: 0;
+}
+.playlist-empty-state {
+  color: var(--text-muted);
+  padding: 24px 8px;
+  text-align: center;
 }
 
 /* -- 탭 -------------------------------------------------------------- */
@@ -547,6 +575,7 @@ input[type="range"]:hover::-moz-range-thumb {
 }
 .confirm-dialog p {
   margin: 0;
+  white-space: pre-line;
 }
 .track-info-dialog {
   width: 420px;
@@ -586,6 +615,7 @@ input[type="range"]:hover::-moz-range-thumb {
   background: var(--bg-elevated);
 }
 .track-info-field {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -593,7 +623,26 @@ input[type="range"]:hover::-moz-range-thumb {
   font-size: 12px;
   color: var(--text-secondary);
 }
-.track-info-field input {
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 2px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 5;
+}
+.autocomplete-list[hidden] {
+  display: none;
+}
+.track-info-field input,
+.dialog-input {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -601,9 +650,15 @@ input[type="range"]:hover::-moz-range-thumb {
   font-size: 15px;
   color: var(--text-primary);
 }
-.track-info-field input:focus {
+.track-info-field input:focus,
+.dialog-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+.dialog-input {
+  width: 100%;
+  margin-top: 8px;
+  box-sizing: border-box;
 }
 #library-picker-search {
   width: 100%;
@@ -627,9 +682,14 @@ input[type="range"]:hover::-moz-range-thumb {
   padding: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.picker-row:hover {
+.picker-row:hover,
+.picker-row.highlighted {
   background: var(--bg-elevated);
+  color: var(--accent);
 }
 .dialog-actions {
   display: flex;
@@ -652,6 +712,155 @@ input[type="range"]:hover::-moz-range-thumb {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--icon-on-accent);
+}
+
+/* -- 전체화면 오버레이(재생 통계 / 브라우즈 공용) ------------------------ */
+.overlay-fullscreen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-base);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+  gap: 12px;
+}
+.overlay-fullscreen[hidden] {
+  display: none;
+}
+.overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stats-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.stats-period-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stats-period-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  min-width: 140px;
+  text-align: center;
+}
+.stats-empty {
+  color: var(--text-muted);
+  padding: 16px;
+  text-align: center;
+}
+
+/* -- 카드형 그리드(재생 통계 / 앨범 브라우즈 공용) ----------------------- */
+.card-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+.media-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.media-card-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 6px;
+  margin: -6px;
+}
+.media-card-clickable:hover {
+  background: var(--bg-elevated);
+}
+.media-card-art-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-card-rank {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.media-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-card-artist {
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-card-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* -- 브라우즈 --------------------------------------------------------- */
+#browse-search {
+  flex: 1;
+  min-width: 160px;
+  max-width: 320px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+#browse-songs-panel,
+#browse-albums-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* -- 앨범 정보 수정 ----------------------------------------------------- */
+.album-info-readonly {
+  color: var(--text-secondary);
+  padding: 6px 0;
+}
+.album-info-track-list {
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+}
+.album-info-track-row {
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* -- 반응형: 좁은 화면에서는 재생목록/가사 패널을 세로로 쌓는다 ------------ */
