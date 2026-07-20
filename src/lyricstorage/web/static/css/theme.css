@@ -1,0 +1,676 @@
+:root {
+  color-scheme: dark;
+  --accent: #7c9cff;
+  --accent-muted: #5b6ea8;
+  --bg-base: #15171f;
+  --bg-panel: #1b1e29;
+  --bg-elevated: #242835;
+  --border: #2e3342;
+  --text-primary: #e8eaf2;
+  --text-secondary: #8b90a3;
+  --text-muted: #5c6076;
+  --icon-on-accent: #0f1117;
+  --font-sans: "Pretendard", -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* -- 커스텀 스크롤바 (Qt 커스텀 스크롤바 스타일과 동일한 얇은 스타일) -------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  min-height: 28px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-muted);
+  background-clip: content-box;
+}
+
+/* -- 아이콘: Feather SVG(stroke=currentColor)를 CSS mask로 재색상화 -------- */
+.icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  -webkit-mask-image: var(--icon);
+  mask-image: var(--icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  flex-shrink: 0;
+}
+.icon-lg {
+  width: 24px;
+  height: 24px;
+}
+.icon-sm {
+  width: 12px;
+  height: 12px;
+}
+.icon.accent {
+  color: var(--accent);
+}
+
+/* -- 레이아웃 -------------------------------------------------------------- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  gap: 10px;
+  padding: 12px;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.now-playing-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+
+.now-playing-art-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+#now-playing-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.now-playing-text {
+  min-width: 0;
+}
+
+.track-title {
+  font-weight: 600;
+  font-size: 19px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-artist {
+  color: var(--text-secondary);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-columns {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+}
+
+.playlist-panel,
+.lyrics-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-width: 0;
+  min-height: 0;
+  gap: 8px;
+}
+
+.panel-header-row,
+.panel-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-title {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* -- 버튼 -------------------------------------------------------------- */
+.icon-btn {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+  position: relative;
+}
+.icon-btn:hover {
+  background: var(--bg-elevated);
+}
+.icon-btn:active {
+  background: var(--border);
+}
+.icon-btn.toggle-btn.active {
+  background: var(--accent);
+  color: var(--icon-on-accent);
+}
+
+.play-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--accent);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--icon-on-accent);
+  padding: 0;
+}
+.play-btn:hover {
+  background: var(--accent-muted);
+}
+.play-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.repeat-badge {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+select#playlist-select {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+/* -- 재생목록 -------------------------------------------------------------- */
+.playlist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.playlist-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin: 1px 2px;
+  cursor: pointer;
+}
+.playlist-row:hover {
+  background: #1f2330;
+}
+.playlist-row.selected {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+.playlist-row.playing .playlist-row-label {
+  color: var(--accent);
+}
+.playlist-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.playlist-row-duration {
+  color: var(--text-secondary);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.playlist-row-more {
+  flex-shrink: 0;
+}
+
+/* -- 탭 -------------------------------------------------------------- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.tab-btn.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.tab-panel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.tab-panel.active {
+  display: flex;
+}
+
+/* -- 가사 보기 -------------------------------------------------------------- */
+.lyrics-view-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.lyrics-line {
+  padding: 4px;
+  font-size: 15px;
+  color: var(--text-muted);
+  transition: color 0.15s, font-size 0.15s;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.lyrics-line:hover {
+  background: var(--bg-elevated);
+}
+.lyrics-line.active {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.lyrics-line .lyric-secondary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 0.15s, font-size 0.15s;
+}
+.lyrics-line.active .lyric-secondary {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.lyrics-placeholder {
+  color: var(--text-muted);
+  padding: 8px;
+}
+
+/* -- 가사 편집 -------------------------------------------------------------- */
+.lyrics-edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lyrics-edit-scroll {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+table.lyrics-edit-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lyrics-edit-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+.lyrics-edit-table th.col-time {
+  width: 140px;
+}
+.lyrics-edit-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.lyrics-edit-table tr.selected td {
+  background: var(--bg-elevated);
+}
+.lyrics-time-input {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.lyrics-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.lyrics-text-input {
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  line-height: 1.4;
+}
+.lyrics-text-input:focus {
+  outline: none;
+}
+
+/* -- 트랜스포트 바 -------------------------------------------------------------- */
+.transport-bar {
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.seek-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.time-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  min-width: 38px;
+  text-align: center;
+}
+.controls-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+}
+.controls-center {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.controls-volume {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* -- range 슬라이더 (seek/volume 공용) -------------------------------------- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]#volume-slider {
+  flex: none;
+  width: 100px;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--range-progress, 0%),
+    var(--border) var(--range-progress, 0%)
+  );
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--text-primary);
+  margin-top: -4px;
+  border: none;
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  background: var(--accent);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--range-progress, 0%),
+    var(--border) var(--range-progress, 0%)
+  );
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--text-primary);
+  border: none;
+}
+input[type="range"]:hover::-moz-range-thumb {
+  background: var(--accent);
+}
+
+/* -- 기본 플레이리스트에서 추가 모달 -------------------------------------- */
+.library-picker-dialog {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  width: 420px;
+  max-width: 90vw;
+}
+.library-picker-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+.library-picker-dialog h3 {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+}
+.confirm-dialog {
+  width: 360px;
+}
+.confirm-dialog p {
+  margin: 0;
+}
+.track-info-dialog {
+  width: 420px;
+}
+.track-info-art-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.track-info-art-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.track-info-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.track-info-art-row button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.track-info-art-row button:hover {
+  background: var(--bg-elevated);
+}
+.track-info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.track-info-field input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.track-info-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+#library-picker-search {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+.library-picker-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+}
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.picker-row:hover {
+  background: var(--bg-elevated);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.dialog-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.dialog-actions button:hover {
+  background: var(--bg-elevated);
+}
+.dialog-actions button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--icon-on-accent);
+}
+
+/* -- 반응형: 좁은 화면에서는 재생목록/가사 패널을 세로로 쌓는다 ------------ */
+@media (max-width: 768px) {
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+  }
+  .main-columns {
+    flex-direction: column;
+  }
+  .playlist-panel,
+  .lyrics-panel {
+    flex: none;
+    min-height: 420px;
+    max-height: 60vh;
+  }
+  .transport-bar {
+    position: sticky;
+    bottom: 12px;
+  }
+}

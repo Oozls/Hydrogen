@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lyric Storage</title>
+  <link
+    rel="stylesheet"
+    as="style"
+    crossorigin
+    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"
+  />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
+</head>
+<body>
+  <div class="app-shell">
+    <header id="now-playing-bar" class="panel now-playing-bar">
+      <div class="now-playing-art-wrap">
+        <img id="now-playing-art" alt="" style="display: none" />
+        <span id="now-playing-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
+      </div>
+      <div class="now-playing-text">
+        <div id="now-playing-title" class="track-title">재생 중인 곡 없음</div>
+        <div id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</div>
+      </div>
+    </header>
+
+    <main class="main-columns">
+      <section id="playlist-panel" class="panel playlist-panel">
+        <div class="panel-header-row">
+          <select id="playlist-select"></select>
+          <button id="btn-new-playlist" class="icon-btn" title="새 플레이리스트">
+            <span class="icon" style="--icon: url(/static/icons/list.svg)"></span>
+          </button>
+        </div>
+        <div class="panel-toolbar-row">
+          <span class="section-title">재생목록</span>
+          <div class="spacer"></div>
+          <button id="btn-add-file" class="icon-btn" title="파일 추가">
+            <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
+          </button>
+          <button id="btn-add-folder" class="icon-btn" title="폴더 추가">
+            <span class="icon" style="--icon: url(/static/icons/folder-plus.svg)"></span>
+          </button>
+          <button id="btn-add-from-library" class="icon-btn" title="기본 플레이리스트에서 추가" style="display: none">
+            <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
+          </button>
+          <button id="btn-remove-selected" class="icon-btn" title="선택 삭제">
+            <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
+          </button>
+          <button id="btn-delete-playlist" class="icon-btn" title="플레이리스트 삭제" style="display: none">
+            <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+          </button>
+        </div>
+        <input type="file" id="file-input" accept=".mp3,.wav,.m4a" multiple hidden />
+        <input type="file" id="folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
+        <ul id="playlist-list" class="playlist-list"></ul>
+      </section>
+
+      <section id="lyrics-panel" class="panel lyrics-panel">
+        <span class="section-title">가사</span>
+        <div class="tabs">
+          <button id="tab-lyrics-view-btn" class="tab-btn active" type="button">가사 보기</button>
+          <button id="tab-lyrics-edit-btn" class="tab-btn" type="button">가사 편집</button>
+        </div>
+
+        <div id="lyrics-view-panel" class="tab-panel active">
+          <ul id="lyrics-view-list" class="lyrics-view-list"></ul>
+        </div>
+
+        <div id="lyrics-edit-panel" class="tab-panel">
+          <div class="lyrics-edit-toolbar">
+            <button id="btn-lyrics-add-row" class="icon-btn" title="줄 추가">
+              <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
+            </button>
+            <button id="btn-lyrics-remove-row" class="icon-btn" title="선택한 줄 삭제">
+              <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
+            </button>
+            <div class="spacer"></div>
+            <button id="btn-lyrics-clear" class="icon-btn" title="가사 전체 지우기">
+              <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+            </button>
+          </div>
+          <div id="lyrics-edit-scroll" class="lyrics-edit-scroll">
+            <table class="lyrics-edit-table">
+              <thead>
+                <tr>
+                  <th class="col-time">시간 (분:초:밀리초)</th>
+                  <th>가사</th>
+                </tr>
+              </thead>
+              <tbody id="lyrics-edit-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer id="transport-bar" class="panel transport-bar">
+      <div class="seek-row">
+        <span id="elapsed-label" class="time-label">00:00</span>
+        <input type="range" id="seek-slider" min="0" max="0" value="0" />
+        <span id="duration-label" class="time-label">00:00</span>
+      </div>
+      <div class="controls-row">
+        <div class="controls-center">
+          <button id="btn-shuffle" class="icon-btn toggle-btn" title="셔플">
+            <span class="icon" style="--icon: url(/static/icons/shuffle.svg)"></span>
+          </button>
+          <button id="btn-prev" class="icon-btn" title="이전 곡">
+            <span class="icon" style="--icon: url(/static/icons/skip-back.svg)"></span>
+          </button>
+          <button id="btn-play-pause" class="play-btn" title="재생/일시정지">
+            <span class="icon" style="--icon: url(/static/icons/play.svg)"></span>
+          </button>
+          <button id="btn-next" class="icon-btn" title="다음 곡">
+            <span class="icon" style="--icon: url(/static/icons/skip-forward.svg)"></span>
+          </button>
+          <button id="btn-repeat" class="icon-btn toggle-btn" title="반복">
+            <span class="icon" style="--icon: url(/static/icons/repeat.svg)"></span>
+            <span id="repeat-badge" class="repeat-badge"></span>
+          </button>
+        </div>
+        <div class="controls-volume">
+          <button id="btn-mute" class="icon-btn" title="음소거">
+            <span class="icon" style="--icon: url(/static/icons/volume-2.svg)"></span>
+          </button>
+          <input type="range" id="volume-slider" min="0" max="100" value="80" />
+        </div>
+      </div>
+    </footer>
+
+    <audio id="audio-element" preload="metadata"></audio>
+  </div>
+
+  <dialog id="library-picker-dialog" class="library-picker-dialog">
+    <h3>기본 플레이리스트에서 추가</h3>
+    <input type="text" id="library-picker-search" placeholder="검색..." />
+    <div id="library-picker-list" class="library-picker-list"></div>
+    <div class="dialog-actions">
+      <button id="library-picker-cancel" type="button">취소</button>
+      <button id="library-picker-ok" class="primary" type="button">확인</button>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">
+    <p id="confirm-dialog-message"></p>
+    <div class="dialog-actions">
+      <button id="confirm-dialog-cancel" type="button">취소</button>
+      <button id="confirm-dialog-ok" class="primary" type="button">확인</button>
+    </div>
+  </dialog>
+
+  <dialog id="track-info-dialog" class="library-picker-dialog track-info-dialog">
+    <h3>곡 정보 수정</h3>
+    <div class="track-info-art-row">
+      <div class="track-info-art-wrap">
+        <img id="track-info-art-preview" alt="" style="display: none" />
+        <span id="track-info-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
+      </div>
+      <button id="track-info-art-btn" type="button">표지 이미지 선택</button>
+      <input type="file" id="track-info-art-input" accept="image/png,image/jpeg" hidden />
+    </div>
+    <label class="track-info-field">제목<input type="text" id="track-info-title" /></label>
+    <label class="track-info-field">아티스트<input type="text" id="track-info-artist" /></label>
+    <label class="track-info-field">앨범<input type="text" id="track-info-album" /></label>
+    <div class="dialog-actions">
+      <button id="track-info-cancel" type="button">취소</button>
+      <button id="track-info-save" class="primary" type="button">저장</button>
+    </div>
+  </dialog>
+
+  <script id="bootstrap-data" type="application/json">{{ bootstrap_json|safe }}</script>
+  <script src="{{ url_for('static', filename='vendor/sortable.min.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
