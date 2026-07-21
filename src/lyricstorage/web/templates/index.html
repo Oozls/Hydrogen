@@ -190,7 +190,17 @@
         <button class="tab-btn" data-mode="album" type="button">앨범</button>
       </div>
       <input type="text" id="browse-search" placeholder="검색..." />
+      <select id="browse-target-playlist" title="추가할 플레이리스트"></select>
+      <div class="spacer"></div>
+      <button id="btn-browse-add-file" class="icon-btn" title="새 음원 파일 등록">
+        <span class="icon" style="--icon: url(/static/icons/upload.svg)"></span>
+      </button>
+      <button id="btn-browse-add-folder" class="icon-btn" title="새 음원 폴더 등록">
+        <span class="icon" style="--icon: url(/static/icons/folder-plus.svg)"></span>
+      </button>
     </div>
+    <input type="file" id="browse-file-input" accept=".mp3,.wav,.m4a" multiple hidden />
+    <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
     <div id="browse-songs-panel" class="tab-panel active">
       <ul id="browse-songs-list" class="playlist-list"></ul>
     </div>

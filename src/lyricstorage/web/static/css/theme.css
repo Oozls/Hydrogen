@@ -11,6 +11,9 @@
   --text-muted: #5c6076;
   --icon-on-accent: #0f1117;
   --font-sans: "Pretendard", -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+  --transport-bar-height: 100px;
+  --transport-bar-gap: 10px;
+  --transport-bar-inset: 12px;
 }
 
 * {
@@ -98,6 +101,7 @@ textarea {
   height: 100vh;
   gap: 10px;
   padding: 12px;
+  padding-bottom: calc(var(--transport-bar-height) + var(--transport-bar-gap) + var(--transport-bar-inset));
 }
 
 .panel {
@@ -318,7 +322,8 @@ select#playlist-sort {
   font-size: 13px;
   flex-shrink: 0;
 }
-.playlist-row-more {
+.playlist-row-more,
+.playlist-row-add {
   flex-shrink: 0;
 }
 .playlist-empty-state {
@@ -462,7 +467,12 @@ table.lyrics-edit-table {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex-shrink: 0;
+  position: fixed;
+  left: var(--transport-bar-inset);
+  right: var(--transport-bar-inset);
+  bottom: var(--transport-bar-inset);
+  min-height: var(--transport-bar-height);
+  z-index: 10;
 }
 .seek-row {
   display: flex;
@@ -832,6 +842,13 @@ input[type="range"]:hover::-moz-range-thumb {
   border-radius: 6px;
   padding: 6px 8px;
 }
+#browse-target-playlist {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  min-width: 160px;
+}
 #browse-songs-panel,
 #browse-albums-panel {
   flex: 1;
@@ -877,9 +894,5 @@ input[type="range"]:hover::-moz-range-thumb {
     flex: none;
     min-height: 420px;
     max-height: 60vh;
-  }
-  .transport-bar {
-    position: sticky;
-    bottom: 12px;
   }
 }

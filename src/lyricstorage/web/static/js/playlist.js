@@ -370,6 +370,13 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
       }
       if (changed) renderList();
     },
+    applyExternalUpdate(updatedPlaylist) {
+      if (currentPlaylist.name && updatedPlaylist.name === currentPlaylist.name) {
+        currentPlaylist = updatedPlaylist;
+        renderList();
+        player.syncTracks(currentPlaylist);
+      }
+    },
     getCurrentPlaylist: () => currentPlaylist,
   };
 }
