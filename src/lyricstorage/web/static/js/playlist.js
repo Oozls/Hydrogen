@@ -15,6 +15,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   const selectEl = document.getElementById("playlist-select");
   const sortSelect = document.getElementById("playlist-sort");
   const newBtn = document.getElementById("btn-new-playlist");
+  const renameBtn = document.getElementById("btn-rename-playlist");
   const deleteBtn = document.getElementById("btn-delete-playlist");
   const addFileBtn = document.getElementById("btn-add-file");
   const addFolderBtn = document.getElementById("btn-add-folder");
@@ -39,6 +40,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
 
   function updateToolbarMode() {
     deleteBtn.style.display = currentPlaylist.name ? "" : "none";
+    renameBtn.style.display = currentPlaylist.name ? "" : "none";
   }
 
   function renderSelect() {
@@ -196,6 +198,21 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
       updateToolbarMode();
       renderList();
       player.setPlaylist(currentPlaylist);
+    } catch (err) {
+      await alertDialog(err.message);
+    }
+  });
+
+  renameBtn.addEventListener("click", async () => {
+    if (!currentPlaylist.name) return;
+    const name = await promptDialog("새 이름:", currentPlaylist.name);
+    if (!name || !name.trim() || name.trim() === currentPlaylist.name) return;
+    try {
+      currentPlaylist = await api.renamePlaylist(currentPlaylist.name, name.trim());
+      await refreshPlaylistNames();
+      selectEl.value = currentPlaylist.name;
+      renderList();
+      await api.updateSettings({ last_playlist: currentPlaylist.name });
     } catch (err) {
       await alertDialog(err.message);
     }

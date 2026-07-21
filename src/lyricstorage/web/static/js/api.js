@@ -27,6 +27,10 @@ export const api = {
   createPlaylist: (name) => request("POST", "/api/playlists", { json: { name } }),
   getPlaylist: (name) => request("GET", `/api/playlists/${encodeURIComponent(name)}`),
   deletePlaylist: (name) => request("DELETE", `/api/playlists/${encodeURIComponent(name)}`),
+  renamePlaylist: (name, newName) =>
+    request("POST", `/api/playlists/${encodeURIComponent(name)}/rename`, {
+      json: { name: newName },
+    }),
   reorderPlaylist: (name, fromIndex, toIndex) =>
     request("POST", `/api/playlists/${encodeURIComponent(name)}/reorder`, {
       json: { from_index: fromIndex, to_index: toIndex },

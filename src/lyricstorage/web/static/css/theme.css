@@ -12,8 +12,6 @@
   --icon-on-accent: #0f1117;
   --font-sans: "Pretendard", -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
   --transport-bar-height: 100px;
-  --transport-bar-gap: 10px;
-  --transport-bar-inset: 12px;
 }
 
 * {
@@ -101,7 +99,7 @@ textarea {
   height: 100vh;
   gap: 10px;
   padding: 12px;
-  padding-bottom: calc(var(--transport-bar-height) + var(--transport-bar-gap) + var(--transport-bar-inset));
+  padding-bottom: var(--transport-bar-height);
 }
 
 .panel {
@@ -468,11 +466,16 @@ table.lyrics-edit-table {
   flex-direction: column;
   gap: 6px;
   position: fixed;
-  left: var(--transport-bar-inset);
-  right: var(--transport-bar-inset);
-  bottom: var(--transport-bar-inset);
+  left: 0;
+  right: 0;
+  bottom: 0;
   min-height: var(--transport-bar-height);
   z-index: 10;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.35);
 }
 .seek-row {
   display: flex;

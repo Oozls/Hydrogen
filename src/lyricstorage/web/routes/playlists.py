@@ -64,6 +64,29 @@ def delete_playlist(name: str):
     return jsonify({"ok": True})
 
 
+@bp.post("/<name>/rename")
+def rename_playlist(name: str):
+    if name == GLOBAL_PLAYLIST_NAME:
+        return jsonify({"error": "라이브러리는 이름을 변경할 수 없습니다."}), 403
+    playlist = playlist_repo.load_playlist(name)
+    if playlist is None:
+        return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
+    data = request.get_json(silent=True) or {}
+    new_name = (data.get("name") or "").strip()
+    if not new_name:
+        return jsonify({"error": "이름을 입력하세요."}), 400
+    if new_name == GLOBAL_PLAYLIST_NAME:
+        return jsonify({"error": "해당 이름은 예약되어 있습니다."}), 400
+    if new_name != name and playlist_repo.find_playlist_path(new_name) is not None:
+        return jsonify({"error": "이미 존재하는 이름입니다."}), 400
+    old_path = playlist_repo.find_playlist_path(name)
+    playlist.name = new_name
+    new_path = playlist.save()
+    if old_path is not None and old_path != new_path:
+        old_path.unlink(missing_ok=True)
+    return jsonify(playlist_to_json(playlist))
+
+
 @bp.post("/<name>/reorder")
 def reorder_playlist(name: str):
     playlist = playlist_repo.load_playlist(name)
