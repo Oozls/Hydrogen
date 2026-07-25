@@ -93,6 +93,23 @@ def update_metadata_batch():
     return jsonify({"updated": updated, "errors": errors})
 
 
+@bp.delete("/metadata/batch")
+def delete_tracks_batch():
+    data = request.get_json(silent=True) or {}
+    track_ids = data.get("track_ids") or []
+    deleted, errors = [], []
+    for track_id in dict.fromkeys(track_ids):  # 중복 제거, 순서 유지
+        track = find_track_by_id(track_id)
+        if track is None:
+            errors.append({"track_id": track_id, "reason": "트랙을 찾을 수 없습니다."})
+            continue
+        playlist_repo.remove_track_from_all_playlists(track.path)
+        Path(track.path).unlink(missing_ok=True)
+        deleted.append(track_id)
+    applog.log_info("ACTION", f"곡 일괄 삭제: {len(deleted)}곡 성공, {len(errors)}곡 실패")
+    return jsonify({"deleted": deleted, "errors": errors})
+
+
 @bp.post("/<track_id>/art")
 def upload_art(track_id: str):
     track = find_track_by_id(track_id)

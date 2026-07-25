@@ -1,5 +1,8 @@
 import { api } from "./api.js";
 import { setIcon } from "./icons.js";
+import { applyMarquee } from "./marquee.js";
+
+const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
 function fmtTime(ms) {
   ms = Math.max(0, ms || 0);
@@ -24,6 +27,7 @@ export function setupNowPlaying(player) {
   const artPlaceholder = document.getElementById("now-playing-art-placeholder");
   const titleEl = document.getElementById("now-playing-title");
   const artistEl = document.getElementById("now-playing-artist");
+  const nowPlayingTextEl = document.querySelector(".now-playing-text");
 
   const seekSlider = document.getElementById("seek-slider");
   const elapsedLabel = document.getElementById("elapsed-label");
@@ -48,6 +52,7 @@ export function setupNowPlaying(player) {
       artistEl.textContent = "플레이리스트에서 곡을 선택하세요";
       artEl.style.display = "none";
       artPlaceholder.style.display = "";
+      requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
       return;
     }
     titleEl.textContent = track.title || "제목 없음";
@@ -61,7 +66,14 @@ export function setupNowPlaying(player) {
       artPlaceholder.style.display = "none";
     };
     artEl.src = api.artUrl(track.track_id) + (bustArtCache ? `?t=${Date.now()}` : "");
+    requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
   }
+
+  let marqueeResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(marqueeResizeTimer);
+    marqueeResizeTimer = setTimeout(() => applyMarquee(nowPlayingTextEl), MARQUEE_RESIZE_DEBOUNCE_MS);
+  });
 
   player.addEventListener("trackchange", (e) => setTrack(e.detail.track));
 

@@ -9,7 +9,6 @@ export function setupAlbumInfo(onSaved) {
   const artInput = document.getElementById("album-info-art-input");
   const albumInput = document.getElementById("album-info-album");
   const artistText = document.getElementById("album-info-artist");
-  const trackList = document.getElementById("album-info-track-list");
   const saveBtn = document.getElementById("album-info-save");
   const cancelBtn = document.getElementById("album-info-cancel");
 
@@ -37,13 +36,6 @@ export function setupAlbumInfo(onSaved) {
     artistText.textContent = group.artist || "(아티스트 없음)";
     showArt(`${api.artUrl(group.track_id)}?t=${Date.now()}`);
 
-    trackList.innerHTML = "";
-    for (const track of group.tracks) {
-      const row = document.createElement("div");
-      row.className = "album-info-track-row";
-      row.textContent = track.title || track.track_id;
-      trackList.appendChild(row);
-    }
     dialog.showModal();
   }
 

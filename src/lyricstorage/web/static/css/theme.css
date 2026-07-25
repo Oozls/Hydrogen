@@ -1,3 +1,13 @@
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 100; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Thin.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Thin.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 200; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-ExtraLight.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-ExtraLight.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 300; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Light.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Light.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 400; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Regular.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 500; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Medium.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 600; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-SemiBold.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 700; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Bold.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Bold.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 800; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-ExtraBold.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-ExtraBold.ttf') format('truetype'); }
+@font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 900; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Black.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Black.ttf') format('truetype'); }
+
 :root {
   color-scheme: dark;
   --accent: #7c9cff;
@@ -10,7 +20,7 @@
   --text-secondary: #8b90a3;
   --text-muted: #5c6076;
   --icon-on-accent: #0f1117;
-  --font-sans: "Pretendard", -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+  --font-sans: "Apple SD Gothic Neo", -apple-system, "Malgun Gothic", "Segoe UI", sans-serif;
   --transport-bar-height: 100px;
 }
 
@@ -165,7 +175,8 @@ textarea {
 
 .playlist-panel,
 .browse-panel,
-.lyrics-panel {
+.lyrics-panel,
+.stats-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -190,7 +201,8 @@ textarea {
   min-height: 0;
   gap: 8px;
 }
-.sidebar-home-btn {
+.sidebar-home-btn,
+.sidebar-nav-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -202,11 +214,14 @@ textarea {
   color: var(--text-secondary);
   font-size: 14px;
   text-align: left;
+  text-decoration: none;
 }
-.sidebar-home-btn:hover {
+.sidebar-home-btn:hover,
+.sidebar-nav-btn:hover {
   background: #1f2330;
 }
-.sidebar-home-btn.active {
+.sidebar-home-btn.active,
+.sidebar-nav-btn.active {
   background: var(--bg-elevated);
   color: var(--accent);
 }
@@ -216,6 +231,22 @@ textarea {
   padding: 0;
   overflow-y: auto;
   flex: 1;
+}
+.sidebar-bottom-nav {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.sidebar-data-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 .sidebar-playlist-row {
   padding: 6px 8px;
@@ -360,34 +391,65 @@ select#playlist-sort {
 .playlist-row.playing .playlist-row-label {
   color: var(--accent);
 }
-.playlist-row.playing .playlist-row-artist {
+.playlist-row.playing .playlist-row-artist,
+.playlist-row.playing .playlist-row-album {
   color: var(--accent-muted);
 }
 .playlist-row-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex: 1;
   min-width: 0;
+}
+.playlist-row-title-clip {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  position: relative;
 }
 .playlist-row-title {
   color: inherit;
 }
-.playlist-row-artist {
+.playlist-row-title-inner {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+.playlist-row-title-inner.marquee {
+  display: inline-flex;
+}
+.marquee-copy {
+  flex: none;
+  white-space: nowrap;
+}
+.playlist-row-album {
+  flex: 0 0 170px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-secondary);
   font-size: 13px;
 }
-.playlist-row-artist::before {
-  content: "  ·  ";
-  color: var(--text-muted);
+.playlist-row-artist {
+  flex: 0 0 150px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 .playlist-row-duration {
+  flex: 0 0 40px;
   color: var(--text-secondary);
   font-size: 13px;
-  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.playlist-row-more,
-.playlist-row-add {
+.playlist-row-more {
   flex-shrink: 0;
 }
 .playlist-empty-state {
@@ -484,12 +546,15 @@ select#playlist-sort {
 }
 .lyrics-edit-scroll {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
 table.lyrics-edit-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 .lyrics-edit-table th {
@@ -528,6 +593,7 @@ table.lyrics-edit-table {
   width: 100%;
   resize: none;
   overflow: hidden;
+  overflow-wrap: anywhere;
   background: transparent;
   border: none;
   padding: 4px;
@@ -587,6 +653,27 @@ table.lyrics-edit-table {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+.transport-now-playing {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+  min-width: 0;
+}
+.transport-now-playing .now-playing-art-wrap {
+  width: 40px;
+  height: 40px;
+}
+.transport-now-playing .track-title {
+  font-size: 14px;
+}
+.transport-now-playing .track-artist {
+  font-size: 12px;
 }
 
 /* -- range 슬라이더 (seek/volume 공용) -------------------------------------- */
@@ -812,20 +899,6 @@ input[type="range"]:hover::-moz-range-thumb {
   color: var(--icon-on-accent);
 }
 
-/* -- 전체화면 오버레이(재생 통계 / 브라우즈 공용) ------------------------ */
-.overlay-fullscreen {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-base);
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  padding: 16px 20px;
-  gap: 12px;
-}
-.overlay-fullscreen[hidden] {
-  display: none;
-}
 .overlay-header {
   display: flex;
   align-items: center;
@@ -930,37 +1003,81 @@ input[type="range"]:hover::-moz-range-thumb {
   border-radius: 6px;
   padding: 6px 8px;
 }
-#browse-target-playlist {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 8px;
-  min-width: 160px;
-}
 #browse-songs-panel,
 #browse-albums-panel {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
+#browse-album-detail-panel {
+  gap: 8px;
+}
+
+/* -- 앨범 상세(브라우즈 앨범 탭 → 앨범 클릭) ------------------------------ */
+.album-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.album-detail-art-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.album-detail-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.album-detail-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* -- 행 컨텍스트 메뉴(브라우즈/재생목록/앨범 상세 "⋮" 공용) --------------- */
+.row-context-menu {
+  position: fixed;
+  z-index: 60;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  min-width: 180px;
+}
+.row-context-menu[hidden] {
+  display: none;
+}
+.context-menu-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.context-menu-item:hover {
+  background: var(--accent);
+  color: var(--icon-on-accent);
+}
+.context-menu-item.disabled {
+  color: var(--text-muted);
+  cursor: default;
+  pointer-events: none;
+}
 
 /* -- 앨범 정보 수정 ----------------------------------------------------- */
 .album-info-readonly {
   color: var(--text-secondary);
   padding: 6px 0;
-}
-.album-info-track-list {
-  max-height: 160px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px;
-}
-.album-info-track-row {
-  padding: 4px 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .icon-btn:disabled {
   opacity: 0.4;
@@ -1033,14 +1150,6 @@ input[type="range"]:hover::-moz-range-thumb {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 0 0 12px;
-}
-.bulk-edit-field-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.bulk-edit-field input[type="text"]:disabled {
-  opacity: 0.5;
 }
 .playlist-row.selected {
   box-shadow: inset 3px 0 0 var(--accent);
@@ -1131,7 +1240,10 @@ input[type="range"]:hover::-moz-range-thumb {
 .logs-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  overflow: hidden;
 }
 .logs-empty {
   color: var(--text-secondary);
@@ -1142,10 +1254,11 @@ input[type="range"]:hover::-moz-range-thumb {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-elevated);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.log-row:last-child {
+  border-bottom: none;
 }
 .log-ts {
   flex: none;
@@ -1162,9 +1275,6 @@ input[type="range"]:hover::-moz-range-thumb {
   border-radius: 4px;
   background: var(--border);
   color: var(--text-secondary);
-}
-.log-row.log-level-error {
-  border-color: #e5484d;
 }
 .log-row.log-level-error .log-badge {
   background: #e5484d;

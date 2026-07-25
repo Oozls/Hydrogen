@@ -78,6 +78,7 @@ export const api = {
   },
   getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
+  getDataSize: () => request("GET", "/api/settings/data-size"),
   getLyrics: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics`),
   saveLyrics: (trackId, lines) =>
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
@@ -86,6 +87,8 @@ export const api = {
   updateTrackMetadataBatch: (trackIds, patch) =>
     request("PUT", "/api/tracks/metadata/batch", { json: { track_ids: trackIds, ...patch } }),
   deleteTrackEntirely: (trackId) => request("DELETE", `/api/tracks/${trackId}`),
+  deleteTracksBatch: (trackIds) =>
+    request("DELETE", "/api/tracks/metadata/batch", { json: { track_ids: trackIds } }),
   uploadTrackArt: (trackId, file) => {
     const formData = new FormData();
     formData.append("art", file);

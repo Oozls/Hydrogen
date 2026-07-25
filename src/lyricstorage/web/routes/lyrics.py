@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from lyricstorage import applog
 from lyricstorage.markdown_render import to_html
 from lyricstorage.models import LyricLine, LyricTrack
 from lyricstorage.web.lookup import find_track_by_id
@@ -49,6 +50,7 @@ def save_lyrics(track_id: str):
 
     lyric_track = LyricTrack(track.path, lines)
     saved_path = lyric_track.save()
+    applog.log_info("ACTION", f"가사 저장: {track_id} ({len(lines)}줄)")
     return jsonify(
         {
             "saved_count": len(lines),

@@ -4,13 +4,15 @@ function parseRoute(hash) {
     const name = decodeURIComponent(raw.slice("playlist/".length));
     if (name) return { type: "playlist", name };
   }
+  if (raw === "stats") return { type: "stats" };
   return { type: "browse" };
 }
 
-export function setupRouter({ onBrowse, onPlaylist }) {
+export function setupRouter({ onBrowse, onPlaylist, onStats }) {
   function dispatch() {
     const route = parseRoute(location.hash);
     if (route.type === "playlist") onPlaylist(route.name);
+    else if (route.type === "stats") onStats();
     else onBrowse();
   }
 
@@ -31,6 +33,9 @@ export function setupRouter({ onBrowse, onPlaylist }) {
     },
     goPlaylist(name) {
       navigate(`#/playlist/${encodeURIComponent(name)}`);
+    },
+    goStats() {
+      navigate("#/stats");
     },
   };
 }

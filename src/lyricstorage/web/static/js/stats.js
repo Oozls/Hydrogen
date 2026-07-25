@@ -18,9 +18,7 @@ function formatRange(startIso, endIso, period) {
 }
 
 export function setupStats() {
-  const overlay = document.getElementById("stats-overlay");
-  const openBtn = document.getElementById("btn-stats");
-  const closeBtn = document.getElementById("btn-stats-close");
+  const panelEl = document.getElementById("stats-panel");
   const periodTabs = document.getElementById("stats-period-tabs");
   const groupTabs = document.getElementById("stats-group-tabs");
   const prevBtn = document.getElementById("btn-stats-prev");
@@ -117,12 +115,15 @@ export function setupStats() {
     offset = Math.max(0, offset - 1);
     refresh();
   });
-  openBtn.addEventListener("click", () => {
-    overlay.hidden = false;
-    offset = 0;
-    refresh();
-  });
-  closeBtn.addEventListener("click", () => {
-    overlay.hidden = true;
-  });
+
+  return {
+    show() {
+      panelEl.classList.add("active");
+      offset = 0;
+      refresh();
+    },
+    hide() {
+      panelEl.classList.remove("active");
+    },
+  };
 }

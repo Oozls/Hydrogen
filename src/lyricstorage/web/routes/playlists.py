@@ -101,6 +101,7 @@ def reorder_playlist(name: str):
         return jsonify({"error": "from_index/to_index가 필요합니다."}), 400
     playlist.move(from_index, to_index)
     playlist.save()
+    applog.log_info("ACTION", f"플레이리스트 순서 변경: {name} ({from_index} -> {to_index})")
     return jsonify(playlist_to_json(playlist))
 
 

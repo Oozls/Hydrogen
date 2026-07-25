@@ -1,8 +1,9 @@
 import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { alertDialog } from "./dialog.js";
-import { fetchNonGlobalPlaylistNames } from "./playlistNames.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
+import { setupRowContextMenu } from "./rowContextMenu.js";
+import { applyMarquee } from "./marquee.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -33,6 +34,7 @@ function groupAlbums(tracks) {
 
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE = 10;
+const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
 export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit) {
   const panelEl = document.getElementById("browse-panel");
@@ -40,9 +42,16 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const tabsEl = document.getElementById("browse-tabs");
   const songsPanel = document.getElementById("browse-songs-panel");
   const albumsPanel = document.getElementById("browse-albums-panel");
+  const albumDetailPanel = document.getElementById("browse-album-detail-panel");
   const songsList = document.getElementById("browse-songs-list");
   const albumsList = document.getElementById("browse-albums-list");
-  const targetSelect = document.getElementById("browse-target-playlist");
+  const albumDetailList = document.getElementById("browse-album-detail-list");
+  const albumDetailTitle = document.getElementById("album-detail-title");
+  const albumDetailArtist = document.getElementById("album-detail-artist");
+  const albumDetailArt = document.getElementById("album-detail-art");
+  const albumDetailArtPlaceholder = document.getElementById("album-detail-art-placeholder");
+  const btnAlbumDetailBack = document.getElementById("btn-album-detail-back");
+  const btnAlbumDetailEdit = document.getElementById("btn-album-detail-edit");
   const bulkEditBtn = document.getElementById("btn-browse-bulk-edit");
   const clearSelectionBtn = document.getElementById("btn-browse-clear-selection");
   const addFileBtn = document.getElementById("btn-browse-add-file");
@@ -52,9 +61,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   let tracks = [];
   let mode = "song";
-  let playlistNames = [];
   let selectedTrackIds = new Set();
   let lastClickedIndex = null;
+  let currentAlbumGroup = null;
+
+  const rowMenu = setupRowContextMenu({
+    onEditTrack: (track) => onEditTrack(track),
+    onAddToPlaylist: (track, playlistName) => addTrackToPlaylist(track, playlistName),
+  });
 
   // 선택된 곡이 하나라도 있으면 "선택 모드"로 간주 — 이때만 체크박스가 보이고,
   // 수정자 키 없는 일반 클릭도 체크박스처럼 토글로 동작한다.
@@ -74,40 +88,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     player.playIndex(0);
   }
 
-  function renderTargetSelect() {
-    targetSelect.innerHTML = "";
-    if (!playlistNames.length) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "플레이리스트 없음";
-      targetSelect.appendChild(opt);
-      targetSelect.disabled = true;
-      return;
-    }
-    targetSelect.disabled = false;
-    for (const name of playlistNames) {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      targetSelect.appendChild(opt);
-    }
-  }
-
-  async function refreshPlaylistNames() {
-    playlistNames = await fetchNonGlobalPlaylistNames();
-    renderTargetSelect();
-    const current = playlistApi.getCurrentPlaylist().name;
-    if (current && playlistNames.includes(current)) targetSelect.value = current;
-  }
-
-  async function addTrackToTarget(track) {
-    const target = targetSelect.value;
-    if (!target) {
-      await alertDialog("먼저 플레이리스트를 만들거나 선택하세요.");
-      return;
-    }
+  async function addTrackToPlaylist(track, playlistName) {
+    if (!playlistName) return;
     try {
-      const updated = await api.addTracksFromLibrary(target, [track.track_id]);
+      const updated = await api.addTracksFromLibrary(playlistName, [track.track_id]);
       playlistApi.applyExternalUpdate(updated);
     } catch (err) {
       await alertDialog(err.message);
@@ -149,19 +133,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     container.appendChild(empty);
   }
 
-  function renderSongs() {
-    const validIds = new Set(tracks.map((t) => t.track_id));
-    for (const id of selectedTrackIds) {
-      if (!validIds.has(id)) selectedTrackIds.delete(id);
-    }
-
-    const q = searchInput.value.trim().toLowerCase();
-    songsList.innerHTML = "";
-    syncSelectionUI();
-
-    const filtered = tracks.filter((t) => matchesSong(t, q));
-    if (!filtered.length) {
-      renderEmpty(songsList);
+  // 브라우즈 "곡" 목록과 앨범 상세 화면의 곡 목록이 공유하는 행 렌더러.
+  // selectedTrackIds/lastClickedIndex는 모듈 전역이라 다중선택·일괄수정 툴바가
+  // 어느 목록에서 선택했든 동일하게 동작한다.
+  function renderSongRows(container, tracksArray) {
+    container.innerHTML = "";
+    if (!tracksArray.length) {
+      renderEmpty(container);
       return;
     }
 
@@ -179,7 +157,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       syncSelectionUI();
     }
 
-    filtered.forEach((track, i) => {
+    tracksArray.forEach((track, i) => {
       const li = document.createElement("li");
       li.className = "playlist-row";
       const selected = selectedTrackIds.has(track.track_id);
@@ -204,16 +182,25 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "playlist-row-title";
-      titleSpan.textContent = track.title || track.track_id;
-      label.appendChild(titleSpan);
-      if (track.artist) {
-        const artistSpan = document.createElement("span");
-        artistSpan.className = "playlist-row-artist";
-        artistSpan.textContent = track.artist;
-        label.appendChild(artistSpan);
-      }
+
+      const titleClip = document.createElement("span");
+      titleClip.className = "playlist-row-title-clip";
+      const titleInner = document.createElement("span");
+      titleInner.className = "playlist-row-title playlist-row-title-inner";
+      titleInner.textContent = track.title || track.track_id;
+      titleClip.appendChild(titleInner);
+      label.appendChild(titleClip);
+
+      const albumSpan = document.createElement("span");
+      albumSpan.className = "playlist-row-album";
+      albumSpan.textContent = track.album || "";
+      label.appendChild(albumSpan);
+
+      const artistSpan = document.createElement("span");
+      artistSpan.className = "playlist-row-artist";
+      artistSpan.textContent = track.artist || "";
+      label.appendChild(artistSpan);
+
       li.appendChild(label);
 
       const duration = document.createElement("span");
@@ -221,25 +208,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       duration.textContent = fmtDuration(track.duration_ms);
       li.appendChild(duration);
 
-      const addBtn = document.createElement("button");
-      addBtn.type = "button";
-      addBtn.className = "icon-btn playlist-row-add";
-      addBtn.title = "재생목록에 추가";
-      addBtn.appendChild(iconSpan("plus", "icon-sm"));
-      addBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        addTrackToTarget(track);
-      });
-      li.appendChild(addBtn);
-
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
       moreBtn.className = "icon-btn playlist-row-more";
-      moreBtn.title = "곡 정보 수정";
+      moreBtn.title = "더보기";
       moreBtn.appendChild(iconSpan("more-vertical", "icon-sm"));
       moreBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        onEditTrack(track);
+        rowMenu.open(track, e.clientX, e.clientY);
       });
       li.appendChild(moreBtn);
 
@@ -299,8 +275,60 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       });
 
       li.addEventListener("dblclick", () => playEphemeral(track));
-      songsList.appendChild(li);
+      container.appendChild(li);
     });
+
+    // 마퀴는 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
+    requestAnimationFrame(() => applyMarquee(container));
+  }
+
+  function renderSongs() {
+    const validIds = new Set(tracks.map((t) => t.track_id));
+    for (const id of selectedTrackIds) {
+      if (!validIds.has(id)) selectedTrackIds.delete(id);
+    }
+
+    const q = searchInput.value.trim().toLowerCase();
+    syncSelectionUI();
+
+    const filtered = tracks.filter((t) => matchesSong(t, q));
+    renderSongRows(songsList, filtered);
+  }
+
+  function renderAlbumDetailRows(group) {
+    renderSongRows(albumDetailList, group.tracks);
+  }
+
+  function showAlbumDetailArt(url) {
+    albumDetailArt.onerror = () => {
+      albumDetailArt.style.display = "none";
+      albumDetailArtPlaceholder.style.display = "";
+    };
+    albumDetailArt.onload = () => {
+      albumDetailArt.style.display = "";
+      albumDetailArtPlaceholder.style.display = "none";
+    };
+    albumDetailArt.src = url;
+  }
+
+  function fillAlbumDetailHeader(group) {
+    albumDetailTitle.textContent = group.album || "(앨범 없음)";
+    albumDetailArtist.textContent = group.artist || "";
+    showAlbumDetailArt(`${api.artUrl(group.track_id)}?t=${Date.now()}`);
+  }
+
+  function openAlbumDetail(group) {
+    currentAlbumGroup = group;
+    fillAlbumDetailHeader(group);
+    albumsPanel.classList.remove("active");
+    albumDetailPanel.classList.add("active");
+    renderAlbumDetailRows(group);
+  }
+
+  function closeAlbumDetail() {
+    albumDetailPanel.classList.remove("active");
+    albumsPanel.classList.add("active");
+    currentAlbumGroup = null;
   }
 
   function renderAlbums() {
@@ -345,7 +373,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       meta.textContent = `${group.tracks.length}곡`;
       card.appendChild(meta);
 
-      card.addEventListener("click", () => onEditAlbum(group));
+      card.addEventListener("click", () => openAlbumDetail(group));
       albumsList.appendChild(card);
     });
   }
@@ -361,6 +389,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       selectedTrackIds.clear();
       syncSelectionUI();
     }
+    albumDetailPanel.classList.remove("active");
+    currentAlbumGroup = null;
     songsPanel.classList.toggle("active", mode === "song");
     albumsPanel.classList.toggle("active", mode === "album");
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
@@ -386,6 +416,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     render();
   });
 
+  btnAlbumDetailBack.addEventListener("click", closeAlbumDetail);
+  btnAlbumDetailEdit.addEventListener("click", () => {
+    if (currentAlbumGroup) onEditAlbum(currentAlbumGroup);
+  });
+
   addFileBtn.addEventListener("click", () => fileInput.click());
   addFolderBtn.addEventListener("click", () => folderInput.click());
   fileInput.addEventListener("change", async () => {
@@ -397,13 +432,23 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     folderInput.value = "";
   });
 
+  // 현재 화면에 보이는 목록에 대해서만 리사이즈 시 마퀴를 재계산한다.
+  let marqueeResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(marqueeResizeTimer);
+    marqueeResizeTimer = setTimeout(() => {
+      if (!panelEl.classList.contains("active")) return;
+      if (albumDetailPanel.classList.contains("active")) applyMarquee(albumDetailList);
+      else if (songsPanel.classList.contains("active")) applyMarquee(songsList);
+    }, MARQUEE_RESIZE_DEBOUNCE_MS);
+  });
+
   return {
     async show() {
       panelEl.classList.add("active");
       searchInput.value = "";
       const library = await api.getLibrary();
       tracks = library.tracks;
-      await refreshPlaylistNames();
       switchMode("song");
     },
     hide() {
@@ -412,6 +457,19 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     async refreshAfterAlbumUpdate() {
       const library = await api.getLibrary();
       tracks = library.tracks;
+      if (currentAlbumGroup) {
+        const groups = groupAlbums(tracks);
+        const match = groups.find(
+          (g) => g.album === currentAlbumGroup.album && g.artist === currentAlbumGroup.artist
+        );
+        if (match) {
+          currentAlbumGroup = match;
+          fillAlbumDetailHeader(match);
+          renderAlbumDetailRows(match);
+        } else {
+          closeAlbumDetail();
+        }
+      }
       render();
     },
     clearSelection() {

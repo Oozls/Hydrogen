@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const sidebarApi = setupSidebar(bootstrap, {
     onSelectPlaylist: (name) => refs.router.goPlaylist(name),
     onGoBrowse: () => refs.router.goBrowse(),
+    onGoStats: () => refs.router.goStats(),
   });
   const playlistApi = setupPlaylist(
     player,
@@ -61,7 +62,8 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
-  setupStats();
+  const statsApi = setupStats();
+  const lyricsPanelEl = document.getElementById("lyrics-panel");
 
   const browseApi = setupBrowse(
     player,
@@ -77,27 +79,50 @@ document.addEventListener("DOMContentLoaded", () => {
       nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
     }
   });
-  const bulkEditApi = setupBulkEdit((updatedTracks) => {
-    playlistApi.refreshTracksInfo(updatedTracks);
-    playlistApi.clearSelection();
-    browseApi.refreshAfterAlbumUpdate();
-    browseApi.clearSelection();
-    if (player.currentTrack && updatedTracks.some((t) => t.track_id === player.currentTrack.track_id)) {
-      nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
+  const bulkEditApi = setupBulkEdit(
+    (updatedTracks, trackIds) => {
+      if (updatedTracks.length) playlistApi.refreshTracksInfo(updatedTracks);
+      playlistApi.clearSelection();
+      browseApi.refreshAfterAlbumUpdate();
+      browseApi.clearSelection();
+      if (player.currentTrack && trackIds.includes(player.currentTrack.track_id)) {
+        nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
+      }
+    },
+    async (trackIds) => {
+      if (player.currentTrack && trackIds.includes(player.currentTrack.track_id)) player.stop();
+      playlistApi.clearSelection();
+      browseApi.clearSelection();
+      await playlistApi.refreshCurrent();
+      await browseApi.refreshAfterAlbumUpdate();
     }
-  });
+  );
 
   refs.router = setupRouter({
     onBrowse: () => {
       playlistApi.hide();
+      statsApi.hide();
+      lyricsPanelEl.style.display = "";
       browseApi.show();
       sidebarApi.setActive(null);
+      sidebarApi.refreshDataSize();
     },
     onPlaylist: (name) => {
       browseApi.hide();
+      statsApi.hide();
+      lyricsPanelEl.style.display = "";
       playlistApi.show();
       playlistApi.loadPlaylist(name);
       sidebarApi.setActive(name);
+      sidebarApi.refreshDataSize();
+    },
+    onStats: () => {
+      playlistApi.hide();
+      browseApi.hide();
+      lyricsPanelEl.style.display = "none";
+      statsApi.show();
+      sidebarApi.setActive("__stats__");
+      sidebarApi.refreshDataSize();
     },
   });
 

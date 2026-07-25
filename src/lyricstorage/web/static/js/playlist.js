@@ -2,6 +2,8 @@ import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { confirmDialog, promptDialog, alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
+import { setupRowContextMenu } from "./rowContextMenu.js";
+import { applyMarquee } from "./marquee.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -11,6 +13,7 @@ function fmtDuration(ms) {
 }
 
 const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
+const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
 export function setupPlaylist(
   player,
@@ -45,6 +48,25 @@ export function setupPlaylist(
   let lastClickedIndex = null;
   let sortable = null;
   let sortMode = "default";
+
+  async function addTrackToPlaylist(track, playlistName) {
+    if (!playlistName) return;
+    try {
+      const updated = await api.addTracksFromLibrary(playlistName, [track.track_id]);
+      if (currentPlaylist.name === playlistName) {
+        currentPlaylist = updated;
+        renderList();
+        player.syncTracks(currentPlaylist);
+      }
+    } catch (err) {
+      await alertDialog(err.message);
+    }
+  }
+
+  const rowMenu = setupRowContextMenu({
+    onEditTrack: (track) => onEditTrack(track),
+    onAddToPlaylist: (track, playlistName) => addTrackToPlaylist(track, playlistName),
+  });
 
   function updateToolbarMode() {
     deleteBtn.style.display = currentPlaylist.name ? "" : "none";
@@ -87,17 +109,19 @@ export function setupPlaylist(
       const label = document.createElement("span");
       label.className = "playlist-row-label";
 
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "playlist-row-title";
-      titleSpan.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
-      label.appendChild(titleSpan);
+      const titleClip = document.createElement("span");
+      titleClip.className = "playlist-row-title-clip";
+      const titleInner = document.createElement("span");
+      titleInner.className = "playlist-row-title playlist-row-title-inner";
+      titleInner.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
+      titleClip.appendChild(titleInner);
+      label.appendChild(titleClip);
 
-      if (track.artist) {
-        const artistSpan = document.createElement("span");
-        artistSpan.className = "playlist-row-artist";
-        artistSpan.textContent = track.artist;
-        label.appendChild(artistSpan);
-      }
+      const artistSpan = document.createElement("span");
+      artistSpan.className = "playlist-row-artist";
+      artistSpan.textContent = track.artist || "";
+      label.appendChild(artistSpan);
+
       li.appendChild(label);
 
       if (track.has_lyrics) {
@@ -112,11 +136,11 @@ export function setupPlaylist(
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
       moreBtn.className = "icon-btn playlist-row-more";
-      moreBtn.title = "곡 정보 수정";
+      moreBtn.title = "더보기";
       moreBtn.appendChild(iconSpan("more-vertical", "icon-sm"));
       moreBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        onEditTrack(track);
+        rowMenu.open(track, e.clientX, e.clientY);
       });
       li.appendChild(moreBtn);
 
@@ -125,6 +149,9 @@ export function setupPlaylist(
 
       listEl.appendChild(li);
     });
+
+    // 마퀴는 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
+    requestAnimationFrame(() => applyMarquee(listEl));
   }
 
   function onRowClick(e, index, track) {
@@ -352,6 +379,16 @@ export function setupPlaylist(
   player.addEventListener("trackchange", () => {
     selectedIndices.clear();
     renderList();
+  });
+
+  // 재생목록 화면이 활성일 때만 리사이즈 시 마퀴를 재계산한다.
+  let marqueeResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(marqueeResizeTimer);
+    marqueeResizeTimer = setTimeout(() => {
+      if (!panelEl.classList.contains("active")) return;
+      applyMarquee(listEl);
+    }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 
   updateToolbarMode();

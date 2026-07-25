@@ -16,6 +16,17 @@ def app_data_dir() -> Path:
     return path
 
 
+def app_data_dir_size_bytes() -> int:
+    total = 0
+    for entry in app_data_dir().rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
 def playlists_dir() -> Path:
     path = app_data_dir() / "playlists"
     path.mkdir(parents=True, exist_ok=True)

@@ -5,31 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Lyric Storage</title>
   <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/favicon.jpg') }}" />
-  <link
-    rel="stylesheet"
-    as="style"
-    crossorigin
-    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"
-  />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
 </head>
 <body>
   <div class="app-shell">
-    <header id="now-playing-bar" class="panel now-playing-bar">
-      <div class="now-playing-art-wrap">
-        <img id="now-playing-art" alt="" style="display: none" />
-        <span id="now-playing-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
-      </div>
-      <div class="now-playing-text">
-        <div id="now-playing-title" class="track-title">재생 중인 곡 없음</div>
-        <div id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</div>
-      </div>
-      <div class="spacer"></div>
-      <button id="btn-stats" class="icon-btn" title="재생 통계">
-        <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
-      </button>
-    </header>
-
     <main class="main-columns">
       <nav id="sidebar" class="panel sidebar">
         <button id="btn-sidebar-browse" class="sidebar-home-btn" type="button">
@@ -43,6 +22,20 @@
           </button>
         </div>
         <ul id="sidebar-playlist-list" class="sidebar-playlist-list"></ul>
+        <div id="sidebar-bottom-nav" class="sidebar-bottom-nav">
+          <div id="sidebar-data-size" class="sidebar-data-size" title="data 폴더 용량">
+            <span class="icon icon-sm" style="--icon: url(/static/icons/folder.svg)"></span>
+            <span id="sidebar-data-size-text">계산 중...</span>
+          </div>
+          <button id="btn-sidebar-stats" class="sidebar-nav-btn" type="button">
+            <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
+            <span>재생 통계</span>
+          </button>
+          <a id="btn-sidebar-logs" class="sidebar-nav-btn" href="/logs">
+            <span class="icon" style="--icon: url(/static/icons/list.svg)"></span>
+            <span>로그</span>
+          </a>
+        </div>
       </nav>
 
       <section id="playlist-panel" class="panel playlist-panel page-panel">
@@ -95,7 +88,6 @@
             <button class="tab-btn" data-mode="album" type="button">앨범</button>
           </div>
           <input type="text" id="browse-search" placeholder="검색..." />
-          <select id="browse-target-playlist" title="추가할 플레이리스트"></select>
           <div class="spacer"></div>
           <button id="btn-browse-clear-selection" class="icon-btn" title="선택 취소" hidden>
             <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
@@ -117,6 +109,26 @@
         </div>
         <div id="browse-albums-panel" class="tab-panel">
           <div id="browse-albums-list" class="card-grid"></div>
+        </div>
+        <div id="browse-album-detail-panel" class="tab-panel">
+          <div class="album-detail-header">
+            <button id="btn-album-detail-back" class="icon-btn" title="뒤로">
+              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+            </button>
+            <div class="album-detail-art-wrap">
+              <img id="album-detail-art" alt="" style="display: none" />
+              <span id="album-detail-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
+            </div>
+            <div class="album-detail-text">
+              <div id="album-detail-title" class="track-title"></div>
+              <div id="album-detail-artist" class="track-artist"></div>
+            </div>
+            <div class="spacer"></div>
+            <button id="btn-album-detail-edit" class="icon-btn" title="앨범 정보 수정">
+              <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
+            </button>
+          </div>
+          <ul id="browse-album-detail-list" class="playlist-list"></ul>
         </div>
       </section>
 
@@ -159,6 +171,34 @@
           </div>
         </div>
       </section>
+
+      <div id="stats-panel" class="panel stats-panel page-panel">
+        <div class="overlay-header">
+          <span class="section-title">재생 통계</span>
+        </div>
+        <div class="stats-controls-row">
+          <div class="tabs" id="stats-period-tabs">
+            <button class="tab-btn active" data-period="day" type="button">일간</button>
+            <button class="tab-btn" data-period="week" type="button">주간</button>
+            <button class="tab-btn" data-period="month" type="button">월간</button>
+          </div>
+          <div class="stats-period-nav">
+            <button id="btn-stats-prev" class="icon-btn" title="이전 기간">
+              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+            </button>
+            <span id="stats-period-label" class="stats-period-label"></span>
+            <button id="btn-stats-next" class="icon-btn" title="다음 기간">
+              <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+            </button>
+          </div>
+          <div class="tabs" id="stats-group-tabs">
+            <button class="tab-btn active" data-group="track" type="button">곡</button>
+            <button class="tab-btn" data-group="artist" type="button">아티스트</button>
+            <button class="tab-btn" data-group="album" type="button">앨범</button>
+          </div>
+        </div>
+        <div id="stats-list" class="card-grid"></div>
+      </div>
     </main>
 
     <footer id="transport-bar" class="panel transport-bar">
@@ -168,6 +208,18 @@
         <span id="duration-label" class="time-label">00:00</span>
       </div>
       <div class="controls-row">
+        <div class="transport-now-playing">
+          <div class="now-playing-art-wrap">
+            <img id="now-playing-art" alt="" style="display: none" />
+            <span id="now-playing-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
+          </div>
+          <div class="now-playing-text">
+            <div class="playlist-row-title-clip">
+              <span id="now-playing-title" class="track-title playlist-row-title-inner">재생 중인 곡 없음</span>
+            </div>
+            <div id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</div>
+          </div>
+        </div>
         <div class="controls-center">
           <button id="btn-shuffle" class="icon-btn toggle-btn" title="셔플">
             <span class="icon" style="--icon: url(/static/icons/shuffle.svg)"></span>
@@ -196,37 +248,6 @@
     </footer>
 
     <audio id="audio-element" preload="metadata"></audio>
-  </div>
-
-  <div id="stats-overlay" class="overlay-fullscreen" hidden>
-    <div class="overlay-header">
-      <span class="section-title">재생 통계</span>
-      <button id="btn-stats-close" class="icon-btn" title="닫기">
-        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
-      </button>
-    </div>
-    <div class="stats-controls-row">
-      <div class="tabs" id="stats-period-tabs">
-        <button class="tab-btn active" data-period="day" type="button">일간</button>
-        <button class="tab-btn" data-period="week" type="button">주간</button>
-        <button class="tab-btn" data-period="month" type="button">월간</button>
-      </div>
-      <div class="stats-period-nav">
-        <button id="btn-stats-prev" class="icon-btn" title="이전 기간">
-          <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
-        </button>
-        <span id="stats-period-label" class="stats-period-label"></span>
-        <button id="btn-stats-next" class="icon-btn" title="다음 기간">
-          <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
-        </button>
-      </div>
-      <div class="tabs" id="stats-group-tabs">
-        <button class="tab-btn active" data-group="track" type="button">곡</button>
-        <button class="tab-btn" data-group="artist" type="button">아티스트</button>
-        <button class="tab-btn" data-group="album" type="button">앨범</button>
-      </div>
-    </div>
-    <div id="stats-list" class="card-grid"></div>
   </div>
 
   <dialog id="library-picker-dialog" class="library-picker-dialog">
@@ -281,28 +302,29 @@
   <dialog id="bulk-edit-dialog" class="library-picker-dialog track-info-dialog">
     <h3>곡 정보 일괄 수정</h3>
     <p id="bulk-edit-count" class="bulk-edit-count"></p>
-    <label class="track-info-field bulk-edit-field">
-      <span class="bulk-edit-field-label">
-        <input type="checkbox" id="bulk-edit-title-apply" />
-        제목
-      </span>
-      <input type="text" id="bulk-edit-title" autocomplete="off" disabled />
+    <div class="track-info-art-row">
+      <div class="track-info-art-wrap">
+        <img id="bulk-edit-art-preview" alt="" style="display: none" />
+        <span id="bulk-edit-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
+      </div>
+      <button id="bulk-edit-art-btn" type="button">표지 이미지 선택 (전체 적용)</button>
+      <input type="file" id="bulk-edit-art-input" accept="image/png,image/jpeg" hidden />
+    </div>
+    <label class="track-info-field">제목
+      <input type="text" id="bulk-edit-title" autocomplete="off" />
+      <ul class="autocomplete-list" id="bulk-edit-title-suggestions" hidden></ul>
     </label>
-    <label class="track-info-field bulk-edit-field">
-      <span class="bulk-edit-field-label">
-        <input type="checkbox" id="bulk-edit-artist-apply" />
-        아티스트
-      </span>
-      <input type="text" id="bulk-edit-artist" autocomplete="off" disabled />
+    <label class="track-info-field">아티스트
+      <input type="text" id="bulk-edit-artist" autocomplete="off" />
+      <ul class="autocomplete-list" id="bulk-edit-artist-suggestions" hidden></ul>
     </label>
-    <label class="track-info-field bulk-edit-field">
-      <span class="bulk-edit-field-label">
-        <input type="checkbox" id="bulk-edit-album-apply" />
-        앨범
-      </span>
-      <input type="text" id="bulk-edit-album" autocomplete="off" disabled />
+    <label class="track-info-field">앨범
+      <input type="text" id="bulk-edit-album" autocomplete="off" />
+      <ul class="autocomplete-list" id="bulk-edit-album-suggestions" hidden></ul>
     </label>
     <div class="dialog-actions">
+      <button id="bulk-edit-delete" class="danger" type="button">전체 삭제</button>
+      <div class="spacer"></div>
       <button id="bulk-edit-cancel" type="button">취소</button>
       <button id="bulk-edit-save" class="primary" type="button">저장</button>
     </div>
@@ -324,10 +346,6 @@
     <div class="track-info-field">
       아티스트
       <div id="album-info-artist" class="album-info-readonly"></div>
-    </div>
-    <div class="track-info-field">
-      수록곡
-      <div id="album-info-track-list" class="album-info-track-list"></div>
     </div>
     <div class="dialog-actions">
       <button id="album-info-cancel" type="button">취소</button>

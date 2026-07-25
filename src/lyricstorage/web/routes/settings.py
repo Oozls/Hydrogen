@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import storage
+from lyricstorage import applog, storage
 
 bp = Blueprint("settings", __name__, url_prefix="/api/settings")
 
@@ -24,12 +24,21 @@ def get_settings():
 def update_settings():
     data = request.get_json(silent=True) or {}
     settings = storage.load_settings()
+    applied = {}
     if "last_playlist" in data:
         settings["last_playlist"] = data["last_playlist"]
+        applied["last_playlist"] = data["last_playlist"]
     if "volume" in data:
         try:
             settings["volume"] = max(0, min(100, int(data["volume"])))
+            applied["volume"] = settings["volume"]
         except (TypeError, ValueError):
             pass
     storage.save_settings(settings)
+    applog.log_info("ACTION", f"설정 변경: {applied}")
     return jsonify(settings)
+
+
+@bp.get("/data-size")
+def get_data_size():
+    return jsonify({"bytes": storage.app_data_dir_size_bytes()})

@@ -19,6 +19,10 @@ def create_app() -> Flask:
         template_folder=str(_PACKAGE_ROOT / "templates"),
         static_folder=str(_PACKAGE_ROOT / "static"),
     )
+    # Werkzeug 3.1부터 multipart 요청의 파트 수 기본 상한이 1000개라, 폴더 업로드로
+    # 곡을 1000개 넘게 한 번에 선택하면 파일 크기와 무관하게 413로 거부된다.
+    # 로컬 개인용 라이브러리 앱이라 큰 폴더도 문제없이 올릴 수 있게 넉넉히 늘린다.
+    app.config["MAX_FORM_PARTS"] = 20000
 
     @app.before_request
     def _log_request_start():

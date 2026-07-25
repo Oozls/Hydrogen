@@ -7,6 +7,11 @@ async function fetchJSON(url) {
 const selectEl = document.getElementById("logs-period-select");
 const listEl = document.getElementById("logs-list");
 const refreshBtn = document.getElementById("logs-refresh-btn");
+const panelEl = document.querySelector(".logs-list-panel");
+
+function scrollToBottom() {
+  panelEl.scrollTop = panelEl.scrollHeight;
+}
 
 function periodLabel(file) {
   const half = file.half === "AM" ? "오전 (00:00~12:00)" : "오후 (12:00~24:00)";
@@ -27,8 +32,8 @@ function renderEntries(entries) {
     renderEmpty("이 구간에는 기록된 로그가 없습니다.");
     return;
   }
-  // 최신 항목이 위로 오도록 뒤집어서 표시.
-  for (const entry of entries.slice().reverse()) {
+  // 시간순(오래된 것 → 최신)으로 표시하고, 최신 항목이 있는 하단으로 스크롤한다.
+  for (const entry of entries) {
     const row = document.createElement("div");
     row.className = `log-row log-level-${entry.level.toLowerCase()}`;
 
@@ -54,6 +59,7 @@ function renderEntries(entries) {
 
     listEl.appendChild(row);
   }
+  scrollToBottom();
 }
 
 async function loadEntries(date, half) {
