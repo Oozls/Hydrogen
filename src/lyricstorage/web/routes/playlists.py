@@ -6,7 +6,6 @@ from dataclasses import replace
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import storage
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
@@ -107,15 +106,13 @@ def remove_tracks(name: str):
     if playlist is None:
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
     data = request.get_json(silent=True) or {}
-    track_ids = set(data.get("track_ids") or [])
-    if track_ids:
-        indices = [
-            i
-            for i, t in enumerate(playlist.tracks)
-            if storage.path_hash(t.path) in track_ids
-        ]
-        for i in sorted(indices, reverse=True):
+    indices = sorted(
+        {i for i in (data.get("indices") or []) if isinstance(i, int)}, reverse=True
+    )
+    for i in indices:
+        if 0 <= i < len(playlist.tracks):
             playlist.remove(i)
+    if indices:
         playlist.save()
     return jsonify(playlist_to_json(playlist))
 
@@ -129,12 +126,10 @@ def add_tracks_from_library(name: str):
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
     data = request.get_json(silent=True) or {}
     track_ids = data.get("track_ids") or []
-    existing_paths = {t.path for t in playlist.tracks}
     for track_id in track_ids:
         track = find_track_by_id(track_id)
-        if track is None or track.path in existing_paths:
+        if track is None:
             continue
         playlist.tracks.append(replace(track))
-        existing_paths.add(track.path)
     playlist.save()
     return jsonify(playlist_to_json(playlist))

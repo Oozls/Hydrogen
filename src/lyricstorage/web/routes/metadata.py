@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from flask import Blueprint, jsonify, request
 
 from lyricstorage.models import write_album_art, write_tags
@@ -61,3 +63,14 @@ def upload_art(track_id: str):
         return jsonify({"error": f"앨범아트를 저장하지 못했습니다: {exc}"}), 500
 
     return jsonify(track_to_json(track))
+
+
+@bp.delete("/<track_id>")
+def delete_track(track_id: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+
+    playlist_repo.remove_track_from_all_playlists(track.path)
+    Path(track.path).unlink(missing_ok=True)
+    return jsonify({"ok": True})

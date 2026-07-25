@@ -33,7 +33,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
   const pickerCancel = document.getElementById("library-picker-cancel");
 
   let currentPlaylist = bootstrap.current_playlist || EMPTY_PLAYLIST;
-  let selectedIds = new Set();
+  let selectedIndices = new Set();
   let lastClickedIndex = null;
   let sortable = null;
   let sortMode = "default";
@@ -67,15 +67,14 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
       return;
     }
 
-    const playingTrackId = player.currentTrack ? player.currentTrack.track_id : null;
     sortedTracks().forEach((track) => {
       const index = currentPlaylist.tracks.indexOf(track);
       const li = document.createElement("li");
       li.className = "playlist-row";
       li.dataset.trackId = track.track_id;
-      const isPlaying = track.track_id === playingTrackId;
+      const isPlaying = index === player.currentIndex;
       if (isPlaying) li.classList.add("playing");
-      if (selectedIds.has(track.track_id)) li.classList.add("selected");
+      if (selectedIndices.has(index)) li.classList.add("selected");
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
@@ -123,14 +122,14 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
   function onRowClick(e, index, track) {
     if (e.shiftKey && lastClickedIndex !== null) {
       const [start, end] = [lastClickedIndex, index].sort((a, b) => a - b);
-      selectedIds.clear();
-      for (let i = start; i <= end; i++) selectedIds.add(currentPlaylist.tracks[i].track_id);
+      selectedIndices.clear();
+      for (let i = start; i <= end; i++) selectedIndices.add(i);
     } else if (e.ctrlKey || e.metaKey) {
-      if (selectedIds.has(track.track_id)) selectedIds.delete(track.track_id);
-      else selectedIds.add(track.track_id);
+      if (selectedIndices.has(index)) selectedIndices.delete(index);
+      else selectedIndices.add(index);
       lastClickedIndex = index;
     } else {
-      selectedIds = new Set([track.track_id]);
+      selectedIndices = new Set([index]);
       lastClickedIndex = index;
     }
     renderList();
@@ -149,6 +148,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
         } catch (err) {
           await alertDialog(err.message);
         }
+        selectedIndices.clear();
         renderList();
       },
     });
@@ -167,7 +167,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
       refs.router.goBrowse();
       return;
     }
-    selectedIds.clear();
+    selectedIndices.clear();
     updateToolbarMode();
     renderList();
     player.setPlaylist(currentPlaylist);
@@ -180,7 +180,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
     try {
       currentPlaylist = await api.createPlaylist(name.trim());
       await sidebarApi.refreshNames();
-      selectedIds.clear();
+      selectedIndices.clear();
       updateToolbarMode();
       renderList();
       player.setPlaylist(currentPlaylist);
@@ -257,11 +257,11 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
   });
 
   removeBtn.addEventListener("click", async () => {
-    if (!currentPlaylist.name || !selectedIds.size) return;
-    if (!(await confirmDialog(`${selectedIds.size}곡을 삭제할까요?`))) return;
+    if (!currentPlaylist.name || !selectedIndices.size) return;
+    if (!(await confirmDialog(`${selectedIndices.size}곡을 삭제할까요?`))) return;
     try {
-      currentPlaylist = await api.removeTracks(currentPlaylist.name, Array.from(selectedIds));
-      selectedIds.clear();
+      currentPlaylist = await api.removeTracks(currentPlaylist.name, Array.from(selectedIndices));
+      selectedIndices.clear();
       renderList();
       player.syncTracks(currentPlaylist);
     } catch (err) {
@@ -279,8 +279,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
       return;
     }
     const library = await api.getLibrary();
-    const existingIds = new Set(currentPlaylist.tracks.map((t) => t.track_id));
-    pickerCandidates = library.tracks.filter((t) => !existingIds.has(t.track_id));
+    pickerCandidates = library.tracks;
     pickerChecked = new Set();
     if (!pickerCandidates.length) {
       await alertDialog("라이브러리에 추가할 수 있는 곡이 없습니다.");
@@ -327,7 +326,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
   });
 
   player.addEventListener("trackchange", () => {
-    selectedIds.clear();
+    selectedIndices.clear();
     renderList();
   });
 
@@ -338,6 +337,9 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
 
   return {
     loadPlaylist,
+    async refreshCurrent() {
+      if (currentPlaylist.name) await loadPlaylist(currentPlaylist.name);
+    },
     show() {
       panelEl.classList.add("active");
     },
@@ -345,31 +347,35 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
       panelEl.classList.remove("active");
     },
     refreshHasLyrics(trackId) {
-      const track = currentPlaylist.tracks.find((t) => t.track_id === trackId);
-      if (track) {
-        track.has_lyrics = true;
+      const matches = currentPlaylist.tracks.filter((t) => t.track_id === trackId);
+      if (matches.length) {
+        matches.forEach((track) => {
+          track.has_lyrics = true;
+        });
         renderList();
       }
     },
     refreshTrackInfo(trackId, updated) {
-      const track = currentPlaylist.tracks.find((t) => t.track_id === trackId);
-      if (track) {
-        track.title = updated.title;
-        track.artist = updated.artist;
-        track.album = updated.album;
+      const matches = currentPlaylist.tracks.filter((t) => t.track_id === trackId);
+      if (matches.length) {
+        matches.forEach((track) => {
+          track.title = updated.title;
+          track.artist = updated.artist;
+          track.album = updated.album;
+        });
         renderList();
       }
     },
     refreshTracksInfo(updatedTracks) {
       let changed = false;
       for (const updated of updatedTracks) {
-        const track = currentPlaylist.tracks.find((t) => t.track_id === updated.track_id);
-        if (track) {
+        const matches = currentPlaylist.tracks.filter((t) => t.track_id === updated.track_id);
+        matches.forEach((track) => {
           track.title = updated.title;
           track.artist = updated.artist;
           track.album = updated.album;
           changed = true;
-        }
+        });
       }
       if (changed) renderList();
     },

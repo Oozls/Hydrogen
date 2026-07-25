@@ -39,12 +39,19 @@ document.addEventListener("DOMContentLoaded", () => {
     (track) => trackInfoApi.open(track),
     { sidebarApi, refs }
   );
-  const trackInfoApi = setupTrackInfo((trackId, updated) => {
-    playlistApi.refreshTrackInfo(trackId, updated);
-    if (player.currentTrack && player.currentTrack.track_id === trackId) {
-      nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
+  const trackInfoApi = setupTrackInfo(
+    (trackId, updated) => {
+      playlistApi.refreshTrackInfo(trackId, updated);
+      if (player.currentTrack && player.currentTrack.track_id === trackId) {
+        nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
+      }
+    },
+    async (trackId) => {
+      if (player.currentTrack && player.currentTrack.track_id === trackId) player.stop();
+      await playlistApi.refreshCurrent();
+      await browseApi.refreshAfterAlbumUpdate();
     }
-  });
+  );
   setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
   setupStats();

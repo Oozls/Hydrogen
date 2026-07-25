@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { alertDialog } from "./dialog.js";
+import { alertDialog, confirmDialog } from "./dialog.js";
 
 const MAX_SUGGESTIONS = 8;
 
@@ -86,7 +86,7 @@ function buildAutocomplete(inputEl, listEl, getValues) {
   return { hide };
 }
 
-export function setupTrackInfo(onSaved) {
+export function setupTrackInfo(onSaved, onDeleted) {
   const dialog = document.getElementById("track-info-dialog");
   const artPreview = document.getElementById("track-info-art-preview");
   const artPlaceholder = document.getElementById("track-info-art-placeholder");
@@ -97,6 +97,7 @@ export function setupTrackInfo(onSaved) {
   const albumInput = document.getElementById("track-info-album");
   const saveBtn = document.getElementById("track-info-save");
   const cancelBtn = document.getElementById("track-info-cancel");
+  const deleteBtn = document.getElementById("track-info-delete");
 
   let trackId = null;
   let pendingArtFile = null;
@@ -160,6 +161,28 @@ export function setupTrackInfo(onSaved) {
     artistAutocomplete.hide();
     albumAutocomplete.hide();
     dialog.close();
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    if (!trackId) return;
+    const label = titleInput.value.trim() || trackId;
+    if (
+      !(await confirmDialog(
+        `'${label}'을(를) 모든 재생목록과 라이브러리에서 완전히 삭제할까요? 파일도 함께 삭제되며 되돌릴 수 없습니다.`
+      ))
+    )
+      return;
+    try {
+      const deletedId = trackId;
+      await api.deleteTrackEntirely(deletedId);
+      titleAutocomplete.hide();
+      artistAutocomplete.hide();
+      albumAutocomplete.hide();
+      dialog.close();
+      onDeleted(deletedId);
+    } catch (err) {
+      await alertDialog(err.message);
+    }
   });
 
   saveBtn.addEventListener("click", async () => {

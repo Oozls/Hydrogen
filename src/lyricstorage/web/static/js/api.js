@@ -35,9 +35,9 @@ export const api = {
     request("POST", `/api/playlists/${encodeURIComponent(name)}/reorder`, {
       json: { from_index: fromIndex, to_index: toIndex },
     }),
-  removeTracks: (name, trackIds) =>
+  removeTracks: (name, indices) =>
     request("POST", `/api/playlists/${encodeURIComponent(name)}/tracks/remove-batch`, {
-      json: { track_ids: trackIds },
+      json: { indices },
     }),
   addTracksFromLibrary: (name, trackIds) =>
     request("POST", `/api/playlists/${encodeURIComponent(name)}/tracks`, {
@@ -57,6 +57,7 @@ export const api = {
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
   updateTrackMetadata: (trackId, patch) =>
     request("PUT", `/api/tracks/${trackId}/metadata`, { json: patch }),
+  deleteTrackEntirely: (trackId) => request("DELETE", `/api/tracks/${trackId}`),
   uploadTrackArt: (trackId, file) => {
     const formData = new FormData();
     formData.append("art", file);

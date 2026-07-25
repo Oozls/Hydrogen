@@ -799,6 +799,13 @@ input[type="range"]:hover::-moz-range-thumb {
 .dialog-actions button:hover {
   background: var(--bg-elevated);
 }
+.dialog-actions button.danger {
+  color: #e5484d;
+  border-color: #e5484d;
+}
+.dialog-actions button.danger:hover {
+  background: rgba(229, 72, 77, 0.12);
+}
 .dialog-actions button.primary {
   background: var(--accent);
   border-color: var(--accent);

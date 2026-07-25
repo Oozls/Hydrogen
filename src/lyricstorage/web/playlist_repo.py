@@ -59,3 +59,14 @@ def update_track_in_all_playlists(track_path: str, **fields) -> None:
                 changed = True
         if changed:
             playlist.save()
+
+
+def remove_track_from_all_playlists(track_path: str) -> None:
+    """완전 삭제 시, 같은 파일을 가리키는 모든 플레이리스트(글로벌 포함)의
+    Track 사본을 전부 제거한다. 물리 파일 삭제는 호출자 책임."""
+    for _name, path in PlaylistModel.list_saved_names():
+        playlist = PlaylistModel.load(path)
+        before = len(playlist.tracks)
+        playlist.tracks = [t for t in playlist.tracks if t.path != track_path]
+        if len(playlist.tracks) != before:
+            playlist.save()
