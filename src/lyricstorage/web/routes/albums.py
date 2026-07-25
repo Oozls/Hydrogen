@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from lyricstorage import applog
 from lyricstorage.models import write_album_art, write_tags
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.routes.media import _sniff_image_mimetype
@@ -52,4 +53,7 @@ def update_album():
         track.album = new_album
         updated_tracks.append(track_to_json(track))
 
+    applog.log_info(
+        "ACTION", f"앨범 정보 수정: {album} ({artist}) -> {new_album} ({len(updated_tracks)}곡)"
+    )
     return jsonify({"tracks": updated_tracks})

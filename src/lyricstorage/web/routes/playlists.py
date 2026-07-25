@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from flask import Blueprint, jsonify, request
 
+from lyricstorage import applog
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
@@ -41,6 +42,7 @@ def create_playlist():
         return jsonify({"error": "이미 존재하는 이름입니다."}), 400
     playlist = PlaylistModel(name)
     playlist.save()
+    applog.log_info("ACTION", f"플레이리스트 생성: {name}")
     return jsonify(playlist_to_json(playlist)), 201
 
 
@@ -60,6 +62,7 @@ def delete_playlist(name: str):
     if path is None:
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
     path.unlink(missing_ok=True)
+    applog.log_info("ACTION", f"플레이리스트 삭제: {name}")
     return jsonify({"ok": True})
 
 
@@ -83,6 +86,7 @@ def rename_playlist(name: str):
     new_path = playlist.save()
     if old_path is not None and old_path != new_path:
         old_path.unlink(missing_ok=True)
+    applog.log_info("ACTION", f"플레이리스트 이름 변경: {name} -> {new_name}")
     return jsonify(playlist_to_json(playlist))
 
 
@@ -114,6 +118,7 @@ def remove_tracks(name: str):
             playlist.remove(i)
     if indices:
         playlist.save()
+        applog.log_info("ACTION", f"플레이리스트 곡 제거: {name} ({len(indices)}곡)")
     return jsonify(playlist_to_json(playlist))
 
 
@@ -132,4 +137,5 @@ def add_tracks_from_library(name: str):
             continue
         playlist.tracks.append(replace(track))
     playlist.save()
+    applog.log_info("ACTION", f"플레이리스트에 라이브러리 곡 추가: {name} ({len(track_ids)}곡 요청)")
     return jsonify(playlist_to_json(playlist))

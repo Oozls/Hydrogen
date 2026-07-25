@@ -3,6 +3,7 @@ import { setupNowPlaying } from "./nowplaying.js";
 import { setupPlaylist } from "./playlist.js";
 import { setupLyrics } from "./lyrics.js";
 import { setupTrackInfo } from "./trackinfo.js";
+import { setupBulkEdit } from "./bulkedit.js";
 import { setupPlayTracking } from "./playtracking.js";
 import { setupStats } from "./stats.js";
 import { setupBrowse } from "./browse.js";
@@ -37,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
       player.playIndex(index);
     },
     (track) => trackInfoApi.open(track),
-    { sidebarApi, refs }
+    { sidebarApi, refs, onBulkEdit: (ids) => bulkEditApi.open(ids) }
   );
   const trackInfoApi = setupTrackInfo(
     async (trackId, updated) => {
@@ -66,11 +67,21 @@ document.addEventListener("DOMContentLoaded", () => {
     player,
     playlistApi,
     (track) => trackInfoApi.open(track),
-    (group) => albumInfoApi.open(group)
+    (group) => albumInfoApi.open(group),
+    (ids) => bulkEditApi.open(ids)
   );
   const albumInfoApi = setupAlbumInfo((updatedTracks) => {
     playlistApi.refreshTracksInfo(updatedTracks);
     browseApi.refreshAfterAlbumUpdate();
+    if (player.currentTrack && updatedTracks.some((t) => t.track_id === player.currentTrack.track_id)) {
+      nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
+    }
+  });
+  const bulkEditApi = setupBulkEdit((updatedTracks) => {
+    playlistApi.refreshTracksInfo(updatedTracks);
+    playlistApi.clearSelection();
+    browseApi.refreshAfterAlbumUpdate();
+    browseApi.clearSelection();
     if (player.currentTrack && updatedTracks.some((t) => t.track_id === player.currentTrack.track_id)) {
       nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
     }

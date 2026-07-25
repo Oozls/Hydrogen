@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { alertDialog } from "./dialog.js";
 import { fetchNonGlobalPlaylistNames } from "./playlistNames.js";
+import { showProgress, setProgress, hideProgress } from "./progress.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -30,7 +31,10 @@ function groupAlbums(tracks) {
   return [...map.values()];
 }
 
-export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_TOLERANCE = 10;
+
+export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit) {
   const panelEl = document.getElementById("browse-panel");
   const searchInput = document.getElementById("browse-search");
   const tabsEl = document.getElementById("browse-tabs");
@@ -39,6 +43,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
   const songsList = document.getElementById("browse-songs-list");
   const albumsList = document.getElementById("browse-albums-list");
   const targetSelect = document.getElementById("browse-target-playlist");
+  const bulkEditBtn = document.getElementById("btn-browse-bulk-edit");
+  const clearSelectionBtn = document.getElementById("btn-browse-clear-selection");
   const addFileBtn = document.getElementById("btn-browse-add-file");
   const addFolderBtn = document.getElementById("btn-browse-add-folder");
   const fileInput = document.getElementById("browse-file-input");
@@ -47,6 +53,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
   let tracks = [];
   let mode = "song";
   let playlistNames = [];
+  let selectedTrackIds = new Set();
+  let lastClickedIndex = null;
+
+  // 선택된 곡이 하나라도 있으면 "선택 모드"로 간주 — 이때만 체크박스가 보이고,
+  // 수정자 키 없는 일반 클릭도 체크박스처럼 토글로 동작한다.
+  function syncSelectionUI() {
+    songsList.classList.toggle("selecting", selectedTrackIds.size > 0);
+    bulkEditBtn.disabled = selectedTrackIds.size === 0;
+    bulkEditBtn.title =
+      selectedTrackIds.size > 0 ? `선택한 ${selectedTrackIds.size}곡 정보 일괄 수정` : "선택한 곡 정보 일괄 수정";
+    clearSelectionBtn.hidden = selectedTrackIds.size === 0;
+  }
 
   function playEphemeral(track) {
     if (player.playlist !== playlistApi.getCurrentPlaylist()) {
@@ -98,8 +116,16 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
 
   async function handleUpload(fileList) {
     if (!fileList || !fileList.length) return;
+    showProgress(`곡 업로드 중 (${fileList.length}개 파일)`);
     try {
-      const result = await api.uploadFiles(fileList);
+      const result = await api.uploadFiles(fileList, undefined, (fraction) => {
+        if (fraction >= 1) {
+          showProgress("라이브러리에 추가하는 중...");
+          setProgress(null);
+        } else {
+          setProgress(fraction);
+        }
+      });
       if (result.skipped && result.skipped.length) {
         await alertDialog(
           "다음 파일을 건너뛰었습니다:\n" +
@@ -111,6 +137,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
       render();
     } catch (err) {
       await alertDialog(err.message);
+    } finally {
+      hideProgress();
     }
   }
 
@@ -122,16 +150,51 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
   }
 
   function renderSongs() {
+    const validIds = new Set(tracks.map((t) => t.track_id));
+    for (const id of selectedTrackIds) {
+      if (!validIds.has(id)) selectedTrackIds.delete(id);
+    }
+
     const q = searchInput.value.trim().toLowerCase();
     songsList.innerHTML = "";
+    syncSelectionUI();
+
     const filtered = tracks.filter((t) => matchesSong(t, q));
     if (!filtered.length) {
       renderEmpty(songsList);
       return;
     }
-    filtered.forEach((track) => {
+
+    // 셔프트/컨트롤/롱프레스로 선택된 항목이 바뀔 때마다 목록 전체를 다시 그리지
+    // 않고 해당 행만 직접 갱신한다 — 롱프레스 타이머 콜백이 목록을 재생성하면
+    // 이어지는 pointerup의 네이티브 click이 이미 사라진(재생성된) 옛 요소에서
+    // 발생해 선택이 곧바로 토글되어버리는 문제를 피하기 위함이다.
+    const rows = [];
+    function applySelection(index, selected) {
+      const row = rows[index];
+      if (selected) selectedTrackIds.add(row.track.track_id);
+      else selectedTrackIds.delete(row.track.track_id);
+      row.li.classList.toggle("selected", selected);
+      row.checkbox.checked = selected;
+      syncSelectionUI();
+    }
+
+    filtered.forEach((track, i) => {
       const li = document.createElement("li");
       li.className = "playlist-row";
+      const selected = selectedTrackIds.has(track.track_id);
+      if (selected) li.classList.add("selected");
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "playlist-row-checkbox";
+      checkbox.checked = selected;
+      checkbox.addEventListener("click", (e) => e.stopPropagation());
+      checkbox.addEventListener("change", () => {
+        applySelection(i, checkbox.checked);
+        lastClickedIndex = i;
+      });
+      li.appendChild(checkbox);
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
@@ -173,6 +236,61 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
         onEditTrack(track);
       });
       li.appendChild(moreBtn);
+
+      rows.push({ li, checkbox, track });
+
+      // 롱프레스로 선택 모드에 진입한 직후, 같은 클릭(pointerup)에서 발생하는
+      // 네이티브 click 이벤트가 선택을 곧바로 되돌리지 않도록 억제 플래그를 둔다.
+      let longPressTimer = null;
+      let longPressStart = null;
+      let longPressFired = false;
+
+      li.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button, input")) return;
+        longPressFired = false;
+        longPressStart = { x: e.clientX, y: e.clientY };
+        clearTimeout(longPressTimer);
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          longPressFired = true;
+          applySelection(i, true);
+          lastClickedIndex = i;
+        }, LONG_PRESS_MS);
+      });
+      const cancelLongPress = () => {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        longPressStart = null;
+      };
+      li.addEventListener("pointerup", cancelLongPress);
+      li.addEventListener("pointerleave", cancelLongPress);
+      li.addEventListener("pointercancel", cancelLongPress);
+      li.addEventListener("pointermove", (e) => {
+        if (!longPressStart) return;
+        const dx = e.clientX - longPressStart.x;
+        const dy = e.clientY - longPressStart.y;
+        if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) cancelLongPress();
+      });
+
+      li.addEventListener("click", (e) => {
+        if (longPressFired) {
+          longPressFired = false;
+          return;
+        }
+        if (e.target.closest("button, input")) return;
+        if (e.shiftKey && lastClickedIndex !== null) {
+          const [start, end] = [lastClickedIndex, i].sort((a, b) => a - b);
+          for (let j = start; j <= end; j++) applySelection(j, true);
+          lastClickedIndex = i;
+        } else if (e.ctrlKey || e.metaKey) {
+          applySelection(i, !selectedTrackIds.has(track.track_id));
+          lastClickedIndex = i;
+        } else if (selectedTrackIds.size > 0) {
+          // 선택 모드 중에는 수정자 키 없는 일반 클릭도 체크박스처럼 토글된다.
+          applySelection(i, !selectedTrackIds.has(track.track_id));
+          lastClickedIndex = i;
+        }
+      });
 
       li.addEventListener("dblclick", () => playEphemeral(track));
       songsList.appendChild(li);
@@ -233,6 +351,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
 
   function switchMode(next) {
     mode = next;
+    if (mode !== "song") {
+      selectedTrackIds.clear();
+      syncSelectionUI();
+    }
     songsPanel.classList.toggle("active", mode === "song");
     albumsPanel.classList.toggle("active", mode === "album");
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
@@ -246,6 +368,17 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
   });
 
   searchInput.addEventListener("input", render);
+
+  bulkEditBtn.addEventListener("click", () => {
+    if (!selectedTrackIds.size) return;
+    onBulkEdit(Array.from(selectedTrackIds));
+  });
+
+  clearSelectionBtn.addEventListener("click", () => {
+    selectedTrackIds.clear();
+    lastClickedIndex = null;
+    render();
+  });
 
   addFileBtn.addEventListener("click", () => fileInput.click());
   addFolderBtn.addEventListener("click", () => folderInput.click());
@@ -273,6 +406,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum) {
     async refreshAfterAlbumUpdate() {
       const library = await api.getLibrary();
       tracks = library.tracks;
+      render();
+    },
+    clearSelection() {
+      selectedTrackIds.clear();
+      lastClickedIndex = null;
       render();
     },
   };

@@ -40,3 +40,8 @@ def index():
     # </script>로 오인되어 태그가 끊기지 않도록 이스케이프.
     bootstrap_json = json.dumps(bootstrap, ensure_ascii=False).replace("</", "<\\/")
     return render_template("index.html", bootstrap_json=bootstrap_json)
+
+
+@bp.get("/logs")
+def logs_page():
+    return render_template("logs.html")

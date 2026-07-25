@@ -44,11 +44,37 @@ export const api = {
       json: { track_ids: trackIds },
     }),
   getLibrary: () => request("GET", "/api/library"),
-  uploadFiles: (fileList, playlistName) => {
+  // onProgress(fraction): 업로드 바이트 전송 진행률(0~1)을 실시간으로 받고 싶을 때만
+  // 넘긴다. 서버 응답을 기다리는 구간(해시 계산/태그 읽기)은 진행률을 알 수 없으므로
+  // 전송이 끝나면 onProgress(1)까지만 호출되고, 이후는 호출자가 알아서 처리한다.
+  uploadFiles: (fileList, playlistName, onProgress) => {
     const formData = new FormData();
     for (const file of fileList) formData.append("files[]", file);
     if (playlistName) formData.append("playlist", playlistName);
-    return request("POST", "/api/library/upload", { formData });
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/library/upload");
+      if (onProgress) {
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) onProgress(e.loaded / e.total);
+        });
+      }
+      xhr.onload = () => {
+        let data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch (_err) {
+          /* 응답이 JSON이 아님 */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          reject(new Error((data && data.error) || `POST /api/library/upload 실패 (${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("업로드 중 네트워크 오류가 발생했습니다."));
+      xhr.send(formData);
+    });
   },
   getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
@@ -57,6 +83,8 @@ export const api = {
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
   updateTrackMetadata: (trackId, patch) =>
     request("PUT", `/api/tracks/${trackId}/metadata`, { json: patch }),
+  updateTrackMetadataBatch: (trackIds, patch) =>
+    request("PUT", "/api/tracks/metadata/batch", { json: { track_ids: trackIds, ...patch } }),
   deleteTrackEntirely: (trackId) => request("DELETE", `/api/tracks/${trackId}`),
   uploadTrackArt: (trackId, file) => {
     const formData = new FormData();

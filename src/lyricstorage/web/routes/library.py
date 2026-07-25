@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from flask import Blueprint, jsonify, request
 
+from lyricstorage import applog
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME
 from lyricstorage.web import library as library_adapter
 from lyricstorage.web import playlist_repo
@@ -47,4 +48,9 @@ def upload_files():
         playlist.save()
         if target_playlist is not None:
             target_playlist.save()
+    applog.log_info(
+        "ACTION",
+        f"곡 업로드: 총 {len(files)}개 중 성공 {len(added)}개, 스킵 {len(skipped)}개"
+        + (f" (대상 재생목록={target_name})" if target_playlist is not None else ""),
+    )
     return jsonify({"added": added, "skipped": skipped})

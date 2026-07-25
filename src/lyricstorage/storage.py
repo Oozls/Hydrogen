@@ -34,6 +34,12 @@ def songs_dir() -> Path:
     return path
 
 
+def logs_dir() -> Path:
+    path = app_data_dir() / "logs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def settings_path() -> Path:
     return app_data_dir() / "settings.json"
 

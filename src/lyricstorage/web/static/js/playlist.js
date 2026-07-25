@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { confirmDialog, promptDialog, alertDialog } from "./dialog.js";
+import { showProgress, setProgress, hideProgress } from "./progress.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -11,7 +12,13 @@ function fmtDuration(ms) {
 
 const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
 
-export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, { sidebarApi, refs }) {
+export function setupPlaylist(
+  player,
+  bootstrap,
+  onTrackActivated,
+  onEditTrack,
+  { sidebarApi, refs, onBulkEdit }
+) {
   const panelEl = document.getElementById("playlist-panel");
   const pageTitleEl = document.getElementById("playlist-page-title");
   const sortSelect = document.getElementById("playlist-sort");
@@ -21,6 +28,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
   const addFileBtn = document.getElementById("btn-add-file");
   const addFolderBtn = document.getElementById("btn-add-folder");
   const addFromLibraryBtn = document.getElementById("btn-add-from-library");
+  const bulkEditBtn = document.getElementById("btn-bulk-edit");
   const removeBtn = document.getElementById("btn-remove-selected");
   const fileInput = document.getElementById("file-input");
   const folderInput = document.getElementById("folder-input");
@@ -229,8 +237,16 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
 
   async function handleUpload(fileList) {
     if (!fileList || !fileList.length) return;
+    showProgress(`곡 업로드 중 (${fileList.length}개 파일)`);
     try {
-      const result = await api.uploadFiles(fileList, currentPlaylist.name);
+      const result = await api.uploadFiles(fileList, currentPlaylist.name, (fraction) => {
+        if (fraction >= 1) {
+          showProgress("재생목록에 추가하는 중...");
+          setProgress(null);
+        } else {
+          setProgress(fraction);
+        }
+      });
       if (result.skipped && result.skipped.length) {
         await alertDialog(
           "다음 파일을 건너뛰었습니다:\n" +
@@ -244,6 +260,8 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
       }
     } catch (err) {
       await alertDialog(err.message);
+    } finally {
+      hideProgress();
     }
   }
 
@@ -254,6 +272,12 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
   folderInput.addEventListener("change", async () => {
     await handleUpload(folderInput.files);
     folderInput.value = "";
+  });
+
+  bulkEditBtn.addEventListener("click", () => {
+    if (!currentPlaylist.name || !selectedIndices.size) return;
+    const ids = Array.from(selectedIndices).map((i) => currentPlaylist.tracks[i].track_id);
+    onBulkEdit(ids);
   });
 
   removeBtn.addEventListener("click", async () => {
@@ -345,6 +369,10 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, 
     },
     hide() {
       panelEl.classList.remove("active");
+    },
+    clearSelection() {
+      selectedIndices.clear();
+      renderList();
     },
     refreshHasLyrics(trackId) {
       const matches = currentPlaylist.tracks.filter((t) => t.track_id === trackId);

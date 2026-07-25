@@ -70,6 +70,9 @@
           <button id="btn-add-from-library" class="icon-btn" title="라이브러리에서 추가">
             <span class="icon" style="--icon: url(/static/icons/music.svg)"></span>
           </button>
+          <button id="btn-bulk-edit" class="icon-btn" title="선택한 곡 정보 일괄 수정">
+            <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
+          </button>
           <button id="btn-remove-selected" class="icon-btn" title="선택 삭제">
             <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
           </button>
@@ -94,6 +97,12 @@
           <input type="text" id="browse-search" placeholder="검색..." />
           <select id="browse-target-playlist" title="추가할 플레이리스트"></select>
           <div class="spacer"></div>
+          <button id="btn-browse-clear-selection" class="icon-btn" title="선택 취소" hidden>
+            <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+          </button>
+          <button id="btn-browse-bulk-edit" class="icon-btn" title="선택한 곡 정보 일괄 수정" disabled>
+            <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
+          </button>
           <button id="btn-browse-add-file" class="icon-btn" title="새 음원 파일 등록">
             <span class="icon" style="--icon: url(/static/icons/upload.svg)"></span>
           </button>
@@ -269,6 +278,36 @@
     </div>
   </dialog>
 
+  <dialog id="bulk-edit-dialog" class="library-picker-dialog track-info-dialog">
+    <h3>곡 정보 일괄 수정</h3>
+    <p id="bulk-edit-count" class="bulk-edit-count"></p>
+    <label class="track-info-field bulk-edit-field">
+      <span class="bulk-edit-field-label">
+        <input type="checkbox" id="bulk-edit-title-apply" />
+        제목
+      </span>
+      <input type="text" id="bulk-edit-title" autocomplete="off" disabled />
+    </label>
+    <label class="track-info-field bulk-edit-field">
+      <span class="bulk-edit-field-label">
+        <input type="checkbox" id="bulk-edit-artist-apply" />
+        아티스트
+      </span>
+      <input type="text" id="bulk-edit-artist" autocomplete="off" disabled />
+    </label>
+    <label class="track-info-field bulk-edit-field">
+      <span class="bulk-edit-field-label">
+        <input type="checkbox" id="bulk-edit-album-apply" />
+        앨범
+      </span>
+      <input type="text" id="bulk-edit-album" autocomplete="off" disabled />
+    </label>
+    <div class="dialog-actions">
+      <button id="bulk-edit-cancel" type="button">취소</button>
+      <button id="bulk-edit-save" class="primary" type="button">저장</button>
+    </div>
+  </dialog>
+
   <dialog id="album-info-dialog" class="library-picker-dialog track-info-dialog">
     <h3>앨범 정보 수정</h3>
     <div class="track-info-art-row">
@@ -295,6 +334,16 @@
       <button id="album-info-save" class="primary" type="button">저장</button>
     </div>
   </dialog>
+
+  <div id="progress-overlay" class="progress-overlay" aria-live="polite">
+    <div class="progress-box">
+      <div id="progress-label" class="progress-label"></div>
+      <div class="progress-track">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div id="progress-percent" class="progress-percent"></div>
+    </div>
+  </div>
 
   <script id="bootstrap-data" type="application/json">{{ bootstrap_json|safe }}</script>
   <script src="{{ url_for('static', filename='vendor/sortable.min.js') }}"></script>
