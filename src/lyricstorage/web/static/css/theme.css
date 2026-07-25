@@ -1042,13 +1042,60 @@ input[type="range"]:hover::-moz-range-thumb {
 .bulk-edit-field input[type="text"]:disabled {
   opacity: 0.5;
 }
-.playlist-row-checkbox {
-  flex: none;
-  margin: 0 2px 0 0;
-  display: none;
+.playlist-row.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
-.playlist-list.selecting .playlist-row-checkbox {
+
+/* -- 커스텀 체크박스(라이브러리 다중 선택) -------------------------------- */
+.row-checkbox {
+  display: none;
+  position: relative;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 2px 0 0;
+  cursor: pointer;
+}
+.playlist-list.selecting .row-checkbox {
   display: inline-block;
+}
+.row-checkbox-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.row-checkbox-box {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.row-checkbox-input:hover ~ .row-checkbox-box {
+  border-color: var(--accent);
+}
+.row-checkbox-input:checked ~ .row-checkbox-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  position: relative;
+}
+.row-checkbox-input:checked ~ .row-checkbox-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--icon-on-accent);
+  -webkit-mask-image: url(/static/icons/check.svg);
+  mask-image: url(/static/icons/check.svg);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 70%;
+  mask-size: 70%;
 }
 
 /* -- 로그 페이지 (/logs) ------------------------------------------------ */

@@ -185,16 +185,22 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       const selected = selectedTrackIds.has(track.track_id);
       if (selected) li.classList.add("selected");
 
+      const checkboxWrap = document.createElement("label");
+      checkboxWrap.className = "row-checkbox";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
-      checkbox.className = "playlist-row-checkbox";
+      checkbox.className = "row-checkbox-input";
       checkbox.checked = selected;
       checkbox.addEventListener("click", (e) => e.stopPropagation());
       checkbox.addEventListener("change", () => {
         applySelection(i, checkbox.checked);
         lastClickedIndex = i;
       });
-      li.appendChild(checkbox);
+      checkboxWrap.appendChild(checkbox);
+      const checkboxBox = document.createElement("span");
+      checkboxBox.className = "row-checkbox-box";
+      checkboxWrap.appendChild(checkboxBox);
+      li.appendChild(checkboxWrap);
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
