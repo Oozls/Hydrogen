@@ -38,6 +38,7 @@ function parseMinSecMs(text) {
 }
 
 export function setupLyrics(player, onLyricsSaved) {
+  const lyricsPanel = document.getElementById("lyrics-panel");
   const tabViewBtn = document.getElementById("tab-lyrics-view-btn");
   const tabEditBtn = document.getElementById("tab-lyrics-edit-btn");
   const viewPanel = document.getElementById("lyrics-view-panel");
@@ -67,11 +68,13 @@ export function setupLyrics(player, onLyricsSaved) {
     });
   }
 
+  // 가사 보기 패널은 항상 표시한다(편집 모드일 때는 편집 패널과 나란히,
+  // 보기 모드일 때는 혼자). 편집 모드 진입 시 가사 패널 자체 폭도 넓힌다.
   function switchTab(which) {
     tabViewBtn.classList.toggle("active", which === "view");
     tabEditBtn.classList.toggle("active", which === "edit");
-    viewPanel.classList.toggle("active", which === "view");
     editPanel.classList.toggle("active", which === "edit");
+    lyricsPanel.classList.toggle("wide", which === "edit");
     if (which === "edit") regrowEditTextareas();
   }
   tabViewBtn.addEventListener("click", () => switchTab("view"));

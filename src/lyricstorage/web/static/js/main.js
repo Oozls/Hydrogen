@@ -7,6 +7,8 @@ import { setupPlayTracking } from "./playtracking.js";
 import { setupStats } from "./stats.js";
 import { setupBrowse } from "./browse.js";
 import { setupAlbumInfo } from "./albuminfo.js";
+import { setupSidebar } from "./sidebar.js";
+import { setupRouter } from "./router.js";
 
 function readBootstrap() {
   const el = document.getElementById("bootstrap-data");
@@ -18,7 +20,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 
+  const refs = { router: null };
+
   const nowPlayingApi = setupNowPlaying(player);
+  const sidebarApi = setupSidebar(bootstrap, {
+    onSelectPlaylist: (name) => refs.router.goPlaylist(name),
+    onGoBrowse: () => refs.router.goBrowse(),
+  });
   const playlistApi = setupPlaylist(
     player,
     bootstrap,
@@ -28,7 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       player.playIndex(index);
     },
-    (track) => trackInfoApi.open(track)
+    (track) => trackInfoApi.open(track),
+    { sidebarApi, refs }
   );
   const trackInfoApi = setupTrackInfo((trackId, updated) => {
     playlistApi.refreshTrackInfo(trackId, updated);
@@ -52,6 +61,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (player.currentTrack && updatedTracks.some((t) => t.track_id === player.currentTrack.track_id)) {
       nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
     }
+  });
+
+  refs.router = setupRouter({
+    onBrowse: () => {
+      playlistApi.hide();
+      browseApi.show();
+      sidebarApi.setActive(null);
+    },
+    onPlaylist: (name) => {
+      browseApi.hide();
+      playlistApi.show();
+      playlistApi.loadPlaylist(name);
+      sidebarApi.setActive(name);
+    },
   });
 
   const initialVolume = bootstrap.settings.volume || 80;

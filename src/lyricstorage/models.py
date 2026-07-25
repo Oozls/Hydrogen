@@ -176,6 +176,13 @@ class PlaylistModel:
 
     def add_file(self, path: str) -> Track:
         library_path = _copy_into_library(path)
+        # library_path 파일명 자체가 내용 해시이므로, 경로 일치 여부만으로
+        # 완전히 동일한 파일이 이미 추가돼 있는지 판단할 수 있다(재해싱 불필요).
+        # 이 검사는 self(호출 대상 플레이리스트)의 트랙 목록만 기준으로 하므로,
+        # add_file/add_folder가 라이브러리(글로벌) 플레이리스트가 아닌 다른
+        # 플레이리스트에서 직접 호출되면 그 플레이리스트 기준으로 중복이 판단된다.
+        if any(t.path == library_path for t in self.tracks):
+            raise ValueError("이미 라이브러리에 있는 파일입니다")
         track = Track.from_file(library_path)
         self.tracks.append(track)
         return track

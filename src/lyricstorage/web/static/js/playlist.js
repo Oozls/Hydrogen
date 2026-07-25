@@ -11,8 +11,9 @@ function fmtDuration(ms) {
 
 const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
 
-export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) {
-  const selectEl = document.getElementById("playlist-select");
+export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack, { sidebarApi, refs }) {
+  const panelEl = document.getElementById("playlist-panel");
+  const pageTitleEl = document.getElementById("playlist-page-title");
   const sortSelect = document.getElementById("playlist-sort");
   const newBtn = document.getElementById("btn-new-playlist");
   const renameBtn = document.getElementById("btn-rename-playlist");
@@ -32,7 +33,6 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   const pickerCancel = document.getElementById("library-picker-cancel");
 
   let currentPlaylist = bootstrap.current_playlist || EMPTY_PLAYLIST;
-  let playlistNames = bootstrap.playlist_names.slice();
   let selectedIds = new Set();
   let lastClickedIndex = null;
   let sortable = null;
@@ -41,17 +41,7 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   function updateToolbarMode() {
     deleteBtn.style.display = currentPlaylist.name ? "" : "none";
     renameBtn.style.display = currentPlaylist.name ? "" : "none";
-  }
-
-  function renderSelect() {
-    selectEl.innerHTML = "";
-    for (const name of playlistNames) {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      if (name === currentPlaylist.name) opt.selected = true;
-      selectEl.appendChild(opt);
-    }
+    pageTitleEl.textContent = currentPlaylist.name || "";
   }
 
   function sortedTracks() {
@@ -170,14 +160,13 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
     renderList();
   });
 
-  async function refreshPlaylistNames() {
-    const items = await api.listPlaylists();
-    playlistNames = items.filter((p) => !p.is_global).map((p) => p.name);
-    renderSelect();
-  }
-
   async function loadPlaylist(name) {
-    currentPlaylist = await api.getPlaylist(name);
+    try {
+      currentPlaylist = await api.getPlaylist(name);
+    } catch (err) {
+      refs.router.goBrowse();
+      return;
+    }
     selectedIds.clear();
     updateToolbarMode();
     renderList();
@@ -185,19 +174,17 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
     await api.updateSettings({ last_playlist: name });
   }
 
-  selectEl.addEventListener("change", () => loadPlaylist(selectEl.value));
-
   newBtn.addEventListener("click", async () => {
     const name = await promptDialog("새 플레이리스트 이름:");
     if (!name || !name.trim()) return;
     try {
       currentPlaylist = await api.createPlaylist(name.trim());
-      await refreshPlaylistNames();
-      selectEl.value = currentPlaylist.name;
+      await sidebarApi.refreshNames();
       selectedIds.clear();
       updateToolbarMode();
       renderList();
       player.setPlaylist(currentPlaylist);
+      refs.router.goPlaylist(currentPlaylist.name);
     } catch (err) {
       await alertDialog(err.message);
     }
@@ -209,10 +196,10 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
     if (!name || !name.trim() || name.trim() === currentPlaylist.name) return;
     try {
       currentPlaylist = await api.renamePlaylist(currentPlaylist.name, name.trim());
-      await refreshPlaylistNames();
-      selectEl.value = currentPlaylist.name;
+      await sidebarApi.refreshNames();
       renderList();
       await api.updateSettings({ last_playlist: currentPlaylist.name });
+      refs.router.goPlaylist(currentPlaylist.name);
     } catch (err) {
       await alertDialog(err.message);
     }
@@ -228,17 +215,10 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
       return;
     try {
       await api.deletePlaylist(currentPlaylist.name);
-      await refreshPlaylistNames();
-      const fallback = playlistNames[0];
-      if (fallback) await loadPlaylist(fallback);
-      else {
-        currentPlaylist = EMPTY_PLAYLIST;
-        selectedIds.clear();
-        updateToolbarMode();
-        renderSelect();
-        renderList();
-        player.setPlaylist(currentPlaylist);
-      }
+      const names = await sidebarApi.refreshNames();
+      const fallback = names[0];
+      if (fallback) refs.router.goPlaylist(fallback);
+      else refs.router.goBrowse();
     } catch (err) {
       await alertDialog(err.message);
     }
@@ -352,12 +332,18 @@ export function setupPlaylist(player, bootstrap, onTrackActivated, onEditTrack) 
   });
 
   updateToolbarMode();
-  renderSelect();
   renderList();
   enableSortable();
   player.setPlaylist(currentPlaylist);
 
   return {
+    loadPlaylist,
+    show() {
+      panelEl.classList.add("active");
+    },
+    hide() {
+      panelEl.classList.remove("active");
+    },
     refreshHasLyrics(trackId) {
       const track = currentPlaylist.tracks.find((t) => t.track_id === trackId);
       if (track) {
