@@ -40,9 +40,15 @@ document.addEventListener("DOMContentLoaded", () => {
     { sidebarApi, refs }
   );
   const trackInfoApi = setupTrackInfo(
-    (trackId, updated) => {
+    async (trackId, updated) => {
       playlistApi.refreshTrackInfo(trackId, updated);
+      await browseApi.refreshAfterAlbumUpdate();
       if (player.currentTrack && player.currentTrack.track_id === trackId) {
+        // 검색 결과(브라우즈)에서 바로 재생 중인 트랙은 currentPlaylist/브라우즈 목록과
+        // 별개의 객체 참조라 위 갱신들이 닿지 않으므로, 재생 중 표시줄은 직접 패치한다.
+        player.currentTrack.title = updated.title;
+        player.currentTrack.artist = updated.artist;
+        player.currentTrack.album = updated.album;
         nowPlayingApi.setTrack(player.currentTrack, { bustArtCache: true });
       }
     },
