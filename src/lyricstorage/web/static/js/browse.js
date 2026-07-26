@@ -14,7 +14,12 @@ function fmtDuration(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function matchesSong(track, q) {
+// field: "all"(기본) | "title" | "album" | "artist" — 검색창 옆 범위 선택에
+// 맞춰 특정 필드만 대상으로 검색할 수 있게 한다.
+function matchesSong(track, q, field = "all") {
+  if (field === "title") return (track.title || "").toLowerCase().includes(q);
+  if (field === "album") return (track.album || "").toLowerCase().includes(q);
+  if (field === "artist") return (track.artist || "").toLowerCase().includes(q);
   return `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(q);
 }
 
@@ -37,6 +42,8 @@ const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit) {
   const panelEl = document.getElementById("browse-panel");
   const searchInput = document.getElementById("browse-search");
+  const searchFieldSelect = document.getElementById("browse-search-field");
+  const searchFieldTitleOption = searchFieldSelect.querySelector('option[value="title"]');
   const tabsEl = document.getElementById("browse-tabs");
   const songsPanel = document.getElementById("browse-songs-panel");
   const albumsPanel = document.getElementById("browse-albums-panel");
@@ -343,9 +350,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
 
     const q = searchInput.value.trim().toLowerCase();
+    const field = searchFieldSelect.value;
     syncSelectionUI();
 
-    const filtered = tracks.filter((t) => matchesSong(t, q));
+    const filtered = tracks.filter((t) => matchesSong(t, q, field));
     renderSongRows(songsList, filtered);
   }
 
@@ -390,8 +398,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   function renderAlbums() {
     const q = searchInput.value.trim().toLowerCase();
+    const field = searchFieldSelect.value;
     albumsList.innerHTML = "";
-    const groups = groupAlbums(tracks).filter((g) => matchesAlbum(g, q));
+    const groups = groupAlbums(tracks).filter((g) => matchesAlbum(g, q, field));
     renderedAlbumGroups = groups;
     if (!groups.length) {
       renderEmpty(albumsList);
@@ -419,9 +428,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
       const titleRow = document.createElement("div");
       titleRow.className = "media-card-title-row";
-      const title = document.createElement("div");
-      title.className = "media-card-title";
-      title.textContent = group.album || "(앨범 없음)";
+      const title = createMarqueeClip("media-card-title", "", group.album || "(앨범 없음)");
       titleRow.appendChild(title);
 
       // 순서 변경은 이 손잡이를 잡고 드래그할 때만 시작된다(SortableJS의
@@ -451,11 +458,23 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       card.addEventListener("click", () => openAlbumDetail(group));
       albumsList.appendChild(card);
     });
+
+    // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다(곡 목록과 동일).
+    requestAnimationFrame(() => applyMarquee(albumsList));
   }
 
   function render() {
     if (mode === "song") renderSongs();
     else renderAlbums();
+  }
+
+  // 앨범 탭은 개별 곡명이 없는 그룹 단위라 "곡명" 범위가 의미가 없다 —
+  // 선택지에서 아예 비활성화하고, 곡 탭에서 곡명을 고른 채로 넘어왔으면
+  // "전체"로 되돌린다.
+  function syncSearchFieldOptions() {
+    const isAlbumMode = mode === "album";
+    searchFieldTitleOption.disabled = isAlbumMode;
+    if (isAlbumMode && searchFieldSelect.value === "title") searchFieldSelect.value = "all";
   }
 
   function switchMode(next) {
@@ -469,6 +488,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     songsPanel.classList.toggle("active", mode === "song");
     albumsPanel.classList.toggle("active", mode === "album");
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+    syncSearchFieldOptions();
     render();
   }
 
@@ -479,6 +499,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   });
 
   searchInput.addEventListener("input", render);
+  searchFieldSelect.addEventListener("change", render);
 
   clearSelectionBtn.addEventListener("click", () => {
     selectedTrackIds.clear();
@@ -532,14 +553,15 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     clearTimeout(marqueeResizeTimer);
     marqueeResizeTimer = setTimeout(() => {
       if (!panelEl.classList.contains("active")) return;
-      const activeList = albumDetailPanel.classList.contains("active")
-        ? albumDetailList
-        : songsPanel.classList.contains("active")
-          ? songsList
-          : null;
-      if (!activeList) return;
-      applyColumnPriority(activeList);
-      applyMarquee(activeList);
+      if (albumDetailPanel.classList.contains("active")) {
+        applyColumnPriority(albumDetailList);
+        applyMarquee(albumDetailList);
+      } else if (songsPanel.classList.contains("active")) {
+        applyColumnPriority(songsList);
+        applyMarquee(songsList);
+      } else if (albumsPanel.classList.contains("active")) {
+        applyMarquee(albumsList);
+      }
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 
@@ -664,6 +686,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     async show() {
       panelEl.classList.add("active");
       searchInput.value = "";
+      searchFieldSelect.value = "all";
       renderLoading(songsList);
       renderLoading(albumsList);
       const library = await api.getLibrary();

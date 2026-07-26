@@ -55,6 +55,8 @@ export function setupPlaylist(
   const pickerTitleEl = document.getElementById("library-picker-title");
   const pickerSelectedCountEl = document.getElementById("library-picker-selected-count");
   const pickerSearch = document.getElementById("library-picker-search");
+  const pickerSearchField = document.getElementById("library-picker-search-field");
+  const pickerSearchFieldTitleOption = pickerSearchField.querySelector('option[value="title"]');
   const pickerAlbumsEl = document.getElementById("library-picker-albums");
   const pickerList = document.getElementById("library-picker-list");
   const pickerOk = document.getElementById("library-picker-ok");
@@ -409,12 +411,17 @@ export function setupPlaylist(
     pickerSelectedCountEl.textContent = pickerChecked.size ? `${pickerChecked.size}곡 선택됨` : "";
   }
 
+  // 앨범 목록 화면은 개별 곡명이 없는 그룹 단위라 "곡명" 범위가 의미가 없다 —
+  // 선택지에서 비활성화하고, 곡 목록 화면에서 곡명을 고른 채로 넘어왔으면
+  // "전체"로 되돌린다.
   function showPickerView(view) {
     pickerAlbumsEl.classList.toggle("active", view === "albums");
     pickerList.classList.toggle("active", view === "tracks");
     pickerBackBtn.hidden = view === "albums";
     pickerTitleEl.textContent =
       view === "tracks" ? pickerCurrentAlbum.album || "(앨범 없음)" : "라이브러리에서 추가";
+    pickerSearchFieldTitleOption.disabled = view === "albums";
+    if (view === "albums" && pickerSearchField.value === "title") pickerSearchField.value = "all";
   }
 
   addFromLibraryBtn.addEventListener("click", async () => {
@@ -431,6 +438,7 @@ export function setupPlaylist(
       return;
     }
     pickerSearch.value = "";
+    pickerSearchField.value = "all";
     updatePickerSelectedCount();
     showPickerView("albums");
     renderPickerAlbums();
@@ -439,8 +447,9 @@ export function setupPlaylist(
 
   function renderPickerAlbums() {
     const filter = pickerSearch.value.trim().toLowerCase();
+    const field = pickerSearchField.value;
     pickerAlbumsEl.innerHTML = "";
-    const filtered = pickerAlbumGroups.filter((g) => !filter || matchesAlbum(g, filter));
+    const filtered = pickerAlbumGroups.filter((g) => !filter || matchesAlbum(g, filter, field));
 
     if (!filtered.length) {
       const empty = document.createElement("div");
@@ -470,9 +479,7 @@ export function setupPlaylist(
       artWrap.appendChild(img);
       card.appendChild(artWrap);
 
-      const title = document.createElement("div");
-      title.className = "media-card-title";
-      title.textContent = group.album || "(앨범 없음)";
+      const title = createMarqueeClip("media-card-title", "", group.album || "(앨범 없음)");
       card.appendChild(title);
 
       if (group.artist) {
@@ -496,13 +503,19 @@ export function setupPlaylist(
       });
       pickerAlbumsEl.appendChild(card);
     });
+
+    requestAnimationFrame(() => applyMarquee(pickerAlbumsEl));
   }
 
   function renderPickerTracks() {
     const filter = pickerSearch.value.trim().toLowerCase();
+    const field = pickerSearchField.value;
     pickerList.innerHTML = "";
     const filtered = pickerCurrentAlbum.tracks.filter((track) => {
       if (!filter) return true;
+      if (field === "title") return (track.title || track.track_id).toLowerCase().includes(filter);
+      if (field === "album") return (track.album || "").toLowerCase().includes(filter);
+      if (field === "artist") return (track.artist || "").toLowerCase().includes(filter);
       const haystack = `${track.title || track.track_id} ${track.artist || ""} ${track.album || ""}`;
       return haystack.toLowerCase().includes(filter);
     });
@@ -593,6 +606,10 @@ export function setupPlaylist(
     if (pickerCurrentAlbum) renderPickerTracks();
     else renderPickerAlbums();
   });
+  pickerSearchField.addEventListener("change", () => {
+    if (pickerCurrentAlbum) renderPickerTracks();
+    else renderPickerAlbums();
+  });
 
   pickerCancel.addEventListener("click", () => pickerDialog.close());
   pickerOk.addEventListener("click", async () => {
@@ -636,6 +653,8 @@ export function setupPlaylist(
       if (pickerDialog.open && pickerCurrentAlbum) {
         applyColumnPriority(pickerList);
         applyMarquee(pickerList);
+      } else if (pickerDialog.open) {
+        applyMarquee(pickerAlbumsEl);
       }
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });

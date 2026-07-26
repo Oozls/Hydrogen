@@ -12,6 +12,11 @@ export function groupAlbums(tracks) {
   return [...map.values()];
 }
 
-export function matchesAlbum(group, q) {
+// field: "all"(기본) | "album" | "artist" — 검색창 옆 범위 선택에 맞춰 특정
+// 필드만 대상으로 검색할 수 있게 한다. "title"은 앨범 단위엔 없는 필드라
+// 호출하는 쪽(브라우즈 앨범 탭 등)에서 애초에 선택지에서 빼둔다.
+export function matchesAlbum(group, q, field = "all") {
+  if (field === "album") return (group.album || "").toLowerCase().includes(q);
+  if (field === "artist") return (group.artist || "").toLowerCase().includes(q);
   return `${group.album} ${group.artist}`.toLowerCase().includes(q);
 }

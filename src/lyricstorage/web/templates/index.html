@@ -89,6 +89,12 @@
             <button class="tab-btn active" data-mode="album" type="button">앨범</button>
           </div>
           <input type="text" id="browse-search" placeholder="검색..." />
+          <select id="browse-search-field" class="search-scope-select" title="검색 범위">
+            <option value="all">전체</option>
+            <option value="title">곡명</option>
+            <option value="album">앨범명</option>
+            <option value="artist">아티스트명</option>
+          </select>
           <div class="spacer"></div>
           <button id="btn-browse-clear-selection" class="icon-btn" title="선택 취소" hidden>
             <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
@@ -277,7 +283,15 @@
       <div class="spacer"></div>
       <span id="library-picker-selected-count" class="library-picker-selected-count"></span>
     </div>
-    <input type="text" id="library-picker-search" placeholder="검색..." />
+    <div class="library-picker-search-row">
+      <input type="text" id="library-picker-search" placeholder="검색..." />
+      <select id="library-picker-search-field" class="search-scope-select" title="검색 범위">
+        <option value="all">전체</option>
+        <option value="title">곡명</option>
+        <option value="album">앨범명</option>
+        <option value="artist">아티스트명</option>
+      </select>
+    </div>
     <div id="library-picker-albums" class="card-grid"></div>
     <ul id="library-picker-list" class="library-picker-list playlist-list selecting"></ul>
     <div class="dialog-actions">

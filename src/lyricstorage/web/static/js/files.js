@@ -1,4 +1,5 @@
 import { confirmDialog, alertDialog } from "./dialog.js";
+import { createMarqueeClip, applyMarquee } from "./marquee.js";
 
 async function fetchJSON(url, options) {
   const res = await fetch(url, options);
@@ -92,9 +93,7 @@ function buildNode(entry, depth) {
   const icon = document.createElement("span");
   icon.className = "icon icon-sm";
 
-  const name = document.createElement("span");
-  name.className = "files-tree-name";
-  name.textContent = entry.name;
+  const name = createMarqueeClip("files-tree-name", "", entry.name);
 
   const meta = document.createElement("span");
   meta.className = "files-tree-meta";
@@ -118,6 +117,10 @@ function buildNode(entry, depth) {
       expanded = !expanded;
       childrenWrap.hidden = !expanded;
       toggle.style.setProperty("--icon", expanded ? CHEVRON_DOWN : CHEVRON_RIGHT);
+      // 접혀 있는 동안엔 폭이 0이라 마퀴가 실제로 넘치는지 정확히 잴 수 없다
+      // (숨김 상태에서 미리 계산해두면 항상 "넘침"으로 잘못 판단한다). 펼칠
+      // 때마다 그 시점의 실제 폭으로 다시 계산한다.
+      if (expanded) requestAnimationFrame(() => applyMarquee(childrenWrap));
     });
 
     row.append(toggle, icon, name, meta);
@@ -173,11 +176,18 @@ async function load() {
     }
     treeEl.innerHTML = "";
     root.children.forEach((entry) => treeEl.appendChild(buildNode(entry, 0)));
+    requestAnimationFrame(() => applyMarquee(treeEl));
   } catch (err) {
     renderMessage(err.message);
   }
 }
 
 refreshBtn.addEventListener("click", load);
+
+let marqueeResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(marqueeResizeTimer);
+  marqueeResizeTimer = setTimeout(() => applyMarquee(treeEl), 150);
+});
 
 load();

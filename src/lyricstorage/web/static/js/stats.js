@@ -1,6 +1,9 @@
 import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
+import { createMarqueeClip, applyMarquee } from "./marquee.js";
+
+const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -66,9 +69,8 @@ export function setupStats() {
     artWrap.appendChild(rank);
     card.appendChild(artWrap);
 
-    const title = document.createElement("div");
-    title.className = "media-card-title";
-    title.textContent = group === "track" ? item.title || item.track_id : group === "album" ? item.album : item.artist;
+    const titleText = group === "track" ? item.title || item.track_id : group === "album" ? item.album : item.artist;
+    const title = createMarqueeClip("media-card-title", "", titleText);
     card.appendChild(title);
 
     if (group !== "artist" && item.artist) {
@@ -96,6 +98,7 @@ export function setupStats() {
       return;
     }
     items.forEach((item, i) => listEl.appendChild(buildCard(item, i, group)));
+    requestAnimationFrame(() => applyMarquee(listEl));
   }
 
   function switchTabs(tabsEl, dataKey, onSelect) {
@@ -118,6 +121,14 @@ export function setupStats() {
   nextBtn.addEventListener("click", () => {
     offset = Math.max(0, offset - 1);
     refresh();
+  });
+
+  let marqueeResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(marqueeResizeTimer);
+    marqueeResizeTimer = setTimeout(() => {
+      if (panelEl.classList.contains("active")) applyMarquee(listEl);
+    }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 
   return {
