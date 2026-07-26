@@ -391,11 +391,55 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   function renderSongsPagination(totalCount, totalPages) {
+    lastSongsPageTotalCount = totalCount;
+    lastSongsPageTotalPages = totalPages;
     songsPagination.hidden = totalPages <= 1;
-    songsPageLabel.textContent = `${songsPage + 1} / ${totalPages} (${totalCount}곡)`;
     songsPrevPageBtn.disabled = songsPage <= 0;
     songsNextPageBtn.disabled = songsPage >= totalPages - 1;
+    if (songsPageLabelEditing) return; // 입력 중인 <input>을 렌더로 덮어쓰지 않는다.
+    songsPageLabel.textContent = `${songsPage + 1} / ${totalPages} (${totalCount}곡)`;
   }
+
+  // 페이지 라벨을 클릭하면 숫자 입력창으로 바뀌어 원하는 페이지로 바로 이동할 수 있다.
+  let songsPageLabelEditing = false;
+  let lastSongsPageTotalCount = 0;
+  let lastSongsPageTotalPages = 1;
+  function startEditingSongsPage() {
+    if (songsPageLabelEditing || lastSongsPageTotalPages <= 1) return;
+    songsPageLabelEditing = true;
+    let cancelled = false;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "pagination-page-input";
+    input.min = "1";
+    input.max = String(lastSongsPageTotalPages);
+    input.value = String(songsPage + 1);
+    songsPageLabel.textContent = "";
+    songsPageLabel.appendChild(input);
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelled = true;
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", () => {
+      songsPageLabelEditing = false;
+      const targetPage = cancelled
+        ? songsPage
+        : Math.min(lastSongsPageTotalPages, Math.max(1, Math.round(Number(input.value)) || 1)) - 1;
+      if (targetPage !== songsPage) goToSongsPage(targetPage);
+      else renderSongsPagination(lastSongsPageTotalCount, lastSongsPageTotalPages);
+    });
+    input.focus();
+    input.select();
+  }
+  songsPageLabel.title = "클릭해서 페이지 번호 입력";
+  songsPageLabel.addEventListener("click", startEditingSongsPage);
 
   // 실제로 렌더링된 행 하나의 높이와 목록 영역의 실측 높이를 비교해서, 스크롤
   // 없이 딱 들어가는 행 개수를 구한다. 값이 이전과 달라졌을 때만(최초 실측,

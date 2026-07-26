@@ -48,6 +48,35 @@ export function setupNowPlaying(player) {
   let lastVolume = Number(volumeSlider.value) || 80;
   let bufferingStopSpin = null;
 
+  // OS/브라우저의 미디어 알림(잠금화면, 알림창, 하드웨어 미디어 키 등)에
+  // 현재 재생 중인 곡의 제목/아티스트/앨범아트를 노출하고, 그쪽에서 들어오는
+  // 재생/일시정지/이전/다음/탐색 조작을 플레이어에 반영한다.
+  const hasMediaSession = "mediaSession" in navigator;
+  if (hasMediaSession) {
+    navigator.mediaSession.setActionHandler("play", () => player.togglePlayPause());
+    navigator.mediaSession.setActionHandler("pause", () => player.togglePlayPause());
+    navigator.mediaSession.setActionHandler("previoustrack", () => player.previousTrack());
+    navigator.mediaSession.setActionHandler("nexttrack", () => player.nextTrack());
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      if (details.seekTime != null) player.seek(details.seekTime * 1000);
+    });
+  }
+
+  function updateMediaSessionMetadata(track) {
+    if (!hasMediaSession) return;
+    if (!track) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+      return;
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title || "제목 없음",
+      artist: track.artist || "아티스트 미상",
+      album: track.album || "",
+      artwork: [{ src: api.artUrl(track.track_id) }],
+    });
+  }
+
   function setTrack(track, { bustArtCache = false } = {}) {
     if (!track) {
       titleEl.textContent = "재생 중인 곡 없음";
@@ -55,6 +84,7 @@ export function setupNowPlaying(player) {
       artEl.style.display = "none";
       artPlaceholder.style.display = "";
       requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
+      updateMediaSessionMetadata(null);
       return;
     }
     titleEl.textContent = track.title || "제목 없음";
@@ -72,6 +102,7 @@ export function setupNowPlaying(player) {
     };
     artEl.src = api.artUrl(track.track_id) + (bustArtCache ? `?t=${Date.now()}` : "");
     requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
+    updateMediaSessionMetadata(track);
   }
 
   let marqueeResizeTimer = null;
@@ -82,21 +113,40 @@ export function setupNowPlaying(player) {
 
   player.addEventListener("trackchange", (e) => setTrack(e.detail.track));
 
+  // durationMs가 아직 0/NaN인 상태(트랙 전환 직후)에는 setPositionState가
+  // 예외를 던지므로 유효할 때만 호출한다.
+  function updateMediaSessionPosition(positionMs, durationMs) {
+    if (!hasMediaSession || !("setPositionState" in navigator.mediaSession)) return;
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: durationMs / 1000,
+        position: Math.min(positionMs, durationMs) / 1000,
+        playbackRate: 1,
+      });
+    } catch (_err) {
+      // 탐색 직후 등 위치가 duration을 잠깐 벗어나는 경우 조용히 무시.
+    }
+  }
+
   player.addEventListener("tick", (e) => {
     if (seeking) return;
     seekSlider.value = String(e.detail.positionMs);
     elapsedLabel.textContent = fmtTime(e.detail.positionMs);
     updateRangeFill(seekSlider);
+    updateMediaSessionPosition(e.detail.positionMs, player.duration());
   });
 
   player.addEventListener("durationchange", (e) => {
     seekSlider.max = String(Math.max(0, e.detail.durationMs));
     durationLabel.textContent = fmtTime(e.detail.durationMs);
     updateRangeFill(seekSlider);
+    updateMediaSessionPosition(player.position(), e.detail.durationMs);
   });
 
   player.addEventListener("playstate", (e) => {
     setIcon(playPauseBtn.querySelector(".icon"), e.detail.playing ? "pause" : "play");
+    if (hasMediaSession) navigator.mediaSession.playbackState = e.detail.playing ? "playing" : "paused";
   });
 
   // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.

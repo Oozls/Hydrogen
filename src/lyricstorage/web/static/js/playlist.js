@@ -73,9 +73,8 @@ export function setupPlaylist(
     try {
       const updated = await api.addTracksFromLibrary(playlistName, [track.track_id]);
       if (currentPlaylist.name === playlistName) {
-        currentPlaylist = updated;
+        applyUpdatedPlaylist(updated);
         renderList();
-        player.syncTracks(currentPlaylist);
       }
     } catch (err) {
       await alertDialog(err.message);
@@ -101,6 +100,16 @@ export function setupPlaylist(
     if (!player.currentTrack) return false;
     if (player.playlist === currentPlaylist) return index === player.currentIndex;
     return player.currentTrack.track_id === track.track_id;
+  }
+
+  // 이 재생목록이 실제로 재생 중일 때만(=player.playlist가 아직 이전 currentPlaylist
+  // 객체를 가리키고 있을 때만) player 쪽 playlist 참조/인덱스를 새 데이터로 동기화한다.
+  // 그냥 보고 있거나 다른 곳(브라우즈 등)에서 재생 중이라면 건드리지 않아야
+  // 재생 중인 곡의 currentTrack이 사라져 레이팅 위젯 등이 비활성화되는 버그를 막는다.
+  function applyUpdatedPlaylist(updated) {
+    const wasSynced = player.playlist === currentPlaylist;
+    currentPlaylist = updated;
+    if (wasSynced) player.syncTracks(currentPlaylist);
   }
 
   function sortedTracks() {
@@ -256,8 +265,7 @@ export function setupPlaylist(
         if (evt.oldIndex === evt.newIndex) return;
         sortable.option("disabled", true);
         try {
-          currentPlaylist = await api.reorderPlaylist(currentPlaylist.name, evt.oldIndex, evt.newIndex);
-          player.syncTracks(currentPlaylist);
+          applyUpdatedPlaylist(await api.reorderPlaylist(currentPlaylist.name, evt.oldIndex, evt.newIndex));
         } catch (err) {
           await alertDialog(err.message);
         } finally {
@@ -290,7 +298,10 @@ export function setupPlaylist(
     selectedIndices.clear();
     updateToolbarMode();
     renderList();
-    player.setPlaylist(currentPlaylist);
+    // player.setPlaylist()는 여기서 부르지 않는다 — 그냥 목록을 "보기만" 해도
+    // player.currentIndex가 -1로 초기화돼, 브라우즈/다른 재생목록에서 재생 중이던
+    // 곡의 레이팅 위젯 등이 currentTrack을 잃어 비활성화되는 버그가 있었다.
+    // 실제로 이 재생목록의 곡을 재생할 때만(onTrackActivated) 필요한 시점에 동기화한다.
     await api.updateSettings({ last_playlist: name });
   }
 
@@ -303,7 +314,6 @@ export function setupPlaylist(
       selectedIndices.clear();
       updateToolbarMode();
       renderList();
-      player.setPlaylist(currentPlaylist);
       refs.router.goPlaylist(currentPlaylist.name);
     } catch (err) {
       await alertDialog(err.message);
@@ -366,9 +376,8 @@ export function setupPlaylist(
         );
       }
       if (currentPlaylist.name) {
-        currentPlaylist = await api.getPlaylist(currentPlaylist.name);
+        applyUpdatedPlaylist(await api.getPlaylist(currentPlaylist.name));
         renderList();
-        player.syncTracks(currentPlaylist);
       }
     } catch (err) {
       await alertDialog(err.message);
@@ -390,10 +399,9 @@ export function setupPlaylist(
     if (!currentPlaylist.name || !selectedIndices.size) return;
     if (!(await confirmDialog(`${selectedIndices.size}곡을 삭제할까요?`))) return;
     try {
-      currentPlaylist = await api.removeTracks(currentPlaylist.name, Array.from(selectedIndices));
+      applyUpdatedPlaylist(await api.removeTracks(currentPlaylist.name, Array.from(selectedIndices)));
       selectedIndices.clear();
       renderList();
-      player.syncTracks(currentPlaylist);
     } catch (err) {
       await alertDialog(err.message);
     }
@@ -616,9 +624,8 @@ export function setupPlaylist(
     pickerDialog.close();
     if (!pickerChecked.size) return;
     try {
-      currentPlaylist = await api.addTracksFromLibrary(currentPlaylist.name, Array.from(pickerChecked));
+      applyUpdatedPlaylist(await api.addTracksFromLibrary(currentPlaylist.name, Array.from(pickerChecked)));
       renderList();
-      player.syncTracks(currentPlaylist);
     } catch (err) {
       await alertDialog(err.message);
     }
@@ -714,9 +721,8 @@ export function setupPlaylist(
     },
     applyExternalUpdate(updatedPlaylist) {
       if (currentPlaylist.name && updatedPlaylist.name === currentPlaylist.name) {
-        currentPlaylist = updatedPlaylist;
+        applyUpdatedPlaylist(updatedPlaylist);
         renderList();
-        player.syncTracks(currentPlaylist);
       }
     },
     getCurrentPlaylist: () => currentPlaylist,

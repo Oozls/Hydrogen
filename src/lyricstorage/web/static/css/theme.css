@@ -584,6 +584,24 @@ select#playlist-sort {
   font-size: 13px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.pagination-label:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+.pagination-page-input {
+  width: 48px;
+  text-align: center;
+  font-size: 13px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 2px 4px;
 }
 .tab-panel.active {
   display: flex;
@@ -762,8 +780,8 @@ table.lyrics-edit-table {
   background: transparent;
   border: none;
   padding: 0;
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
