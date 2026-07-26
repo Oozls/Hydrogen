@@ -1402,12 +1402,27 @@ input[type="range"]:hover::-moz-range-thumb {
   color: var(--text-secondary);
 }
 .files-tree-name {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+}
+/* 파일명(해시)은 폭이 제각각이라 flex-grow로 나눠 가지면 곡명 시작 위치가 행마다
+   들쭉날쭉해진다. 파일명 칸을 고정 폭으로 잘라내고 곡명은 그 뒤 고정 위치에서
+   시작하는 별도 열로 둬야 여러 행에서 세로로 열이 맞는다. */
+.files-tree-name.files-tree-name-fixed {
+  flex: 0 1 260px;
+}
+.files-tree-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 .files-tree-meta {
   flex: none;

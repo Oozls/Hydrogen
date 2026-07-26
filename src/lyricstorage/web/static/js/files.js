@@ -52,6 +52,10 @@ async function deleteEntry(entry, node) {
   }
 }
 
+function formatDate(iso) {
+  return iso ? iso.replace("T", " ") : "";
+}
+
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
@@ -120,7 +124,17 @@ function buildNode(entry, depth) {
     node.append(row, childrenWrap);
   } else {
     icon.style.setProperty("--icon", "url(/static/icons/music.svg)");
-    meta.textContent = formatSize(entry.size || 0);
+    const metaParts = [formatSize(entry.size || 0)];
+    if (entry.created) metaParts.push(formatDate(entry.created));
+    meta.textContent = metaParts.join(" · ");
+
+    let titleSpan = null;
+    if (entry.title) {
+      name.classList.add("files-tree-name-fixed");
+      titleSpan = document.createElement("span");
+      titleSpan.className = "files-tree-title";
+      titleSpan.textContent = `— ${entry.title}`;
+    }
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
@@ -140,7 +154,9 @@ function buildNode(entry, depth) {
       row.addEventListener("click", () => openContent(entry));
     }
 
-    row.append(toggle, icon, name, meta, deleteBtn);
+    row.append(toggle, icon, name);
+    if (titleSpan) row.appendChild(titleSpan);
+    row.append(meta, deleteBtn);
     node.append(row);
   }
 
