@@ -55,7 +55,7 @@ def _period_bounds(period: str, offset: int, *, now: datetime | None = None) -> 
     return start, end
 
 
-def top(period: str, group: str, offset: int = 0, limit: int = 20) -> dict[str, Any]:
+def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dict[str, Any]:
     if period not in PERIODS:
         raise ValueError(f"unknown period: {period}")
     if group not in GROUPS:
@@ -77,31 +77,53 @@ def top(period: str, group: str, offset: int = 0, limit: int = 20) -> dict[str, 
         artist = entry.get("artist") or ""
         album = entry.get("album") or ""
         listened_ms = entry.get("listened_ms") or 0
+        played_at_str = entry["played_at"]
 
         if group == "track":
             key = entry.get("track_id")
             bucket = buckets.setdefault(
                 key,
-                {"track_id": key, "title": title, "artist": artist, "album": album, "count": 0, "listened_ms": 0},
+                {
+                    "track_id": key,
+                    "title": title,
+                    "artist": artist,
+                    "album": album,
+                    "count": 0,
+                    "listened_ms": 0,
+                    "last_played_at": played_at_str,
+                },
             )
             bucket["title"] = title
             bucket["artist"] = artist
             bucket["album"] = album
         elif group == "artist":
             key = artist or "(아티스트 없음)"
-            bucket = buckets.setdefault(key, {"artist": key, "count": 0, "listened_ms": 0})
+            bucket = buckets.setdefault(key, {"artist": key, "count": 0, "listened_ms": 0, "last_played_at": played_at_str})
         else:  # album
             album_label = album or "(앨범 없음)"
             key = (album_label, artist)
             bucket = buckets.setdefault(
                 key,
-                {"album": album_label, "artist": artist, "track_id": entry.get("track_id"), "count": 0, "listened_ms": 0},
+                {
+                    "album": album_label,
+                    "artist": artist,
+                    "track_id": entry.get("track_id"),
+                    "count": 0,
+                    "listened_ms": 0,
+                    "last_played_at": played_at_str,
+                },
             )
 
         bucket["count"] += 1
         bucket["listened_ms"] += listened_ms
+        if played_at_str > bucket["last_played_at"]:
+            bucket["last_played_at"] = played_at_str
 
-    items = sorted(buckets.values(), key=lambda b: b["count"], reverse=True)[:limit]
+    # "곡" 그룹은 많이 들은 순이 아니라 최근에 들은 순으로 보여준다(최근 재생 목록).
+    sort_key = (lambda b: b["last_played_at"]) if group == "track" else (lambda b: b["count"])
+    items = sorted(buckets.values(), key=sort_key, reverse=True)
+    if limit is not None:
+        items = items[:limit]
     return {
         "period": period,
         "group": group,

@@ -171,6 +171,45 @@ textarea {
   text-overflow: ellipsis;
 }
 
+.now-playing-subline {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.now-playing-subline .track-artist {
+  flex: 0 1 auto;
+}
+.now-playing-album-sep {
+  flex: none;
+  margin: 0 5px;
+  color: var(--text-muted);
+}
+.now-playing-album-sep[hidden] {
+  display: none;
+}
+.track-album-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  text-align: left;
+}
+.track-album-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.track-album-link[hidden] {
+  display: none;
+}
+
 .main-columns {
   flex: 1;
   display: flex;
@@ -490,6 +529,13 @@ select#playlist-sort {
   color: var(--text-secondary);
   font-size: 13px;
 }
+.playlist-row-album-link {
+  cursor: pointer;
+}
+.playlist-row-album-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .playlist-row-artist {
   flex: 0 1 150px;
   min-width: 44px;
@@ -498,6 +544,20 @@ select#playlist-sort {
 }
 .playlist-row-duration {
   flex: 0 0 40px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.playlist-row-lastplayed {
+  flex: 0 0 64px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.playlist-row-playcount {
+  flex: 0 0 84px;
   color: var(--text-secondary);
   font-size: 13px;
   text-align: right;
@@ -1162,6 +1222,32 @@ input[type="range"]:hover::-moz-range-thumb {
   color: var(--text-muted);
   padding: 16px;
   text-align: center;
+}
+.stats-track-body {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.stats-track-body[hidden] {
+  display: none;
+}
+.stats-track-top3 {
+  flex: 0 0 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.stats-track-top3[hidden] {
+  display: none;
+}
+.stats-track-top3-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 /* -- 카드형 그리드(재생 통계 / 앨범 브라우즈 공용) ----------------------- */

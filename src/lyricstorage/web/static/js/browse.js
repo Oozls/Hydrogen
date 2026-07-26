@@ -804,7 +804,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   });
 
   return {
-    async show() {
+    // focusTrackId를 넘기면 앨범 탭으로 들어간 뒤 그 곡이 속한 앨범의 상세
+    // 화면을 곧바로 연다(재생바 앨범명 클릭 등 외부 진입점용). 라우터의
+    // onBrowse가 이 인자와 함께 호출하므로, show() 안에서 한 번의 흐름으로
+    // 처리해야 라이브러리 로딩/모드 전환과 상세 열기 사이에 경쟁 상태가 생기지
+    // 않는다.
+    async show(focusTrackId) {
       panelEl.classList.add("active");
       searchInput.value = "";
       searchFieldSelect.value = "all";
@@ -814,6 +819,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       tracks = library.tracks;
       libraryName = library.name;
       switchMode("album");
+      if (focusTrackId) {
+        const group = groupAlbums(tracks).find((g) => g.tracks.some((t) => t.track_id === focusTrackId));
+        if (group) openAlbumDetail(group);
+      }
     },
     hide() {
       panelEl.classList.remove("active");

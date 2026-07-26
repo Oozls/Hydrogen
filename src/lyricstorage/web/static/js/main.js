@@ -22,9 +22,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 
-  const refs = { router: null };
+  const refs = { router: null, pendingAlbumFocusTrackId: null };
 
-  const nowPlayingApi = setupNowPlaying(player);
+  // 재생바/재생 통계에서 앨범명을 클릭하면 브라우즈 > 앨범 탭으로 이동해 그
+  // 앨범의 상세 화면을 바로 연다. browseApi가 아직 만들어지기 전이라(순서상
+  // 아래에서 생성) refs에 "다음 브라우즈 진입 시 열어야 할 트랙"만 남겨두고,
+  // onBrowse 라우터 콜백이 이를 소비해 browseApi.show(focusTrackId)에 전달한다.
+  function openAlbumFromTrack(track) {
+    if (!track || !track.album) return;
+    refs.pendingAlbumFocusTrackId = track.track_id;
+    refs.router.goBrowse();
+  }
+
+  const nowPlayingApi = setupNowPlaying(player, openAlbumFromTrack);
   const sidebarApi = setupSidebar(bootstrap, {
     onSelectPlaylist: (name) => refs.router.goPlaylist(name),
     onGoBrowse: () => refs.router.goBrowse(),
@@ -64,7 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
   setupRating(player);
-  const statsApi = setupStats();
+  const statsApi = setupStats(player, openAlbumFromTrack);
   const lyricsPanelEl = document.getElementById("lyrics-panel");
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
 
@@ -122,7 +132,9 @@ document.addEventListener("DOMContentLoaded", () => {
       statsApi.hide();
       onStatsRoute = false;
       syncLyricsPanelDisplay();
-      browseApi.show();
+      const focusTrackId = refs.pendingAlbumFocusTrackId;
+      refs.pendingAlbumFocusTrackId = null;
+      browseApi.show(focusTrackId);
       sidebarApi.setActive(null);
       sidebarApi.refreshDataSize();
     },

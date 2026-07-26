@@ -23,11 +23,13 @@ function updateRangeFill(el) {
   el.style.setProperty("--range-progress", `${pct}%`);
 }
 
-export function setupNowPlaying(player) {
+export function setupNowPlaying(player, onOpenAlbum) {
   const artEl = document.getElementById("now-playing-art");
   const artPlaceholder = document.getElementById("now-playing-art-placeholder");
   const titleEl = document.getElementById("now-playing-title");
   const artistEl = document.getElementById("now-playing-artist");
+  const albumSepEl = document.getElementById("now-playing-album-sep");
+  const albumBtn = document.getElementById("now-playing-album");
   const nowPlayingTextEl = document.querySelector(".now-playing-text");
 
   const seekSlider = document.getElementById("seek-slider");
@@ -77,18 +79,27 @@ export function setupNowPlaying(player) {
     });
   }
 
+  function updateAlbumLink(track) {
+    const album = track && track.album;
+    albumBtn.hidden = !album;
+    albumSepEl.hidden = !album;
+    albumBtn.textContent = album || "";
+  }
+
   function setTrack(track, { bustArtCache = false } = {}) {
     if (!track) {
       titleEl.textContent = "재생 중인 곡 없음";
       artistEl.textContent = "플레이리스트에서 곡을 선택하세요";
       artEl.style.display = "none";
       artPlaceholder.style.display = "";
+      updateAlbumLink(null);
       requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
       updateMediaSessionMetadata(null);
       return;
     }
     titleEl.textContent = track.title || "제목 없음";
     artistEl.textContent = track.artist || "아티스트 미상";
+    updateAlbumLink(track);
     const stopSpin = showArtSpinner(artEl.parentElement);
     artEl.onerror = () => {
       stopSpin();
@@ -174,6 +185,9 @@ export function setupNowPlaying(player) {
   nextBtn.addEventListener("click", () => player.nextTrack());
   shuffleBtn.addEventListener("click", () => player.setShuffle(!player.shuffle));
   repeatBtn.addEventListener("click", () => player.cycleRepeat());
+  if (onOpenAlbum) {
+    albumBtn.addEventListener("click", () => onOpenAlbum(player.currentTrack));
+  }
 
   // 드래그 중에는 재생 위치 갱신이 슬라이더와 다투지 않도록 무시하고,
   // 놓는 순간에만 실제 seek를 커밋한다.

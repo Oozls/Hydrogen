@@ -215,6 +215,19 @@
           </div>
         </div>
         <div id="stats-list" class="card-grid"></div>
+        <div id="stats-track-body" class="stats-track-body" hidden>
+          <ul id="stats-track-list" class="playlist-list"></ul>
+          <div id="stats-track-top3" class="stats-track-top3" hidden></div>
+        </div>
+        <div id="stats-track-pagination" class="pagination-row" hidden>
+          <button id="stats-track-prev-page" class="icon-btn" type="button" title="이전 페이지">
+            <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+          </button>
+          <span id="stats-track-page-label" class="pagination-label"></span>
+          <button id="stats-track-next-page" class="icon-btn" type="button" title="다음 페이지">
+            <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+          </button>
+        </div>
       </div>
     </main>
 
@@ -234,7 +247,11 @@
             <div class="playlist-row-title-clip marquee-clip">
               <span id="now-playing-title" class="track-title marquee-inner">재생 중인 곡 없음</span>
             </div>
-            <div id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</div>
+            <div class="now-playing-subline">
+              <span id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</span>
+              <span id="now-playing-album-sep" class="now-playing-album-sep" hidden>·</span>
+              <button id="now-playing-album" type="button" class="track-album-link" hidden title="앨범 보기"></button>
+            </div>
           </div>
         </div>
         <div class="controls-center">
