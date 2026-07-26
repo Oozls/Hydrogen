@@ -3,7 +3,8 @@ import { iconSpan } from "./icons.js";
 import { alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
-import { applyMarquee } from "./marquee.js";
+import { applyMarquee, applyColumnPriority } from "./marquee.js";
+import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -14,22 +15,6 @@ function fmtDuration(ms) {
 
 function matchesSong(track, q) {
   return `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(q);
-}
-
-function matchesAlbum(group, q) {
-  return `${group.album} ${group.artist}`.toLowerCase().includes(q);
-}
-
-function groupAlbums(tracks) {
-  const map = new Map();
-  for (const track of tracks) {
-    const key = `${track.album} ${track.artist}`;
-    if (!map.has(key)) {
-      map.set(key, { album: track.album, artist: track.artist, track_id: track.track_id, tracks: [] });
-    }
-    map.get(key).tracks.push(track);
-  }
-  return [...map.values()];
 }
 
 const LONG_PRESS_MS = 500;
@@ -52,7 +37,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const albumDetailArtPlaceholder = document.getElementById("album-detail-art-placeholder");
   const btnAlbumDetailBack = document.getElementById("btn-album-detail-back");
   const btnAlbumDetailEdit = document.getElementById("btn-album-detail-edit");
-  const bulkEditBtn = document.getElementById("btn-browse-bulk-edit");
   const clearSelectionBtn = document.getElementById("btn-browse-clear-selection");
   const addFileBtn = document.getElementById("btn-browse-add-file");
   const addFolderBtn = document.getElementById("btn-browse-add-folder");
@@ -68,15 +52,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
     onAddToPlaylist: (track, playlistName) => addTrackToPlaylist(track, playlistName),
+    onBulkEdit: (ids) => onBulkEdit(ids),
+    getSelectedIds: () => selectedTrackIds,
   });
 
   // 선택된 곡이 하나라도 있으면 "선택 모드"로 간주 — 이때만 체크박스가 보이고,
   // 수정자 키 없는 일반 클릭도 체크박스처럼 토글로 동작한다.
   function syncSelectionUI() {
     songsList.classList.toggle("selecting", selectedTrackIds.size > 0);
-    bulkEditBtn.disabled = selectedTrackIds.size === 0;
-    bulkEditBtn.title =
-      selectedTrackIds.size > 0 ? `선택한 ${selectedTrackIds.size}곡 정보 일괄 수정` : "선택한 곡 정보 일괄 수정";
     clearSelectionBtn.hidden = selectedTrackIds.size === 0;
   }
 
@@ -278,8 +261,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       container.appendChild(li);
     });
 
-    // 마퀴는 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
-    requestAnimationFrame(() => applyMarquee(container));
+    // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
+    // 컬럼 우선순위(앨범/아티스트 숨김 여부)가 제목 폭에 영향을 주므로 마퀴보다 먼저 계산한다.
+    requestAnimationFrame(() => {
+      applyColumnPriority(container);
+      applyMarquee(container);
+    });
   }
 
   function renderSongs() {
@@ -405,11 +392,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   searchInput.addEventListener("input", render);
 
-  bulkEditBtn.addEventListener("click", () => {
-    if (!selectedTrackIds.size) return;
-    onBulkEdit(Array.from(selectedTrackIds));
-  });
-
   clearSelectionBtn.addEventListener("click", () => {
     selectedTrackIds.clear();
     lastClickedIndex = null;
@@ -438,8 +420,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     clearTimeout(marqueeResizeTimer);
     marqueeResizeTimer = setTimeout(() => {
       if (!panelEl.classList.contains("active")) return;
-      if (albumDetailPanel.classList.contains("active")) applyMarquee(albumDetailList);
-      else if (songsPanel.classList.contains("active")) applyMarquee(songsList);
+      const activeList = albumDetailPanel.classList.contains("active")
+        ? albumDetailList
+        : songsPanel.classList.contains("active")
+          ? songsList
+          : null;
+      if (!activeList) return;
+      applyColumnPriority(activeList);
+      applyMarquee(activeList);
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 

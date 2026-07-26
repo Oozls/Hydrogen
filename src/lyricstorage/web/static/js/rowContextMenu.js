@@ -4,7 +4,7 @@ import { fetchNonGlobalPlaylistNames } from "./playlistNames.js";
 // 앨범 상세 목록 등 곡 행이 있는 모든 화면에서 공용으로 사용한다.
 // document.body에 한 번만 붙는 단일 DOM 요소를 재사용하며, 열려있는 동안만
 // 바깥 클릭/Escape/스크롤/리사이즈 리스너를 부착했다가 닫힐 때 정리한다.
-export function setupRowContextMenu({ onEditTrack, onAddToPlaylist }) {
+export function setupRowContextMenu({ onEditTrack, onAddToPlaylist, onBulkEdit, getSelectedIds }) {
   const menu = document.createElement("div");
   menu.id = "row-context-menu";
   menu.className = "row-context-menu";
@@ -73,6 +73,18 @@ export function setupRowContextMenu({ onEditTrack, onAddToPlaylist }) {
         close();
         onEditTrack(track);
       })
+    );
+    // 여러 곡을 선택한 상태에서만 활성화 — 한 곡 이하 선택 시엔 위 "곡 정보 수정"으로 충분하다.
+    const selectedIds = getSelectedIds ? getSelectedIds() : new Set();
+    menu.appendChild(
+      makeItem(
+        "일괄 수정",
+        () => {
+          close();
+          onBulkEdit(Array.from(selectedIds));
+        },
+        selectedIds.size < 2
+      )
     );
     menu.appendChild(makeItem("재생목록에 추가 ▸", () => renderPlaylistSubmenu(track, x, y)));
     position(x, y);

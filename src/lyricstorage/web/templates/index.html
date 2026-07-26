@@ -35,6 +35,10 @@
             <span class="icon" style="--icon: url(/static/icons/list.svg)"></span>
             <span>로그</span>
           </a>
+          <a id="btn-sidebar-files" class="sidebar-nav-btn" href="/files">
+            <span class="icon" style="--icon: url(/static/icons/folder.svg)"></span>
+            <span>파일 탐색기</span>
+          </a>
         </div>
       </nav>
 
@@ -63,9 +67,6 @@
           <button id="btn-add-from-library" class="icon-btn" title="라이브러리에서 추가">
             <span class="icon" style="--icon: url(/static/icons/music.svg)"></span>
           </button>
-          <button id="btn-bulk-edit" class="icon-btn" title="선택한 곡 정보 일괄 수정">
-            <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
-          </button>
           <button id="btn-remove-selected" class="icon-btn" title="선택 삭제">
             <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
           </button>
@@ -91,9 +92,6 @@
           <div class="spacer"></div>
           <button id="btn-browse-clear-selection" class="icon-btn" title="선택 취소" hidden>
             <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
-          </button>
-          <button id="btn-browse-bulk-edit" class="icon-btn" title="선택한 곡 정보 일괄 수정" disabled>
-            <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
           </button>
           <button id="btn-browse-add-file" class="icon-btn" title="새 음원 파일 등록">
             <span class="icon" style="--icon: url(/static/icons/upload.svg)"></span>
@@ -239,6 +237,9 @@
           </button>
         </div>
         <div class="controls-volume">
+          <button id="btn-lyrics-toggle" class="icon-btn toggle-btn" title="가사 표시">
+            <span class="icon" style="--icon: url(/static/icons/mic.svg)"></span>
+          </button>
           <button id="btn-mute" class="icon-btn" title="음소거">
             <span class="icon" style="--icon: url(/static/icons/volume-2.svg)"></span>
           </button>
@@ -250,10 +251,18 @@
     <audio id="audio-element" preload="metadata"></audio>
   </div>
 
-  <dialog id="library-picker-dialog" class="library-picker-dialog">
-    <h3>라이브러리에서 추가</h3>
+  <dialog id="library-picker-dialog" class="library-picker-dialog library-picker-dialog-wide">
+    <div class="library-picker-header">
+      <button id="library-picker-back" class="icon-btn" title="앨범 목록으로" hidden>
+        <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+      </button>
+      <h3 id="library-picker-title">라이브러리에서 추가</h3>
+      <div class="spacer"></div>
+      <span id="library-picker-selected-count" class="library-picker-selected-count"></span>
+    </div>
     <input type="text" id="library-picker-search" placeholder="검색..." />
-    <div id="library-picker-list" class="library-picker-list"></div>
+    <div id="library-picker-albums" class="card-grid"></div>
+    <ul id="library-picker-list" class="library-picker-list playlist-list selecting"></ul>
     <div class="dialog-actions">
       <button id="library-picker-cancel" type="button">취소</button>
       <button id="library-picker-ok" class="primary" type="button">확인</button>

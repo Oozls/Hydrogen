@@ -26,6 +26,39 @@ function stopMarquee(inner) {
   inner.classList.remove("marquee");
 }
 
+// 곡 행의 앨범명/아티스트명은 공간이 부족할 때 제목보다 먼저 희생된다. 앨범+아티스트를
+// 원래 폭 그대로 보여준다고 가정했을 때 제목에게 남는 공간이 앨범+아티스트의 원래 폭
+// 합보다 좁아지면, 제목을 지키기 위해 앨범/아티스트를 통째로 숨긴다. 행마다 텍스트
+// 길이가 다르므로 고정 픽셀 기준(미디어 쿼리)이 아니라 실측 텍스트 폭으로 판단한다.
+// applyMarquee와 마찬가지로 레이아웃이 확정된 뒤(다음 프레임)에 호출해야 하고, 제목
+// 폭 측정에 영향을 주므로 applyMarquee보다 먼저 호출해야 한다.
+const LABEL_GAP_PX = 10;
+
+export function applyColumnPriority(rootEl) {
+  if (!rootEl) return;
+  const rows = rootEl.querySelectorAll(".playlist-row");
+  rows.forEach((row) => {
+    const label = row.querySelector(".playlist-row-label");
+    const album = row.querySelector(".playlist-row-album");
+    const artist = row.querySelector(".playlist-row-artist");
+    if (!label || (!album && !artist)) return;
+
+    // 실제 텍스트 폭을 다시 재려면 우선 숨김을 풀어야 한다(숨겨진 요소는 scrollWidth가 0).
+    if (album) album.hidden = false;
+    if (artist) artist.hidden = false;
+
+    const naturalWidth = (album ? album.scrollWidth : 0) + (artist ? artist.scrollWidth : 0);
+    if (naturalWidth === 0) return;
+
+    const gapCount = (album ? 1 : 0) + (artist ? 1 : 0);
+    const titleSpaceIfShown = label.clientWidth - naturalWidth - LABEL_GAP_PX * gapCount;
+    const shouldHide = titleSpaceIfShown < naturalWidth;
+
+    if (album) album.hidden = shouldHide;
+    if (artist) artist.hidden = shouldHide;
+  });
+}
+
 export function applyMarquee(rootEl) {
   if (!rootEl) return;
   const clips = rootEl.querySelectorAll(".playlist-row-title-clip");
@@ -36,7 +69,10 @@ export function applyMarquee(rootEl) {
     stopMarquee(inner);
 
     // 우선 일반 텍스트로 되돌려서 실제(줄바꿈 없는) 폭을 측정한다.
-    const text = inner.textContent;
+    // 이미 marquee 복사본 2벌이 남아있다면 textContent를 그대로 읽으면 이어붙여져
+    // 중복되므로, 복사본 중 하나만 원본으로 취급한다.
+    const firstCopy = inner.querySelector(".marquee-copy");
+    const text = firstCopy ? firstCopy.textContent : inner.textContent;
     inner.innerHTML = "";
     inner.textContent = text;
     const singleWidth = inner.scrollWidth;

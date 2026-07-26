@@ -403,8 +403,8 @@ select#playlist-sort {
   min-width: 0;
 }
 .playlist-row-title-clip {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 70px;
   overflow: hidden;
   white-space: nowrap;
   position: relative;
@@ -425,8 +425,8 @@ select#playlist-sort {
   white-space: nowrap;
 }
 .playlist-row-album {
-  flex: 0 0 170px;
-  min-width: 0;
+  flex: 0 1 170px;
+  min-width: 44px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -434,8 +434,8 @@ select#playlist-sort {
   font-size: 13px;
 }
 .playlist-row-artist {
-  flex: 0 0 150px;
-  min-width: 0;
+  flex: 0 1 150px;
+  min-width: 44px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -494,9 +494,6 @@ select#playlist-sort {
   min-height: 0;
   display: flex;
   gap: 12px;
-}
-.lyrics-panel.wide {
-  flex: 2;
 }
 
 /* -- 가사 보기 -------------------------------------------------------------- */
@@ -748,6 +745,19 @@ input[type="range"]:hover::-moz-range-thumb {
   margin: 0 0 10px 0;
   font-size: 15px;
 }
+.library-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.library-picker-dialog .library-picker-header h3 {
+  margin: 0;
+}
+.library-picker-selected-count {
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
 .confirm-dialog {
   width: 360px;
 }
@@ -757,6 +767,39 @@ input[type="range"]:hover::-moz-range-thumb {
 }
 .track-info-dialog {
   width: 420px;
+}
+.library-picker-dialog-wide {
+  width: 90vw;
+  max-width: 90vw;
+  height: 85vh;
+  max-height: 85vh;
+}
+/* dialog는 [open]이 아닐 때 UA 스타일로 display:none이 되어야 하는데, 위 규칙에
+   display를 걸면 그 기본 동작을 덮어써 닫혀있어도 항상 렌더링돼버린다. 그래서
+   flex 레이아웃은 열려있을 때(showModal로 [open]이 붙은 상태)에만 적용한다. */
+.library-picker-dialog-wide[open] {
+  display: flex;
+  flex-direction: column;
+}
+.library-picker-dialog-wide .library-picker-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+/* 앨범 선택 화면과 곡 목록 화면을 전환한다. 두 컨테이너 모두 기본 클래스(.card-grid,
+   .playlist-list)가 이미 display를 지정하므로, id 선택자로 특이도를 높여야 평소엔
+   확실히 숨겨지고 .active일 때만 각자 맞는 display로 전환된다. */
+#library-picker-albums {
+  display: none;
+}
+#library-picker-albums.active {
+  display: grid;
+}
+#library-picker-list {
+  display: none;
+}
+#library-picker-list.active {
+  display: block;
 }
 .track-info-art-row {
   display: flex;
@@ -1297,8 +1340,57 @@ input[type="range"]:hover::-moz-range-thumb {
   color: var(--text-primary);
 }
 
+/* -- 파일 탐색기 -------------------------------------------------------------- */
+.files-tree {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.files-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.files-tree-node:last-child > .files-tree-row {
+  border-bottom: none;
+}
+.files-tree-row:hover {
+  background: #1f2330;
+}
+.files-tree-toggle {
+  flex: none;
+  color: var(--text-secondary);
+}
+.files-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.files-tree-meta {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.files-tree-children {
+  display: flex;
+  flex-direction: column;
+}
+.files-tree-children[hidden] {
+  display: none;
+}
+
 /* -- 반응형: 좁은 화면에서는 재생목록/가사 패널을 세로로 쌓는다 ------------ */
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
   .app-shell {
     height: auto;
     min-height: 100vh;

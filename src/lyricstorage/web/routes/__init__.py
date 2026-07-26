@@ -7,6 +7,7 @@ from flask import Flask
 
 def register_routes(app: Flask) -> None:
     from lyricstorage.web.routes.albums import bp as albums_bp
+    from lyricstorage.web.routes.files import bp as files_bp
     from lyricstorage.web.routes.library import bp as library_bp
     from lyricstorage.web.routes.logs import bp as logs_bp
     from lyricstorage.web.routes.lyrics import bp as lyrics_bp
@@ -27,3 +28,4 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(stats_bp)
     app.register_blueprint(albums_bp)
     app.register_blueprint(logs_bp)
+    app.register_blueprint(files_bp)

@@ -64,6 +64,22 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPlayTracking(player);
   const statsApi = setupStats();
   const lyricsPanelEl = document.getElementById("lyrics-panel");
+  const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
+
+  // 가사 패널은 기본적으로 숨겨져 있고, 트랜스포트 바의 토글 버튼으로 세션 중에만
+  // 켜고 끌 수 있다(새로고침하면 다시 숨김으로 시작). 통계 화면에서는 토글 상태와
+  // 무관하게 항상 숨긴다.
+  let lyricsVisible = false;
+  let onStatsRoute = false;
+  function syncLyricsPanelDisplay() {
+    lyricsPanelEl.style.display = !onStatsRoute && lyricsVisible ? "" : "none";
+  }
+  syncLyricsPanelDisplay();
+  lyricsToggleBtn.addEventListener("click", () => {
+    lyricsVisible = !lyricsVisible;
+    lyricsToggleBtn.classList.toggle("active", lyricsVisible);
+    syncLyricsPanelDisplay();
+  });
 
   const browseApi = setupBrowse(
     player,
@@ -102,7 +118,8 @@ document.addEventListener("DOMContentLoaded", () => {
     onBrowse: () => {
       playlistApi.hide();
       statsApi.hide();
-      lyricsPanelEl.style.display = "";
+      onStatsRoute = false;
+      syncLyricsPanelDisplay();
       browseApi.show();
       sidebarApi.setActive(null);
       sidebarApi.refreshDataSize();
@@ -110,7 +127,8 @@ document.addEventListener("DOMContentLoaded", () => {
     onPlaylist: (name) => {
       browseApi.hide();
       statsApi.hide();
-      lyricsPanelEl.style.display = "";
+      onStatsRoute = false;
+      syncLyricsPanelDisplay();
       playlistApi.show();
       playlistApi.loadPlaylist(name);
       sidebarApi.setActive(name);
@@ -119,7 +137,8 @@ document.addEventListener("DOMContentLoaded", () => {
     onStats: () => {
       playlistApi.hide();
       browseApi.hide();
-      lyricsPanelEl.style.display = "none";
+      onStatsRoute = true;
+      syncLyricsPanelDisplay();
       statsApi.show();
       sidebarApi.setActive("__stats__");
       sidebarApi.refreshDataSize();

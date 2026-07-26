@@ -3,7 +3,8 @@ import { iconSpan } from "./icons.js";
 import { confirmDialog, promptDialog, alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
-import { applyMarquee } from "./marquee.js";
+import { applyMarquee, applyColumnPriority } from "./marquee.js";
+import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -31,14 +32,17 @@ export function setupPlaylist(
   const addFileBtn = document.getElementById("btn-add-file");
   const addFolderBtn = document.getElementById("btn-add-folder");
   const addFromLibraryBtn = document.getElementById("btn-add-from-library");
-  const bulkEditBtn = document.getElementById("btn-bulk-edit");
   const removeBtn = document.getElementById("btn-remove-selected");
   const fileInput = document.getElementById("file-input");
   const folderInput = document.getElementById("folder-input");
   const listEl = document.getElementById("playlist-list");
 
   const pickerDialog = document.getElementById("library-picker-dialog");
+  const pickerBackBtn = document.getElementById("library-picker-back");
+  const pickerTitleEl = document.getElementById("library-picker-title");
+  const pickerSelectedCountEl = document.getElementById("library-picker-selected-count");
   const pickerSearch = document.getElementById("library-picker-search");
+  const pickerAlbumsEl = document.getElementById("library-picker-albums");
   const pickerList = document.getElementById("library-picker-list");
   const pickerOk = document.getElementById("library-picker-ok");
   const pickerCancel = document.getElementById("library-picker-cancel");
@@ -66,6 +70,8 @@ export function setupPlaylist(
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
     onAddToPlaylist: (track, playlistName) => addTrackToPlaylist(track, playlistName),
+    onBulkEdit: (ids) => onBulkEdit(ids),
+    getSelectedIds: () => new Set(Array.from(selectedIndices).map((i) => currentPlaylist.tracks[i].track_id)),
   });
 
   function updateToolbarMode() {
@@ -117,6 +123,12 @@ export function setupPlaylist(
       titleClip.appendChild(titleInner);
       label.appendChild(titleClip);
 
+      // 브라우즈 곡 목록과 동일한 컬럼 구성(제목/앨범/아티스트)을 재사용한다.
+      const albumSpan = document.createElement("span");
+      albumSpan.className = "playlist-row-album";
+      albumSpan.textContent = track.album || "";
+      label.appendChild(albumSpan);
+
       const artistSpan = document.createElement("span");
       artistSpan.className = "playlist-row-artist";
       artistSpan.textContent = track.artist || "";
@@ -124,9 +136,12 @@ export function setupPlaylist(
 
       li.appendChild(label);
 
-      if (track.has_lyrics) {
-        li.appendChild(iconSpan("mic", "icon-sm accent"));
-      }
+      // 가사 유무 아이콘은 자리만 항상 차지하고 없을 때는 visibility로만 숨긴다.
+      // 조건부로 아예 붙였다 뗐다 하면 행마다 label에 남는 폭이 달라져서
+      // 아티스트/앨범 컬럼이 행마다 다른 위치에서 시작하는 정렬 어긋남이 생긴다.
+      const lyricsFlag = iconSpan("mic", "icon-sm accent");
+      if (!track.has_lyrics) lyricsFlag.style.visibility = "hidden";
+      li.appendChild(lyricsFlag);
 
       const duration = document.createElement("span");
       duration.className = "playlist-row-duration";
@@ -150,8 +165,11 @@ export function setupPlaylist(
       listEl.appendChild(li);
     });
 
-    // 마퀴는 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
-    requestAnimationFrame(() => applyMarquee(listEl));
+    // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
+    requestAnimationFrame(() => {
+      applyColumnPriority(listEl);
+      applyMarquee(listEl);
+    });
   }
 
   function onRowClick(e, index, track) {
@@ -301,12 +319,6 @@ export function setupPlaylist(
     folderInput.value = "";
   });
 
-  bulkEditBtn.addEventListener("click", () => {
-    if (!currentPlaylist.name || !selectedIndices.size) return;
-    const ids = Array.from(selectedIndices).map((i) => currentPlaylist.tracks[i].track_id);
-    onBulkEdit(ids);
-  });
-
   removeBtn.addEventListener("click", async () => {
     if (!currentPlaylist.name || !selectedIndices.size) return;
     if (!(await confirmDialog(`${selectedIndices.size}곡을 삭제할까요?`))) return;
@@ -321,8 +333,24 @@ export function setupPlaylist(
   });
 
   // -- 라이브러리에서 추가 모달 -----------------------------------------
-  let pickerCandidates = [];
+  // 앨범 목록 → (선택) → 앨범 상세 곡 목록의 2단 구조. 여러 앨범을 오가며 곡을
+  // 골라도 되도록 선택 상태(pickerChecked)는 다이얼로그를 여는 동안 전체 앨범에
+  // 걸쳐 유지되고, 앨범 상세를 나갔다 들어와도 사라지지 않는다.
+  let pickerAlbumGroups = [];
   let pickerChecked = new Set();
+  let pickerCurrentAlbum = null; // null이면 앨범 목록 화면
+
+  function updatePickerSelectedCount() {
+    pickerSelectedCountEl.textContent = pickerChecked.size ? `${pickerChecked.size}곡 선택됨` : "";
+  }
+
+  function showPickerView(view) {
+    pickerAlbumsEl.classList.toggle("active", view === "albums");
+    pickerList.classList.toggle("active", view === "tracks");
+    pickerBackBtn.hidden = view === "albums";
+    pickerTitleEl.textContent =
+      view === "tracks" ? pickerCurrentAlbum.album || "(앨범 없음)" : "라이브러리에서 추가";
+  }
 
   addFromLibraryBtn.addEventListener("click", async () => {
     if (!currentPlaylist.name) {
@@ -330,39 +358,175 @@ export function setupPlaylist(
       return;
     }
     const library = await api.getLibrary();
-    pickerCandidates = library.tracks;
+    pickerAlbumGroups = groupAlbums(library.tracks);
     pickerChecked = new Set();
-    if (!pickerCandidates.length) {
+    pickerCurrentAlbum = null;
+    if (!pickerAlbumGroups.length) {
       await alertDialog("라이브러리에 추가할 수 있는 곡이 없습니다.");
       return;
     }
     pickerSearch.value = "";
-    renderPickerList();
+    updatePickerSelectedCount();
+    showPickerView("albums");
+    renderPickerAlbums();
     pickerDialog.showModal();
   });
 
-  function renderPickerList() {
+  function renderPickerAlbums() {
+    const filter = pickerSearch.value.trim().toLowerCase();
+    pickerAlbumsEl.innerHTML = "";
+    const filtered = pickerAlbumGroups.filter((g) => !filter || matchesAlbum(g, filter));
+
+    if (!filtered.length) {
+      const empty = document.createElement("div");
+      empty.className = "playlist-empty-state";
+      empty.textContent = "일치하는 앨범이 없습니다.";
+      pickerAlbumsEl.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach((group) => {
+      const card = document.createElement("div");
+      card.className = "media-card media-card-clickable";
+
+      const artWrap = document.createElement("div");
+      artWrap.className = "media-card-art-wrap";
+      const img = document.createElement("img");
+      img.className = "media-card-art";
+      img.alt = "";
+      img.src = api.artUrl(group.track_id);
+      img.onerror = () => {
+        img.remove();
+        artWrap.appendChild(iconSpan("music", "icon-lg"));
+      };
+      artWrap.appendChild(img);
+      card.appendChild(artWrap);
+
+      const title = document.createElement("div");
+      title.className = "media-card-title";
+      title.textContent = group.album || "(앨범 없음)";
+      card.appendChild(title);
+
+      if (group.artist) {
+        const artist = document.createElement("div");
+        artist.className = "media-card-artist";
+        artist.textContent = group.artist;
+        card.appendChild(artist);
+      }
+
+      const selectedCount = group.tracks.filter((t) => pickerChecked.has(t.track_id)).length;
+      const meta = document.createElement("div");
+      meta.className = "media-card-meta";
+      meta.textContent = selectedCount ? `${group.tracks.length}곡 · ${selectedCount}개 선택됨` : `${group.tracks.length}곡`;
+      card.appendChild(meta);
+
+      card.addEventListener("click", () => {
+        pickerCurrentAlbum = group;
+        pickerSearch.value = "";
+        showPickerView("tracks");
+        renderPickerTracks();
+      });
+      pickerAlbumsEl.appendChild(card);
+    });
+  }
+
+  function renderPickerTracks() {
     const filter = pickerSearch.value.trim().toLowerCase();
     pickerList.innerHTML = "";
-    for (const track of pickerCandidates) {
-      const label = (track.title || track.track_id) + (track.artist ? `  ·  ${track.artist}` : "");
-      if (filter && !label.toLowerCase().includes(filter)) continue;
-      const row = document.createElement("label");
-      row.className = "picker-row";
+    const filtered = pickerCurrentAlbum.tracks.filter((track) => {
+      if (!filter) return true;
+      const haystack = `${track.title || track.track_id} ${track.artist || ""} ${track.album || ""}`;
+      return haystack.toLowerCase().includes(filter);
+    });
+
+    if (!filtered.length) {
+      const empty = document.createElement("li");
+      empty.className = "playlist-empty-state";
+      empty.textContent = "일치하는 곡이 없습니다.";
+      pickerList.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach((track) => {
+      // 브라우즈 곡 목록과 동일한 행 디자인(커스텀 체크박스 포함)을 재사용한다.
+      const li = document.createElement("li");
+      li.className = "playlist-row";
+
+      const checkboxWrap = document.createElement("label");
+      checkboxWrap.className = "row-checkbox";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
+      checkbox.className = "row-checkbox-input";
       checkbox.checked = pickerChecked.has(track.track_id);
+      checkbox.addEventListener("click", (e) => e.stopPropagation());
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) pickerChecked.add(track.track_id);
         else pickerChecked.delete(track.track_id);
+        li.classList.toggle("selected", checkbox.checked);
+        updatePickerSelectedCount();
       });
-      row.appendChild(checkbox);
-      row.appendChild(document.createTextNode(label));
-      pickerList.appendChild(row);
-    }
+      checkboxWrap.appendChild(checkbox);
+      const checkboxBox = document.createElement("span");
+      checkboxBox.className = "row-checkbox-box";
+      checkboxWrap.appendChild(checkboxBox);
+      li.appendChild(checkboxWrap);
+      if (checkbox.checked) li.classList.add("selected");
+
+      const label = document.createElement("span");
+      label.className = "playlist-row-label";
+
+      const titleClip = document.createElement("span");
+      titleClip.className = "playlist-row-title-clip";
+      const titleInner = document.createElement("span");
+      titleInner.className = "playlist-row-title playlist-row-title-inner";
+      titleInner.textContent = track.title || track.track_id;
+      titleClip.appendChild(titleInner);
+      label.appendChild(titleClip);
+
+      const albumSpan = document.createElement("span");
+      albumSpan.className = "playlist-row-album";
+      albumSpan.textContent = track.album || "";
+      label.appendChild(albumSpan);
+
+      const artistSpan = document.createElement("span");
+      artistSpan.className = "playlist-row-artist";
+      artistSpan.textContent = track.artist || "";
+      label.appendChild(artistSpan);
+
+      li.appendChild(label);
+
+      const duration = document.createElement("span");
+      duration.className = "playlist-row-duration";
+      duration.textContent = fmtDuration(track.duration_ms);
+      li.appendChild(duration);
+
+      li.addEventListener("click", (e) => {
+        if (e.target.closest("input")) return;
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event("change"));
+      });
+
+      pickerList.appendChild(li);
+    });
+
+    requestAnimationFrame(() => {
+      applyColumnPriority(pickerList);
+      applyMarquee(pickerList);
+    });
   }
 
-  pickerSearch.addEventListener("input", renderPickerList);
+  pickerBackBtn.addEventListener("click", () => {
+    pickerCurrentAlbum = null;
+    pickerSearch.value = "";
+    showPickerView("albums");
+    renderPickerAlbums(); // 선택 개수 배지를 최신 상태로 갱신
+  });
+
+  pickerSearch.addEventListener("input", () => {
+    if (pickerCurrentAlbum) renderPickerTracks();
+    else renderPickerAlbums();
+  });
+
   pickerCancel.addEventListener("click", () => pickerDialog.close());
   pickerOk.addEventListener("click", async () => {
     pickerDialog.close();
@@ -381,13 +545,20 @@ export function setupPlaylist(
     renderList();
   });
 
-  // 재생목록 화면이 활성일 때만 리사이즈 시 마퀴를 재계산한다.
+  // 재생목록 화면(또는 열려있는 라이브러리 추가 다이얼로그)이 활성일 때만
+  // 리사이즈 시 컬럼 우선순위/마퀴를 재계산한다.
   let marqueeResizeTimer = null;
   window.addEventListener("resize", () => {
     clearTimeout(marqueeResizeTimer);
     marqueeResizeTimer = setTimeout(() => {
-      if (!panelEl.classList.contains("active")) return;
-      applyMarquee(listEl);
+      if (panelEl.classList.contains("active")) {
+        applyColumnPriority(listEl);
+        applyMarquee(listEl);
+      }
+      if (pickerDialog.open && pickerCurrentAlbum) {
+        applyColumnPriority(pickerList);
+        applyMarquee(pickerList);
+      }
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 

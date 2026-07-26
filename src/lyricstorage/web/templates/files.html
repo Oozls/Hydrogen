@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>파일 탐색기 - Lyric Storage</title>
+  <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/favicon.jpg') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}" />
+</head>
+<body>
+  <div class="logs-shell">
+    <header class="panel logs-header">
+      <a href="/" class="icon-btn" title="돌아가기">
+        <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+      </a>
+      <span class="section-title logs-title">파일 탐색기</span>
+      <div class="spacer"></div>
+      <button id="files-refresh-btn" class="icon-btn" title="새로고침">
+        <span class="icon" style="--icon: url(/static/icons/repeat.svg)"></span>
+      </button>
+    </header>
+    <main class="panel logs-list-panel">
+      <div id="files-tree" class="files-tree"></div>
+    </main>
+  </div>
+  <script type="module" src="{{ url_for('static', filename='js/files.js') }}"></script>
+</body>
+</html>

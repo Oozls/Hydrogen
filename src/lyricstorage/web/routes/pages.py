@@ -45,3 +45,8 @@ def index():
 @bp.get("/logs")
 def logs_page():
     return render_template("logs.html")
+
+
+@bp.get("/files")
+def files_page():
+    return render_template("files.html")
