@@ -39,6 +39,15 @@ const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE = 10;
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
+// 모바일에서 곡이 아주 많으면(수천 곡) 렉이 심해진다. 청크 렌더링은 "그리는
+// 과정"만 여러 프레임에 나눌 뿐 최종 DOM 노드 수는 그대로라 근본적인 해결이
+// 안 되므로, 브라우즈 곡 목록만 실제로 한 페이지분의 행만 DOM에 존재하게
+// 페이지 단위로 자른다(앨범 상세/재생목록은 보통 곡이 훨씬 적어 그대로 둔다).
+// 페이지 크기는 고정 숫자가 아니라 목록 영역에 스크롤 없이 딱 들어가는
+// 행 개수로 실시간 계산한다(SONGS_PAGE_SIZE_FALLBACK은 아직 한 번도 실측하지
+// 못했을 때만 쓰는 임시값).
+const SONGS_PAGE_SIZE_FALLBACK = 50;
+
 export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit) {
   const panelEl = document.getElementById("browse-panel");
   const searchInput = document.getElementById("browse-search");
@@ -49,6 +58,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const albumsPanel = document.getElementById("browse-albums-panel");
   const albumDetailPanel = document.getElementById("browse-album-detail-panel");
   const songsList = document.getElementById("browse-songs-list");
+  const songsPagination = document.getElementById("browse-songs-pagination");
+  const songsPrevPageBtn = document.getElementById("browse-songs-prev-page");
+  const songsNextPageBtn = document.getElementById("browse-songs-next-page");
+  const songsPageLabel = document.getElementById("browse-songs-page-label");
   const albumsList = document.getElementById("browse-albums-list");
   const albumDetailList = document.getElementById("browse-album-detail-list");
   const albumDetailTitle = document.getElementById("album-detail-title");
@@ -70,6 +83,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let lastClickedIndex = null;
   let currentAlbumGroup = null;
   let renderedAlbumGroups = [];
+  let songsPage = 0;
+  let songsPageSize = SONGS_PAGE_SIZE_FALLBACK;
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -165,7 +180,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   function renderSongRows(
     container,
     tracksArray,
-    onActivate = (track) => playFromList(track, tracksArray, "브라우즈 곡 목록")
+    onActivate = (track) => playFromList(track, tracksArray, "브라우즈 곡 목록"),
+    onRendered
   ) {
     const myGeneration = (container._rowsGeneration = (container._rowsGeneration || 0) + 1);
     container.innerHTML = "";
@@ -338,6 +354,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         if (myGeneration !== container._rowsGeneration) return;
         applyColumnPriority(container);
         applyMarquee(container);
+        if (onRendered) onRendered();
       });
     }
     renderChunk();
@@ -354,8 +371,59 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     syncSelectionUI();
 
     const filtered = tracks.filter((t) => matchesSong(t, q, field));
-    renderSongRows(songsList, filtered);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / songsPageSize));
+    songsPage = Math.min(songsPage, totalPages - 1);
+    const pageStart = songsPage * songsPageSize;
+    const pageTracks = filtered.slice(pageStart, pageStart + songsPageSize);
+
+    // 다음/이전 곡 재생은 화면에 보이는 한 페이지가 아니라 필터링된 전체
+    // 목록 기준으로 이어져야 하므로, onActivate에 페이지가 아닌 filtered를
+    // 명시적으로 넘긴다(그냥 두면 renderSongRows 기본값이 실제로 넘긴
+    // tracksArray, 즉 pageTracks만 재생목록으로 잡아 페이지 끝에서 멈춘다).
+    renderSongRows(
+      songsList,
+      pageTracks,
+      (track) => playFromList(track, filtered, "브라우즈 곡 목록"),
+      recalcSongsPageSize
+    );
+    renderSongsPagination(filtered.length, totalPages);
   }
+
+  function renderSongsPagination(totalCount, totalPages) {
+    songsPagination.hidden = totalPages <= 1;
+    songsPageLabel.textContent = `${songsPage + 1} / ${totalPages} (${totalCount}곡)`;
+    songsPrevPageBtn.disabled = songsPage <= 0;
+    songsNextPageBtn.disabled = songsPage >= totalPages - 1;
+  }
+
+  // 실제로 렌더링된 행 하나의 높이와 목록 영역의 실측 높이를 비교해서, 스크롤
+  // 없이 딱 들어가는 행 개수를 구한다. 값이 이전과 달라졌을 때만(최초 실측,
+  // 리사이즈 등) 그 크기로 다시 그린다 — 같으면 그대로 두어 불필요한 재렌더를
+  // 피한다.
+  function recalcSongsPageSize() {
+    const sampleRow = songsList.querySelector(".playlist-row");
+    if (!sampleRow) return;
+    const rowHeight = sampleRow.getBoundingClientRect().height;
+    const containerHeight = songsList.clientHeight;
+    if (!rowHeight || !containerHeight) return;
+    const fitCount = Math.max(1, Math.floor(containerHeight / rowHeight));
+    if (fitCount !== songsPageSize) {
+      songsPageSize = fitCount;
+      renderSongs();
+    }
+  }
+
+  function goToSongsPage(nextPage) {
+    songsPage = nextPage;
+    lastClickedIndex = null; // 페이지가 바뀌면 이전 페이지 기준 shift-선택 인덱스는 의미가 없다.
+    renderSongs();
+  }
+
+  songsPrevPageBtn.addEventListener("click", () => {
+    if (songsPage > 0) goToSongsPage(songsPage - 1);
+  });
+  songsNextPageBtn.addEventListener("click", () => goToSongsPage(songsPage + 1));
 
   function renderAlbumDetailRows(group) {
     renderSongRows(albumDetailList, group.tracks, (track) => playFromList(track, group.tracks, group.album || "앨범"));
@@ -478,11 +546,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   function switchMode(next) {
+    const enteringSong = next === "song" && mode !== "song";
     mode = next;
     if (mode !== "song") {
       selectedTrackIds.clear();
       syncSelectionUI();
     }
+    if (enteringSong) songsPage = 0; // 곡 탭에 새로 들어올 때마다 1페이지부터 보여준다.
     albumDetailPanel.classList.remove("active");
     currentAlbumGroup = null;
     songsPanel.classList.toggle("active", mode === "song");
@@ -498,8 +568,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     switchMode(btn.dataset.mode);
   });
 
-  searchInput.addEventListener("input", render);
-  searchFieldSelect.addEventListener("change", render);
+  searchInput.addEventListener("input", () => {
+    songsPage = 0;
+    render();
+  });
+  searchFieldSelect.addEventListener("change", () => {
+    songsPage = 0;
+    render();
+  });
 
   clearSelectionBtn.addEventListener("click", () => {
     selectedTrackIds.clear();
@@ -559,6 +635,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       } else if (songsPanel.classList.contains("active")) {
         applyColumnPriority(songsList);
         applyMarquee(songsList);
+        recalcSongsPageSize();
       } else if (albumsPanel.classList.contains("active")) {
         applyMarquee(albumsList);
       }

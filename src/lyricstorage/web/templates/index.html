@@ -9,6 +9,10 @@
 </head>
 <body>
   <div class="app-shell">
+    <button id="btn-sidebar-toggle" class="sidebar-toggle-btn" type="button" title="메뉴">
+      <span class="icon" style="--icon: url(/static/icons/menu.svg)"></span>
+    </button>
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
     <main class="main-columns">
       <nav id="sidebar" class="panel sidebar">
         <button id="btn-sidebar-browse" class="sidebar-home-btn" type="button">
@@ -110,6 +114,15 @@
         <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
         <div id="browse-songs-panel" class="tab-panel">
           <ul id="browse-songs-list" class="playlist-list"></ul>
+          <div id="browse-songs-pagination" class="pagination-row" hidden>
+            <button id="browse-songs-prev-page" class="icon-btn" type="button" title="이전 페이지">
+              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+            </button>
+            <span id="browse-songs-page-label" class="pagination-label"></span>
+            <button id="browse-songs-next-page" class="icon-btn" type="button" title="다음 페이지">
+              <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+            </button>
+          </div>
         </div>
         <div id="browse-albums-panel" class="tab-panel active">
           <div id="browse-albums-list" class="card-grid"></div>

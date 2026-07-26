@@ -206,6 +206,42 @@ textarea {
   min-height: 0;
   gap: 8px;
 }
+
+/* 화면이 넓을 땐 사이드바가 늘 보이는 일반 패널이라 숨겨둔다. 좁은 화면에서만
+   (아래 max-width:1000px 미디어쿼리에서) 보이는 햄버거 버튼으로 드로어를 연다. */
+.sidebar-toggle-btn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 37;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.sidebar-toggle-btn:hover {
+  background: var(--border);
+}
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 재생바(트랜스포트 바) 영역은 어둡게 가리지 않도록 그 높이만큼 제외한다
+     — 사이드바 드로어 자체도 같은 높이만큼만 차지한다(top:0 ~
+     bottom:var(--transport-bar-height)). */
+  bottom: var(--transport-bar-height);
+  z-index: 35;
+  background: rgba(0, 0, 0, 0.5);
+}
 .sidebar-home-btn,
 .sidebar-nav-btn {
   display: flex;
@@ -528,6 +564,26 @@ select#playlist-sort {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+}
+.pagination-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.pagination-row[hidden] {
+  display: none;
+}
+.pagination-label {
+  min-width: 120px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 .tab-panel.active {
   display: flex;
@@ -1618,12 +1674,48 @@ input[type="range"]:hover::-moz-range-thumb {
 @media (max-width: 1000px) {
   .main-columns {
     flex-direction: column;
+    /* 왼쪽 위에 고정된 햄버거 버튼과 콘텐츠 패널 헤더(재생목록 제목, 브라우즈
+       탭 등)가 겹치지 않도록 그만큼 아래로 민다. */
+    margin-top: 46px;
   }
-  .sidebar,
   .playlist-panel,
   .browse-panel,
   .lyrics-panel {
     flex: 1 1 0;
     min-height: 0;
+  }
+
+  /* 사이드바는 세로로 쌓인 다른 패널들의 높이를 나눠 갖는 대신, 왼쪽에서
+     슬라이드로 열리는 오버레이(off-canvas 드로어)로 바뀐다 — 그래야 좁은
+     화면에서 실제 콘텐츠(재생목록/브라우즈)가 세로 공간을 최대한 쓸 수 있다.
+     기본은 화면 밖(translateX(-100%))에 숨어 있다가 .open일 때만 들어온다. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: var(--transport-bar-height);
+    z-index: 36;
+    width: min(80vw, 280px);
+    border-radius: 0;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    box-shadow: 6px 0 20px rgba(0, 0, 0, 0.4);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    /* 드로어가 화면 맨 위(top:0)부터 시작해서, 그 위에 떠 있는 햄버거
+       버튼(top:12px~48px)과 첫 항목("브라우즈" 버튼)이 겹친다. 버튼 높이만큼
+       위쪽 여백을 줘서 피한다. */
+    padding-top: 56px;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-toggle-btn {
+    display: flex;
+  }
+  .sidebar-backdrop.open {
+    display: block;
   }
 }
