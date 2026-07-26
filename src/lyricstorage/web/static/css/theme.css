@@ -768,6 +768,32 @@ input[type="range"]:hover::-moz-range-thumb {
 .track-info-dialog {
   width: 420px;
 }
+.file-content-dialog {
+  width: 80vw;
+  max-width: 900px;
+  height: 80vh;
+  max-height: 80vh;
+}
+/* library-picker-dialog-wide[open]와 같은 이유로, 열려있을 때만 flex를 적용한다. */
+.file-content-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.file-content-body {
+  flex: 1;
+  min-height: 0;
+  margin: 10px 0 0;
+  padding: 10px;
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+}
 .library-picker-dialog-wide {
   width: 90vw;
   max-width: 90vw;
@@ -1355,13 +1381,21 @@ input[type="range"]:hover::-moz-range-thumb {
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  cursor: pointer;
 }
 .files-tree-node:last-child > .files-tree-row {
   border-bottom: none;
 }
-.files-tree-row:hover {
+.files-tree-row-clickable {
+  cursor: pointer;
+}
+.files-tree-row-clickable:hover {
   background: #1f2330;
+}
+.files-tree-delete {
+  flex: none;
+}
+.files-tree-delete:hover {
+  color: #e5484d;
 }
 .files-tree-toggle {
   flex: none;

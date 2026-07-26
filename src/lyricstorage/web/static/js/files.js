@@ -1,5 +1,7 @@
-async function fetchJSON(url) {
-  const res = await fetch(url);
+import { confirmDialog, alertDialog } from "./dialog.js";
+
+async function fetchJSON(url, options) {
+  const res = await fetch(url, options);
   if (!res.ok) throw new Error(`${url} 요청 실패 (${res.status})`);
   return res.json();
 }
@@ -7,8 +9,48 @@ async function fetchJSON(url) {
 const treeEl = document.getElementById("files-tree");
 const refreshBtn = document.getElementById("files-refresh-btn");
 
+const contentDialog = document.getElementById("file-content-dialog");
+const contentTitleEl = document.getElementById("file-content-title");
+const contentBodyEl = document.getElementById("file-content-body");
+const contentCloseBtn = document.getElementById("file-content-close");
+
 const CHEVRON_RIGHT = "url(/static/icons/chevron-right.svg)";
 const CHEVRON_DOWN = "url(/static/icons/chevron-down.svg)";
+const TEXT_EXTENSIONS = new Set(["lrc", "json", "log"]);
+
+function extOf(name) {
+  const idx = name.lastIndexOf(".");
+  return idx === -1 ? "" : name.slice(idx + 1).toLowerCase();
+}
+
+function isTextFile(name) {
+  return TEXT_EXTENSIONS.has(extOf(name));
+}
+
+async function openContent(entry) {
+  contentTitleEl.textContent = entry.name;
+  contentBodyEl.textContent = "불러오는 중...";
+  contentDialog.showModal();
+  try {
+    const data = await fetchJSON(`/api/files/content?path=${encodeURIComponent(entry.path)}`);
+    contentBodyEl.textContent = data.content;
+  } catch (err) {
+    contentBodyEl.textContent = err.message;
+  }
+}
+
+contentCloseBtn.addEventListener("click", () => contentDialog.close());
+
+async function deleteEntry(entry, node) {
+  const ok = await confirmDialog(`"${entry.name}" 파일을 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`);
+  if (!ok) return;
+  try {
+    await fetchJSON(`/api/files/entry?path=${encodeURIComponent(entry.path)}`, { method: "DELETE" });
+    node.remove();
+  } catch (err) {
+    await alertDialog(err.message);
+  }
+}
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -61,6 +103,7 @@ function buildNode(entry, depth) {
     childrenWrap.className = "files-tree-children";
 
     toggle.classList.add("icon");
+    row.classList.add("files-tree-row-clickable");
     let expanded = depth === 0;
     toggle.style.setProperty("--icon", expanded ? CHEVRON_DOWN : CHEVRON_RIGHT);
     childrenWrap.hidden = !expanded;
@@ -78,7 +121,26 @@ function buildNode(entry, depth) {
   } else {
     icon.style.setProperty("--icon", "url(/static/icons/music.svg)");
     meta.textContent = formatSize(entry.size || 0);
-    row.append(toggle, icon, name, meta);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "icon-btn files-tree-delete";
+    deleteBtn.title = "삭제";
+    const deleteIcon = document.createElement("span");
+    deleteIcon.className = "icon icon-sm";
+    deleteIcon.style.setProperty("--icon", "url(/static/icons/trash-2.svg)");
+    deleteBtn.appendChild(deleteIcon);
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteEntry(entry, node);
+    });
+
+    if (isTextFile(entry.name)) {
+      row.classList.add("files-tree-row-clickable");
+      row.addEventListener("click", () => openContent(entry));
+    }
+
+    row.append(toggle, icon, name, meta, deleteBtn);
     node.append(row);
   }
 

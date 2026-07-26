@@ -23,6 +23,27 @@
       <div id="files-tree" class="files-tree"></div>
     </main>
   </div>
+
+  <dialog id="file-content-dialog" class="library-picker-dialog file-content-dialog">
+    <div class="library-picker-header">
+      <h3 id="file-content-title"></h3>
+      <div class="spacer"></div>
+      <button id="file-content-close" class="icon-btn" title="닫기" type="button">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <pre id="file-content-body" class="file-content-body"></pre>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">
+    <p id="confirm-dialog-message"></p>
+    <input type="text" id="confirm-dialog-input" class="dialog-input" hidden />
+    <div class="dialog-actions">
+      <button id="confirm-dialog-cancel" type="button">취소</button>
+      <button id="confirm-dialog-ok" class="primary" type="button">확인</button>
+    </div>
+  </dialog>
+
   <script type="module" src="{{ url_for('static', filename='js/files.js') }}"></script>
 </body>
 </html>
