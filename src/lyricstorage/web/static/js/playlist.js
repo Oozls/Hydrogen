@@ -5,6 +5,7 @@ import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
+import { showArtSpinner } from "./artspinner.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -239,6 +240,11 @@ export function setupPlaylist(
   });
 
   async function loadPlaylist(name) {
+    listEl.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "list-loading";
+    loading.textContent = "불러오는 중...";
+    listEl.appendChild(loading);
     try {
       currentPlaylist = await api.getPlaylist(name);
     } catch (err) {
@@ -416,11 +422,14 @@ export function setupPlaylist(
 
       const artWrap = document.createElement("div");
       artWrap.className = "media-card-art-wrap";
+      const stopSpin = showArtSpinner(artWrap);
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
       img.src = api.artUrl(group.track_id);
+      img.onload = () => stopSpin();
       img.onerror = () => {
+        stopSpin();
         img.remove();
         artWrap.appendChild(iconSpan("music", "icon-lg"));
       };

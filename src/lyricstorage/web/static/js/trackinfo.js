@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { alertDialog, confirmDialog } from "./dialog.js";
 import { distinctValues, buildAutocomplete } from "./autocomplete.js";
+import { showArtSpinner } from "./artspinner.js";
 
 export function setupTrackInfo(onSaved, onDeleted) {
   const dialog = document.getElementById("track-info-dialog");
@@ -38,11 +39,14 @@ export function setupTrackInfo(onSaved, onDeleted) {
   );
 
   function showArt(url) {
+    const stopSpin = showArtSpinner(artPreview.parentElement);
     artPreview.onerror = () => {
+      stopSpin();
       artPreview.style.display = "none";
       artPlaceholder.style.display = "";
     };
     artPreview.onload = () => {
+      stopSpin();
       artPreview.style.display = "";
       artPlaceholder.style.display = "none";
     };

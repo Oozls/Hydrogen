@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { alertDialog } from "./dialog.js";
+import { showArtSpinner } from "./artspinner.js";
 
 export function setupAlbumInfo(onSaved) {
   const dialog = document.getElementById("album-info-dialog");
@@ -17,11 +18,14 @@ export function setupAlbumInfo(onSaved) {
   let pendingArtFile = null;
 
   function showArt(url) {
+    const stopSpin = showArtSpinner(artPreview.parentElement);
     artPreview.onerror = () => {
+      stopSpin();
       artPreview.style.display = "none";
       artPlaceholder.style.display = "";
     };
     artPreview.onload = () => {
+      stopSpin();
       artPreview.style.display = "";
       artPlaceholder.style.display = "none";
     };

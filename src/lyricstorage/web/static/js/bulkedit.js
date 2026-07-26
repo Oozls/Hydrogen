@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { alertDialog, confirmDialog } from "./dialog.js";
 import { distinctValues, buildAutocomplete } from "./autocomplete.js";
+import { showArtSpinner } from "./artspinner.js";
 
 // onSaved(updatedTracks, trackIds): 저장 성공 시 호출된다. updatedTracks는
 // 메타데이터(title/artist/album) 중 하나라도 dirty해서 실제로 PUT된 경우에만
@@ -46,11 +47,14 @@ export function setupBulkEdit(onSaved, onDeleted) {
   }
 
   function showArt(url) {
+    const stopSpin = showArtSpinner(artPreview.parentElement);
     artPreview.onerror = () => {
+      stopSpin();
       artPreview.style.display = "none";
       artPlaceholder.style.display = "";
     };
     artPreview.onload = () => {
+      stopSpin();
       artPreview.style.display = "";
       artPlaceholder.style.display = "none";
     };

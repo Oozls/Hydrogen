@@ -5,6 +5,7 @@ import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
+import { showArtSpinner } from "./artspinner.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -65,19 +66,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     clearSelectionBtn.hidden = !selecting;
   }
 
-  function playEphemeral(track) {
-    if (player.playlist !== playlistApi.getCurrentPlaylist()) {
-      player.syncTracks(playlistApi.getCurrentPlaylist());
-    }
-    player.setPlaylist({ name: "검색 결과", tracks: [track] });
-    player.playIndex(0);
-  }
-
-  // 앨범 상세에서 곡을 재생하면, 다음/이전 곡 자동재생이 해당 앨범 트랙 범위
-  // 안에서만 이루어지도록 재생목록을 앨범 트랙 전체로 설정한다.
-  function playInAlbum(track, albumTracks) {
-    player.setPlaylist({ name: currentAlbumGroup ? currentAlbumGroup.album || "앨범" : "앨범", tracks: albumTracks });
-    player.playIndex(albumTracks.indexOf(track));
+  // 더블클릭한 곡이 속한 목록(검색된 곡 목록이든 특정 앨범이든) 전체를 재생목록으로
+  // 설정해서, 다음/이전 곡 자동재생이 그 목록 범위 안에서 이루어지게 한다. 예전엔
+  // 곡 하나짜리 임시 재생목록만 만들어서 "다음 곡" 버튼을 누르면 재생이 그냥
+  // 멈춰버리는 문제가 있었다.
+  function playFromList(track, tracksArray, name) {
+    player.setPlaylist({ name, tracks: tracksArray });
+    player.playIndex(tracksArray.indexOf(track));
   }
 
   async function addTrackToPlaylist(track, playlistName) {
@@ -125,10 +120,22 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     container.appendChild(empty);
   }
 
+  function renderLoading(container) {
+    container.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "list-loading";
+    loading.textContent = "불러오는 중...";
+    container.appendChild(loading);
+  }
+
   // 브라우즈 "곡" 목록과 앨범 상세 화면의 곡 목록이 공유하는 행 렌더러.
   // selectedTrackIds/lastClickedIndex는 모듈 전역이라 다중선택·일괄수정 툴바가
   // 어느 목록에서 선택했든 동일하게 동작한다.
-  function renderSongRows(container, tracksArray, onActivate = playEphemeral) {
+  function renderSongRows(
+    container,
+    tracksArray,
+    onActivate = (track) => playFromList(track, tracksArray, "브라우즈 곡 목록")
+  ) {
     container.innerHTML = "";
     if (!tracksArray.length) {
       renderEmpty(container);
@@ -289,15 +296,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   function renderAlbumDetailRows(group) {
-    renderSongRows(albumDetailList, group.tracks, (track) => playInAlbum(track, group.tracks));
+    renderSongRows(albumDetailList, group.tracks, (track) => playFromList(track, group.tracks, group.album || "앨범"));
   }
 
   function showAlbumDetailArt(url) {
+    const stopSpin = showArtSpinner(albumDetailArt.parentElement);
     albumDetailArt.onerror = () => {
+      stopSpin();
       albumDetailArt.style.display = "none";
       albumDetailArtPlaceholder.style.display = "";
     };
     albumDetailArt.onload = () => {
+      stopSpin();
       albumDetailArt.style.display = "";
       albumDetailArtPlaceholder.style.display = "none";
     };
@@ -338,11 +348,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
       const artWrap = document.createElement("div");
       artWrap.className = "media-card-art-wrap";
+      const stopSpin = showArtSpinner(artWrap);
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
       img.src = api.artUrl(group.track_id);
+      img.onload = () => stopSpin();
       img.onerror = () => {
+        stopSpin();
         img.remove();
         artWrap.appendChild(iconSpan("music", "icon-lg"));
       };
@@ -451,6 +464,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     async show() {
       panelEl.classList.add("active");
       searchInput.value = "";
+      renderLoading(songsList);
+      renderLoading(albumsList);
       const library = await api.getLibrary();
       tracks = library.tracks;
       switchMode("album");

@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { setIcon } from "./icons.js";
 import { applyMarquee } from "./marquee.js";
+import { showArtSpinner } from "./artspinner.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
@@ -45,6 +46,7 @@ export function setupNowPlaying(player) {
 
   let seeking = false;
   let lastVolume = Number(volumeSlider.value) || 80;
+  let bufferingStopSpin = null;
 
   function setTrack(track, { bustArtCache = false } = {}) {
     if (!track) {
@@ -57,11 +59,14 @@ export function setupNowPlaying(player) {
     }
     titleEl.textContent = track.title || "제목 없음";
     artistEl.textContent = track.artist || "아티스트 미상";
+    const stopSpin = showArtSpinner(artEl.parentElement);
     artEl.onerror = () => {
+      stopSpin();
       artEl.style.display = "none";
       artPlaceholder.style.display = "";
     };
     artEl.onload = () => {
+      stopSpin();
       artEl.style.display = "";
       artPlaceholder.style.display = "none";
     };
@@ -92,6 +97,16 @@ export function setupNowPlaying(player) {
 
   player.addEventListener("playstate", (e) => {
     setIcon(playPauseBtn.querySelector(".icon"), e.detail.playing ? "pause" : "play");
+  });
+
+  // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.
+  player.addEventListener("buffering", (e) => {
+    if (e.detail.buffering) {
+      if (!bufferingStopSpin) bufferingStopSpin = showArtSpinner(artEl.parentElement);
+    } else if (bufferingStopSpin) {
+      bufferingStopSpin();
+      bufferingStopSpin = null;
+    }
   });
 
   player.addEventListener("shufflechange", (e) => {

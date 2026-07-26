@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
+import { showArtSpinner } from "./artspinner.js";
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -44,11 +45,14 @@ export function setupStats() {
     const artWrap = document.createElement("div");
     artWrap.className = "media-card-art-wrap";
     if (group !== "artist" && item.track_id) {
+      const stopSpin = showArtSpinner(artWrap);
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
       img.src = api.artUrl(item.track_id);
+      img.onload = () => stopSpin();
       img.onerror = () => {
+        stopSpin();
         img.remove();
         artWrap.appendChild(iconSpan("music", "icon-lg"));
       };

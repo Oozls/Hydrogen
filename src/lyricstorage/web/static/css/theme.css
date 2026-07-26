@@ -127,6 +127,7 @@ textarea {
 }
 
 .now-playing-art-wrap {
+  position: relative;
   width: 56px;
   height: 56px;
   border-radius: 8px;
@@ -834,6 +835,7 @@ input[type="range"]:hover::-moz-range-thumb {
   margin-bottom: 12px;
 }
 .track-info-art-wrap {
+  position: relative;
   width: 72px;
   height: 72px;
   border-radius: 8px;
@@ -1034,6 +1036,50 @@ input[type="range"]:hover::-moz-range-thumb {
   height: 100%;
   object-fit: cover;
 }
+
+/* -- 앨범 아트/곡 목록 로딩 스피너 (공용) --------------------------------- */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.art-spinner {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+}
+.art-spinner::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+.list-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.list-loading::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
 .media-card-rank {
   position: absolute;
   top: 6px;
@@ -1090,6 +1136,7 @@ input[type="range"]:hover::-moz-range-thumb {
   flex-shrink: 0;
 }
 .album-detail-art-wrap {
+  position: relative;
   width: 88px;
   height: 88px;
   border-radius: 8px;

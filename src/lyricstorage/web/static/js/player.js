@@ -32,6 +32,11 @@ export class PlayerEngine extends EventTarget {
     this.audio.addEventListener("play", () => this._emit("playstate", { playing: true }));
     this.audio.addEventListener("pause", () => this._emit("playstate", { playing: false }));
     this.audio.addEventListener("ended", () => this._onEnded());
+    // 트랙 전환 직후나 네트워크가 느릴 때 재생이 버퍼링으로 잠시 멎는 구간을
+    // UI가 "로딩 중"으로 표시할 수 있도록 패스스루한다.
+    this.audio.addEventListener("waiting", () => this._emit("buffering", { buffering: true }));
+    this.audio.addEventListener("playing", () => this._emit("buffering", { buffering: false }));
+    this.audio.addEventListener("canplay", () => this._emit("buffering", { buffering: false }));
   }
 
   _emit(name, detail) {
