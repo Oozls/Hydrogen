@@ -44,6 +44,23 @@ def update_metadata(track_id: str):
     return jsonify(track_to_json(track))
 
 
+@bp.put("/<track_id>/rating")
+def update_rating(track_id: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+
+    data = request.get_json(silent=True) or {}
+    rating = data.get("rating")
+    if not isinstance(rating, int) or isinstance(rating, bool) or not (0 <= rating <= 5):
+        return jsonify({"error": "레이팅은 0~5 사이의 정수여야 합니다."}), 400
+
+    playlist_repo.update_track_in_all_playlists(track.path, rating=rating)
+    track.rating = rating
+    applog.log_info("ACTION", f"곡 레이팅 변경: {track_id} -> {rating}")
+    return jsonify(track_to_json(track))
+
+
 @bp.put("/metadata/batch")
 def update_metadata_batch():
     data = request.get_json(silent=True) or {}

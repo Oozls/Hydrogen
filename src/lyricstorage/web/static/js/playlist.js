@@ -14,6 +14,18 @@ function fmtDuration(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+// 가사 유무 아이콘과 같은 이유로 레이팅이 없는 곡도 배지 자리를 항상 차지하게
+// 만들고 visibility로만 숨긴다(폭 고정은 CSS .playlist-row-rating이 담당) —
+// 그래야 레이팅 있는 행과 없는 행에서 라벨(제목/앨범/아티스트) 폭이 똑같이
+// 남아 컬럼이 어긋나지 않는다.
+function createRatingBadge(rating) {
+  const badge = document.createElement("span");
+  badge.className = "playlist-row-rating" + (rating ? "" : " empty");
+  badge.appendChild(iconSpan("heart-filled", "icon-sm"));
+  badge.appendChild(document.createTextNode(String(rating || 0)));
+  return badge;
+}
+
 const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
@@ -174,6 +186,8 @@ export function setupPlaylist(
       duration.textContent = fmtDuration(track.duration_ms);
       li.appendChild(duration);
 
+      li.appendChild(createRatingBadge(track.rating));
+
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
       moreBtn.className = "icon-btn playlist-row-more";
@@ -184,6 +198,16 @@ export function setupPlaylist(
         rowMenu.open(track, e.clientX, e.clientY);
       });
       li.appendChild(moreBtn);
+
+      // 순서 변경은 이 핸들을 잡고 드래그할 때만 시작된다(SortableJS의 handle
+      // 옵션). 클릭만으로는 행 선택이 되지 않도록 stopPropagation한다.
+      const dragHandle = document.createElement("button");
+      dragHandle.type = "button";
+      dragHandle.className = "icon-btn playlist-row-drag-handle";
+      dragHandle.title = "드래그해서 순서 변경";
+      dragHandle.appendChild(iconSpan("grip-vertical", "icon-sm"));
+      dragHandle.addEventListener("click", (e) => e.stopPropagation());
+      li.appendChild(dragHandle);
 
       li.addEventListener("click", (e) => onRowClick(e, index, track));
       li.addEventListener("dblclick", () => onTrackActivated(index));
@@ -214,18 +238,28 @@ export function setupPlaylist(
     renderList();
   }
 
+  // 드래그는 전용 손잡이(그립 아이콘)를 잡을 때만 시작된다(SortableJS의
+  // handle 옵션). 행의 나머지 영역은 클릭(선택)과 절대 충돌하지 않으므로
+  // 홀드 지연이 필요 없다. 네이티브 HTML5 드래그는 모바일 터치에서 지원이
+  // 불안정해서(특히 iOS Safari) 자체 JS 드래그 구현(forceFallback)을
+  // 강제한다.
   function enableSortable() {
     if (sortable) sortable.destroy();
     sortable = window.Sortable.create(listEl, {
       animation: 150,
+      forceFallback: true,
+      handle: ".playlist-row-drag-handle",
       disabled: sortMode !== "default",
       onEnd: async (evt) => {
         if (evt.oldIndex === evt.newIndex) return;
+        sortable.option("disabled", true);
         try {
           currentPlaylist = await api.reorderPlaylist(currentPlaylist.name, evt.oldIndex, evt.newIndex);
           player.syncTracks(currentPlaylist);
         } catch (err) {
           await alertDialog(err.message);
+        } finally {
+          sortable.option("disabled", sortMode !== "default");
         }
         selectedIndices.clear();
         renderList();
@@ -531,6 +565,8 @@ export function setupPlaylist(
       duration.textContent = fmtDuration(track.duration_ms);
       li.appendChild(duration);
 
+      li.appendChild(createRatingBadge(track.rating));
+
       li.addEventListener("click", (e) => {
         if (e.target.closest("input")) return;
         checkbox.checked = !checkbox.checked;
@@ -574,6 +610,17 @@ export function setupPlaylist(
   player.addEventListener("trackchange", () => {
     selectedIndices.clear();
     renderList();
+  });
+
+  // 재생바 하트로 레이팅을 바꾸면 지금 보고 있는 재생목록에도 바로 반영한다.
+  player.addEventListener("ratingchange", (e) => {
+    const matches = currentPlaylist.tracks.filter((t) => t.track_id === e.detail.trackId);
+    if (matches.length) {
+      matches.forEach((track) => {
+        track.rating = e.detail.rating;
+      });
+      renderList();
+    }
   });
 
   // 재생목록 화면(또는 열려있는 라이브러리 추가 다이얼로그)이 활성일 때만

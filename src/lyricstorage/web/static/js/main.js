@@ -10,6 +10,7 @@ import { setupBrowse } from "./browse.js";
 import { setupAlbumInfo } from "./albuminfo.js";
 import { setupSidebar } from "./sidebar.js";
 import { setupRouter } from "./router.js";
+import { setupRating } from "./rating.js";
 
 function readBootstrap() {
   const el = document.getElementById("bootstrap-data");
@@ -62,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
+  setupRating(player);
   const statsApi = setupStats();
   const lyricsPanelEl = document.getElementById("lyrics-panel");
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");

@@ -18,6 +18,18 @@ function matchesSong(track, q) {
   return `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(q);
 }
 
+// 가사 유무 아이콘과 같은 이유로 레이팅이 없는 곡도 배지 자리를 항상 차지하게
+// 만들고 visibility로만 숨긴다(폭 고정은 CSS .playlist-row-rating이 담당) —
+// 그래야 레이팅 있는 행과 없는 행에서 라벨(제목/앨범/아티스트) 폭이 똑같이
+// 남아 컬럼이 어긋나지 않는다.
+function createRatingBadge(rating) {
+  const badge = document.createElement("span");
+  badge.className = "playlist-row-rating" + (rating ? "" : " empty");
+  badge.appendChild(iconSpan("heart-filled", "icon-sm"));
+  badge.appendChild(document.createTextNode(String(rating || 0)));
+  return badge;
+}
+
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE = 10;
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
@@ -131,6 +143,15 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     container.appendChild(loading);
   }
 
+  // 목록이 길 때 한 프레임에 수백~수천 행을 한꺼번에 만들면 브라우저가 잠깐
+  // 멎는(렉) 느낌을 준다. ROWS_PER_CHUNK개씩 나눠 매 프레임마다 이어 그리고,
+  // 그 사이 같은 컨테이너에 더 최신 렌더 요청(검색어 입력, 트랙 전환 등)이
+  // 들어오면 자기 세대(generation)가 낡았음을 확인하고 그리기를 멈춘다 —
+  // 그렇지 않으면 오래된 렌더와 새 렌더가 뒤섞여 행이 중복으로 남는다. 세대
+  // 카운터는 컨테이너별로 따로 두어(곡 목록/앨범 상세가 서로의 렌더를 취소해
+  // 버리지 않도록) 컨테이너 엘리먼트 자체에 붙인다.
+  const ROWS_PER_CHUNK = 150;
+
   // 브라우즈 "곡" 목록과 앨범 상세 화면의 곡 목록이 공유하는 행 렌더러.
   // selectedTrackIds/lastClickedIndex는 모듈 전역이라 다중선택·일괄수정 툴바가
   // 어느 목록에서 선택했든 동일하게 동작한다.
@@ -139,6 +160,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     tracksArray,
     onActivate = (track) => playFromList(track, tracksArray, "브라우즈 곡 목록")
   ) {
+    const myGeneration = (container._rowsGeneration = (container._rowsGeneration || 0) + 1);
     container.innerHTML = "";
     if (!tracksArray.length) {
       renderEmpty(container);
@@ -159,7 +181,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       syncSelectionUI();
     }
 
-    tracksArray.forEach((track, i) => {
+    function buildRow(track, i) {
       const li = document.createElement("li");
       li.className = "playlist-row";
       const selected = selectedTrackIds.has(track.track_id);
@@ -207,6 +229,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       duration.textContent = fmtDuration(track.duration_ms);
       li.appendChild(duration);
 
+      li.appendChild(createRatingBadge(track.rating));
+
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
       moreBtn.className = "icon-btn playlist-row-more";
@@ -217,6 +241,17 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         rowMenu.open(track, e.clientX, e.clientY);
       });
       li.appendChild(moreBtn);
+
+      // 순서 변경은 이 핸들을 잡고 드래그할 때만 시작된다(SortableJS의 handle
+      // 옵션). 버튼 요소라 아래 롱프레스 선택 로직의 "button, input" 제외
+      // 조건에 자동으로 걸러져서, 행 선택(롱프레스/체크박스)과 절대 충돌하지
+      // 않는다.
+      const dragHandle = document.createElement("button");
+      dragHandle.type = "button";
+      dragHandle.className = "icon-btn playlist-row-drag-handle";
+      dragHandle.title = "드래그해서 순서 변경";
+      dragHandle.appendChild(iconSpan("grip-vertical", "icon-sm"));
+      li.appendChild(dragHandle);
 
       rows.push({ li, checkbox, track });
 
@@ -274,15 +309,31 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       });
 
       li.addEventListener("dblclick", () => onActivate(track));
-      container.appendChild(li);
-    });
+      return li;
+    }
 
-    // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
-    // 컬럼 우선순위(앨범/아티스트 숨김 여부)가 제목 폭에 영향을 주므로 마퀴보다 먼저 계산한다.
-    requestAnimationFrame(() => {
-      applyColumnPriority(container);
-      applyMarquee(container);
-    });
+    let nextIndex = 0;
+    function renderChunk() {
+      if (myGeneration !== container._rowsGeneration) return; // 더 최신 렌더가 대신 진행 중
+      const end = Math.min(nextIndex + ROWS_PER_CHUNK, tracksArray.length);
+      const fragment = document.createDocumentFragment();
+      for (; nextIndex < end; nextIndex++) {
+        fragment.appendChild(buildRow(tracksArray[nextIndex], nextIndex));
+      }
+      container.appendChild(fragment);
+      if (nextIndex < tracksArray.length) {
+        requestAnimationFrame(renderChunk);
+        return;
+      }
+      // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다.
+      // 컬럼 우선순위(앨범/아티스트 숨김 여부)가 제목 폭에 영향을 주므로 마퀴보다 먼저 계산한다.
+      requestAnimationFrame(() => {
+        if (myGeneration !== container._rowsGeneration) return;
+        applyColumnPriority(container);
+        applyMarquee(container);
+      });
+    }
+    renderChunk();
   }
 
   function renderSongs() {
@@ -366,10 +417,24 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       artWrap.appendChild(img);
       card.appendChild(artWrap);
 
+      const titleRow = document.createElement("div");
+      titleRow.className = "media-card-title-row";
       const title = document.createElement("div");
       title.className = "media-card-title";
       title.textContent = group.album || "(앨범 없음)";
-      card.appendChild(title);
+      titleRow.appendChild(title);
+
+      // 순서 변경은 이 손잡이를 잡고 드래그할 때만 시작된다(SortableJS의
+      // handle 옵션) — 앨범 클릭(상세 열기)과 절대 겹치지 않는다.
+      const dragHandle = document.createElement("button");
+      dragHandle.type = "button";
+      dragHandle.className = "icon-btn media-card-drag-handle";
+      dragHandle.title = "드래그해서 순서 변경";
+      dragHandle.appendChild(iconSpan("grip-vertical", "icon-sm"));
+      dragHandle.addEventListener("click", (e) => e.stopPropagation());
+      titleRow.appendChild(dragHandle);
+
+      card.appendChild(titleRow);
 
       if (group.artist) {
         const artist = document.createElement("div");
@@ -447,6 +512,20 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
   });
 
+  // 재생바 하트로 레이팅을 바꾸면 그 곡이 보이는 목록(곡 목록/앨범 상세)에도
+  // 바로 반영한다. player.currentTrack이 이 목록의 tracks 배열과 같은 객체
+  // 참조를 공유하지 않을 수도 있으므로(예: 다른 재생목록 재생 중), track_id로
+  // 찾아 직접 patch한다.
+  player.addEventListener("ratingchange", (e) => {
+    const match = tracks.find((t) => t.track_id === e.detail.trackId);
+    if (match) match.rating = e.detail.rating;
+    if (albumDetailPanel.classList.contains("active")) {
+      renderAlbumDetailRows(currentAlbumGroup);
+    } else if (mode === "song") {
+      renderSongs();
+    }
+  });
+
   // 현재 화면에 보이는 목록에 대해서만 리사이즈 시 마퀴를 재계산한다.
   let marqueeResizeTimer = null;
   window.addEventListener("resize", () => {
@@ -468,30 +547,55 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 검색어가 있으면 화면에 보이는 목록이 전체 라이브러리의 일부일 뿐이라 드래그
   // 인덱스가 실제 순서와 어긋나므로, 검색 중에는 곡/앨범 목록 드래그를 막는다.
   // (앨범 상세는 검색으로 걸러지지 않는 목록이라 항상 켜둔다.)
+  //
+  // 드래그는 전용 손잡이(그립 아이콘)를 잡을 때만 시작된다(SortableJS의
+  // handle 옵션). 그래서 행/카드의 나머지 영역은 클릭·롱프레스 선택·모바일
+  // 스크롤 등 원래 제스처와 절대 충돌하지 않는다 — 굳이 홀드 지연을 둘
+  // 필요가 없다. 다만 네이티브 HTML5 드래그는 모바일 터치에서 지원이
+  // 불안정하므로(특히 iOS Safari), 자체 JS 드래그 구현(forceFallback)을
+  // 강제해 터치에서도 일관되게 동작하게 한다.
+  function isSongSearchActive() {
+    return searchInput.value.trim() !== "";
+  }
+
   async function resyncFromServer() {
     const library = await api.getLibrary();
     tracks = library.tracks;
     libraryName = library.name;
   }
 
+  // 성공 시엔 SortableJS가 이미 화면의 행/카드를 드래그한 자리로 옮겨둔
+  // 상태라 굳이 목록 전체를 허물고 다시 그릴 필요가 없다(다시 그리면 특히
+  // 이미지가 새로 로딩되는 앨범 카드가 잠깐 사라졌다 나타나며 "복사된 것처럼"
+  // 보이는 깜빡임이 생긴다). 실패했을 때만 서버와 어긋난 화면을 되돌리기 위해
+  // 다시 그린다. 또한 진행 중엔 같은 목록의 드래그를 잠가서, 응답이 오기 전에
+  // 연달아 드래그하다 요청 순서가 뒤섞여 순서가 꼬이는 일을 막는다.
   const songsSortable = window.Sortable.create(songsList, {
     animation: 150,
+    forceFallback: true,
+    handle: ".playlist-row-drag-handle",
     onEnd: async (evt) => {
       if (evt.oldIndex === evt.newIndex) return;
+      songsSortable.option("disabled", true);
       try {
         const result = await api.reorderPlaylist(libraryName, evt.oldIndex, evt.newIndex);
         tracks = result.tracks;
       } catch (err) {
         await alertDialog(err.message);
+        render();
+      } finally {
+        songsSortable.option("disabled", isSongSearchActive());
       }
-      render();
     },
   });
 
   const albumsSortable = window.Sortable.create(albumsList, {
     animation: 150,
+    forceFallback: true,
+    handle: ".media-card-drag-handle",
     onEnd: async (evt) => {
       if (evt.oldIndex === evt.newIndex) return;
+      albumsSortable.option("disabled", true);
       const moved = renderedAlbumGroups.splice(evt.oldIndex, 1)[0];
       renderedAlbumGroups.splice(evt.newIndex, 0, moved);
       const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
@@ -501,15 +605,20 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       } catch (err) {
         await alertDialog(err.message);
         await resyncFromServer();
+        render();
+      } finally {
+        albumsSortable.option("disabled", isSongSearchActive());
       }
-      render();
     },
   });
 
-  window.Sortable.create(albumDetailList, {
+  const albumDetailSortable = window.Sortable.create(albumDetailList, {
     animation: 150,
+    forceFallback: true,
+    handle: ".playlist-row-drag-handle",
     onEnd: async (evt) => {
       if (evt.oldIndex === evt.newIndex || !currentAlbumGroup) return;
+      albumDetailSortable.option("disabled", true);
       // 원본 배열은 건드리지 않고 사본으로 새 순서를 계산한다 — API 실패 시
       // currentAlbumGroup을 그대로 다시 그리면 되도록 하기 위함.
       const reordered = currentAlbumGroup.tracks.slice();
@@ -538,13 +647,15 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         currentAlbumGroup = match || currentAlbumGroup;
       } catch (err) {
         await alertDialog(err.message);
+        renderAlbumDetailRows(currentAlbumGroup);
+      } finally {
+        albumDetailSortable.option("disabled", false);
       }
-      renderAlbumDetailRows(currentAlbumGroup);
     },
   });
 
   searchInput.addEventListener("input", () => {
-    const disabled = searchInput.value.trim() !== "";
+    const disabled = isSongSearchActive();
     songsSortable.option("disabled", disabled);
     albumsSortable.option("disabled", disabled);
   });

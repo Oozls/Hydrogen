@@ -86,6 +86,8 @@ export const api = {
   getLyrics: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics`),
   saveLyrics: (trackId, lines) =>
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
+  setRating: (trackId, rating) =>
+    request("PUT", `/api/tracks/${trackId}/rating`, { json: { rating } }),
   updateTrackMetadata: (trackId, patch) =>
     request("PUT", `/api/tracks/${trackId}/metadata`, { json: patch }),
   updateTrackMetadataBatch: (trackIds, patch) =>

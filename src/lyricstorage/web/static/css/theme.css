@@ -107,6 +107,10 @@ textarea {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* 모바일 브라우저의 주소창 등으로 100vh가 실제 보이는 영역보다 커지는
+     문제를 피한다. dvh를 모르는 브라우저는 이 줄 자체를 무시하므로 100vh로
+     자연히 폴백된다. */
+  height: 100dvh;
   gap: 10px;
   padding: 12px;
   padding-bottom: var(--transport-bar-height);
@@ -370,6 +374,7 @@ select#playlist-sort {
   margin: 0;
   padding: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
 }
 
@@ -450,8 +455,35 @@ select#playlist-sort {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.playlist-row-rating {
+  /* 가사 유무 아이콘과 동일한 이유로 폭을 고정해 항상 자리를 차지하게 한다
+     (레이팅이 없는 곡은 visibility로만 숨김) — 그래야 행마다 남는 라벨 폭이
+     달라지지 않아 앨범/아티스트 컬럼이 어긋나지 않는다. */
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.playlist-row-rating.empty {
+  visibility: hidden;
+}
 .playlist-row-more {
   flex-shrink: 0;
+}
+.playlist-row-drag-handle {
+  flex-shrink: 0;
+  cursor: grab;
+  color: var(--text-muted);
+  /* 브라우저가 이 손잡이 위에서의 제스처를 스크롤로 가로채지 않고 그대로
+     SortableJS(터치 폴백 드래그)에 넘기도록 한다. 행의 나머지 영역은 손대지
+     않으므로 스크롤은 평소처럼 동작한다. */
+  touch-action: none;
+}
+.playlist-row-drag-handle:active {
+  cursor: grabbing;
 }
 .playlist-empty-state {
   color: var(--text-muted);
@@ -652,6 +684,44 @@ table.lyrics-edit-table {
   align-items: center;
   gap: 4px;
 }
+.track-rating {
+  display: flex;
+  align-items: center;
+  gap: 0px;
+  margin-right: 4px;
+}
+.rating-heart {
+  background: transparent;
+  border: none;
+  padding: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.rating-heart .icon {
+  /* icon-sm(12px) 대신 하트 전용 크기를 명시해서 5개가 나란히 있을 때도
+     한눈에 잘 보이게 한다. width/height를 고정해 outline(heart)과
+     filled(heart-filled) 두 SVG가 항상 동일한 픽셀 크기로 그려진다. */
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+.rating-heart.filled .icon {
+  color: var(--accent);
+}
+.rating-heart:hover {
+  background: var(--bg-elevated);
+}
+.rating-heart:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
 .transport-now-playing {
   position: absolute;
   left: 0;
@@ -774,6 +844,8 @@ input[type="range"]:hover::-moz-range-thumb {
   max-width: 900px;
   height: 80vh;
   max-height: 80vh;
+  height: 80dvh;
+  max-height: 80dvh;
 }
 /* library-picker-dialog-wide[open]와 같은 이유로, 열려있을 때만 flex를 적용한다. */
 .file-content-dialog[open] {
@@ -800,6 +872,8 @@ input[type="range"]:hover::-moz-range-thumb {
   max-width: 90vw;
   height: 85vh;
   max-height: 85vh;
+  height: 85dvh;
+  max-height: 85dvh;
 }
 /* dialog는 [open]이 아닐 때 UA 스타일로 display:none이 되어야 하는데, 위 규칙에
    display를 걸면 그 기본 동작을 덮어써 닫혀있어도 항상 렌더링돼버린다. 그래서
@@ -1002,6 +1076,7 @@ input[type="range"]:hover::-moz-range-thumb {
 .card-grid {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
@@ -1035,6 +1110,28 @@ input[type="range"]:hover::-moz-range-thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.media-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.media-card-drag-handle {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--text-muted);
+  cursor: grab;
+  /* 브라우저가 이 손잡이 위에서의 제스처를 스크롤로 가로채지 않고 그대로
+     SortableJS(터치 폴백 드래그)에 넘기도록 한다. */
+  touch-action: none;
+}
+.media-card-drag-handle:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+.media-card-drag-handle:active {
+  cursor: grabbing;
 }
 
 /* -- 앨범 아트/곡 목록 로딩 스피너 (공용) --------------------------------- */
@@ -1092,6 +1189,8 @@ input[type="range"]:hover::-moz-range-thumb {
   border-radius: 4px;
 }
 .media-card-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1328,6 +1427,12 @@ input[type="range"]:hover::-moz-range-thumb {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* iOS Safari는 100vh를 주소창/탭바가 숨겨진 "최대" 뷰포트 기준으로 계산해서,
+     그 바가 펼쳐지면 실제 보이는 영역보다 콘텐츠가 커져 페이지 전체가 세로로
+     스크롤돼야 하는 문제가 있다. dvh는 그 바의 표시 상태에 맞춰 실시간으로
+     따라가는 값이라 항상 실제 보이는 높이와 맞는다. dvh를 모르는 브라우저는
+     이 줄 자체를 무시하므로 100vh로 자연히 폴백된다. */
+  height: 100dvh;
   gap: 10px;
   padding: 12px;
 }
@@ -1485,12 +1590,14 @@ input[type="range"]:hover::-moz-range-thumb {
   display: none;
 }
 
-/* -- 반응형: 좁은 화면에서는 재생목록/가사 패널을 세로로 쌓는다 ------------ */
+/* -- 반응형: 좁은 화면에서는 재생목록/가사 패널을 세로로 쌓는다 ------------
+   이전엔 스택된 패널마다 min-height:420px를 강제해서, 세로 폭이 좁은
+   태블릿처럼 뷰포트 자체가 짧은 환경에서 .app-shell이 화면보다 커져 전체
+   페이지가 세로로 스크롤되는 문제가 있었다. .app-shell의 height는(media
+   query 밖의 기본 규칙 그대로) 뷰포트에 고정해 절대 넘치지 않게 하고, 스택된
+   패널들은 남는 높이를 flex:1로 균등하게 나눠 가지면서 각자 내부 목록에서만
+   스크롤되게 한다. */
 @media (max-width: 1000px) {
-  .app-shell {
-    height: auto;
-    min-height: 100vh;
-  }
   .main-columns {
     flex-direction: column;
   }
@@ -1498,8 +1605,7 @@ input[type="range"]:hover::-moz-range-thumb {
   .playlist-panel,
   .browse-panel,
   .lyrics-panel {
-    flex: none;
-    min-height: 420px;
-    max-height: 60vh;
+    flex: 1 1 0;
+    min-height: 0;
   }
 }
