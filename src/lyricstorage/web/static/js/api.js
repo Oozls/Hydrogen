@@ -102,6 +102,9 @@ export const api = {
   },
   audioUrl: (trackId) => `/api/tracks/${trackId}/audio`,
   artUrl: (trackId) => `/api/tracks/${trackId}/art`,
+  downloadUrl: (trackId) => `/api/tracks/${trackId}/download`,
+  albumDownloadUrl: (album, artist) =>
+    `/api/albums/download?album=${encodeURIComponent(album || "")}&artist=${encodeURIComponent(artist || "")}`,
   logPlay: (trackId, title, artist, album, listenedMs) =>
     request("POST", "/api/stats/plays", {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },

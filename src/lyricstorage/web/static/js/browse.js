@@ -69,6 +69,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const albumDetailArt = document.getElementById("album-detail-art");
   const albumDetailArtPlaceholder = document.getElementById("album-detail-art-placeholder");
   const btnAlbumDetailBack = document.getElementById("btn-album-detail-back");
+  const btnAlbumDetailDownload = document.getElementById("btn-album-detail-download");
   const btnAlbumDetailEdit = document.getElementById("btn-album-detail-edit");
   const clearSelectionBtn = document.getElementById("btn-browse-clear-selection");
   const addFileBtn = document.getElementById("btn-browse-add-file");
@@ -628,6 +629,17 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   });
 
   btnAlbumDetailBack.addEventListener("click", closeAlbumDetail);
+  btnAlbumDetailDownload.addEventListener("click", () => {
+    if (!currentAlbumGroup) return;
+    // <a download>를 잠깐 만들어 클릭한 뒤 치운다 — 실제 zip 파일명은 서버의
+    // Content-Disposition 헤더가 정해주므로 download 속성은 비워둔다.
+    const a = document.createElement("a");
+    a.href = api.albumDownloadUrl(currentAlbumGroup.album, currentAlbumGroup.artist);
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
   btnAlbumDetailEdit.addEventListener("click", () => {
     if (currentAlbumGroup) onEditAlbum(currentAlbumGroup);
   });

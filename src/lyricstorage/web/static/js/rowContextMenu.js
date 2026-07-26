@@ -1,4 +1,16 @@
+import { api } from "./api.js";
 import { fetchNonGlobalPlaylistNames } from "./playlistNames.js";
+
+// <a download>를 잠깐 만들어 클릭한 뒤 치운다 — 실제 다운로드 파일명은
+// 서버의 Content-Disposition 헤더가 정해주므로 download 속성은 비워둔다.
+function triggerDownload(url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
 
 // 곡 행 "⋮" 버튼 클릭 시 마우스 위치에 뜨는 컨텍스트 메뉴. 브라우즈/재생목록/
 // 앨범 상세 목록 등 곡 행이 있는 모든 화면에서 공용으로 사용한다.
@@ -87,6 +99,12 @@ export function setupRowContextMenu({ onEditTrack, onAddToPlaylist, onBulkEdit, 
       )
     );
     menu.appendChild(makeItem("재생목록에 추가 ▸", () => renderPlaylistSubmenu(track, x, y)));
+    menu.appendChild(
+      makeItem("다운로드", () => {
+        close();
+        triggerDownload(api.downloadUrl(track.track_id));
+      })
+    );
     position(x, y);
   }
 
