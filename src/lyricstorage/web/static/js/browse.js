@@ -3,7 +3,7 @@ import { iconSpan } from "./icons.js";
 import { alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
-import { applyMarquee, applyColumnPriority } from "./marquee.js";
+import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 
 function fmtDuration(ms) {
@@ -59,8 +59,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 선택된 곡이 하나라도 있으면 "선택 모드"로 간주 — 이때만 체크박스가 보이고,
   // 수정자 키 없는 일반 클릭도 체크박스처럼 토글로 동작한다.
   function syncSelectionUI() {
-    songsList.classList.toggle("selecting", selectedTrackIds.size > 0);
-    clearSelectionBtn.hidden = selectedTrackIds.size === 0;
+    const selecting = selectedTrackIds.size > 0;
+    songsList.classList.toggle("selecting", selecting);
+    albumDetailList.classList.toggle("selecting", selecting);
+    clearSelectionBtn.hidden = !selecting;
   }
 
   function playEphemeral(track) {
@@ -69,6 +71,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
     player.setPlaylist({ name: "검색 결과", tracks: [track] });
     player.playIndex(0);
+  }
+
+  // 앨범 상세에서 곡을 재생하면, 다음/이전 곡 자동재생이 해당 앨범 트랙 범위
+  // 안에서만 이루어지도록 재생목록을 앨범 트랙 전체로 설정한다.
+  function playInAlbum(track, albumTracks) {
+    player.setPlaylist({ name: currentAlbumGroup ? currentAlbumGroup.album || "앨범" : "앨범", tracks: albumTracks });
+    player.playIndex(albumTracks.indexOf(track));
   }
 
   async function addTrackToPlaylist(track, playlistName) {
@@ -119,7 +128,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 브라우즈 "곡" 목록과 앨범 상세 화면의 곡 목록이 공유하는 행 렌더러.
   // selectedTrackIds/lastClickedIndex는 모듈 전역이라 다중선택·일괄수정 툴바가
   // 어느 목록에서 선택했든 동일하게 동작한다.
-  function renderSongRows(container, tracksArray) {
+  function renderSongRows(container, tracksArray, onActivate = playEphemeral) {
     container.innerHTML = "";
     if (!tracksArray.length) {
       renderEmpty(container);
@@ -168,22 +177,17 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       const label = document.createElement("span");
       label.className = "playlist-row-label";
 
-      const titleClip = document.createElement("span");
-      titleClip.className = "playlist-row-title-clip";
-      const titleInner = document.createElement("span");
-      titleInner.className = "playlist-row-title playlist-row-title-inner";
-      titleInner.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
-      titleClip.appendChild(titleInner);
+      const titleClip = createMarqueeClip(
+        "playlist-row-title-clip",
+        "playlist-row-title",
+        (isPlaying ? "▶ " : "") + (track.title || track.track_id)
+      );
       label.appendChild(titleClip);
 
-      const albumSpan = document.createElement("span");
-      albumSpan.className = "playlist-row-album";
-      albumSpan.textContent = track.album || "";
+      const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
       label.appendChild(albumSpan);
 
-      const artistSpan = document.createElement("span");
-      artistSpan.className = "playlist-row-artist";
-      artistSpan.textContent = track.artist || "";
+      const artistSpan = createMarqueeClip("playlist-row-artist", "", track.artist || "");
       label.appendChild(artistSpan);
 
       li.appendChild(label);
@@ -259,7 +263,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         }
       });
 
-      li.addEventListener("dblclick", () => playEphemeral(track));
+      li.addEventListener("dblclick", () => onActivate(track));
       container.appendChild(li);
     });
 
@@ -285,7 +289,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   function renderAlbumDetailRows(group) {
-    renderSongRows(albumDetailList, group.tracks);
+    renderSongRows(albumDetailList, group.tracks, (track) => playInAlbum(track, group.tracks));
   }
 
   function showAlbumDetailArt(url) {
@@ -449,7 +453,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       searchInput.value = "";
       const library = await api.getLibrary();
       tracks = library.tracks;
-      switchMode("song");
+      switchMode("album");
     },
     hide() {
       panelEl.classList.remove("active");

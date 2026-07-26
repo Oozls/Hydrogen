@@ -3,7 +3,7 @@ import { iconSpan } from "./icons.js";
 import { confirmDialog, promptDialog, alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
-import { applyMarquee, applyColumnPriority } from "./marquee.js";
+import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 
 function fmtDuration(ms) {
@@ -102,6 +102,7 @@ export function setupPlaylist(
 
   function renderList() {
     listEl.innerHTML = "";
+    listEl.classList.toggle("selecting", selectedIndices.size > 0);
 
     if (!currentPlaylist.name) {
       const empty = document.createElement("div");
@@ -118,28 +119,44 @@ export function setupPlaylist(
       li.dataset.trackId = track.track_id;
       const isPlaying = isTrackPlaying(track, index);
       if (isPlaying) li.classList.add("playing");
-      if (selectedIndices.has(index)) li.classList.add("selected");
+      const selected = selectedIndices.has(index);
+      if (selected) li.classList.add("selected");
+
+      // 브라우즈 곡 목록과 동일한 커스텀 체크박스(선택 모드에서만 표시).
+      const checkboxWrap = document.createElement("label");
+      checkboxWrap.className = "row-checkbox";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "row-checkbox-input";
+      checkbox.checked = selected;
+      checkbox.addEventListener("click", (e) => e.stopPropagation());
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) selectedIndices.add(index);
+        else selectedIndices.delete(index);
+        lastClickedIndex = index;
+        renderList();
+      });
+      checkboxWrap.appendChild(checkbox);
+      const checkboxBox = document.createElement("span");
+      checkboxBox.className = "row-checkbox-box";
+      checkboxWrap.appendChild(checkboxBox);
+      li.appendChild(checkboxWrap);
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
 
-      const titleClip = document.createElement("span");
-      titleClip.className = "playlist-row-title-clip";
-      const titleInner = document.createElement("span");
-      titleInner.className = "playlist-row-title playlist-row-title-inner";
-      titleInner.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
-      titleClip.appendChild(titleInner);
+      const titleClip = createMarqueeClip(
+        "playlist-row-title-clip",
+        "playlist-row-title",
+        (isPlaying ? "▶ " : "") + (track.title || track.track_id)
+      );
       label.appendChild(titleClip);
 
       // 브라우즈 곡 목록과 동일한 컬럼 구성(제목/앨범/아티스트)을 재사용한다.
-      const albumSpan = document.createElement("span");
-      albumSpan.className = "playlist-row-album";
-      albumSpan.textContent = track.album || "";
+      const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
       label.appendChild(albumSpan);
 
-      const artistSpan = document.createElement("span");
-      artistSpan.className = "playlist-row-artist";
-      artistSpan.textContent = track.artist || "";
+      const artistSpan = createMarqueeClip("playlist-row-artist", "", track.artist || "");
       label.appendChild(artistSpan);
 
       li.appendChild(label);
@@ -485,22 +502,17 @@ export function setupPlaylist(
       const label = document.createElement("span");
       label.className = "playlist-row-label";
 
-      const titleClip = document.createElement("span");
-      titleClip.className = "playlist-row-title-clip";
-      const titleInner = document.createElement("span");
-      titleInner.className = "playlist-row-title playlist-row-title-inner";
-      titleInner.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
-      titleClip.appendChild(titleInner);
+      const titleClip = createMarqueeClip(
+        "playlist-row-title-clip",
+        "playlist-row-title",
+        (isPlaying ? "▶ " : "") + (track.title || track.track_id)
+      );
       label.appendChild(titleClip);
 
-      const albumSpan = document.createElement("span");
-      albumSpan.className = "playlist-row-album";
-      albumSpan.textContent = track.album || "";
+      const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
       label.appendChild(albumSpan);
 
-      const artistSpan = document.createElement("span");
-      artistSpan.className = "playlist-row-artist";
-      artistSpan.textContent = track.artist || "";
+      const artistSpan = createMarqueeClip("playlist-row-artist", "", track.artist || "");
       label.appendChild(artistSpan);
 
       li.appendChild(label);

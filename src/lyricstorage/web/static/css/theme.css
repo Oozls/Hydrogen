@@ -402,22 +402,28 @@ select#playlist-sort {
   flex: 1;
   min-width: 0;
 }
+/* 제목/앨범명/아티스트명 공용 마퀴 스크롤 컨테이너. flex-basis(폭)와 색상은
+   각 열의 고유 클래스(.playlist-row-title-clip/.playlist-row-album/.playlist-row-artist)가
+   따로 맡고, 여기서는 넘친 텍스트를 잘라내고 스크롤 애니메이션을 태우는 역할만 한다. */
+.marquee-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+}
 .playlist-row-title-clip {
   flex: 1 1 0;
   min-width: 70px;
-  overflow: hidden;
-  white-space: nowrap;
-  position: relative;
 }
 .playlist-row-title {
   color: inherit;
 }
-.playlist-row-title-inner {
+.marquee-inner {
   display: inline-block;
   white-space: nowrap;
   will-change: transform;
 }
-.playlist-row-title-inner.marquee {
+.marquee-inner.marquee {
   display: inline-flex;
 }
 .marquee-copy {
@@ -427,18 +433,12 @@ select#playlist-sort {
 .playlist-row-album {
   flex: 0 1 170px;
   min-width: 44px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-secondary);
   font-size: 13px;
 }
 .playlist-row-artist {
   flex: 0 1 150px;
   min-width: 44px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-secondary);
   font-size: 13px;
 }
@@ -1090,8 +1090,8 @@ input[type="range"]:hover::-moz-range-thumb {
   flex-shrink: 0;
 }
 .album-detail-art-wrap {
-  width: 48px;
-  height: 48px;
+  width: 88px;
+  height: 88px;
   border-radius: 8px;
   background: var(--bg-elevated);
   display: flex;

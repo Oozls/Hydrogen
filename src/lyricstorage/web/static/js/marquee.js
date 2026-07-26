@@ -1,8 +1,7 @@
-// 곡 행 제목이 컬럼 폭보다 길 때 자동으로 스크롤하는 마퀴.
-// `.playlist-row-title-clip`(overflow 컨테이너) > `.playlist-row-title-inner`
-// 구조를 전제로 하며, 브라우즈/재생목록/앨범 상세/재생바 등 곡 제목이 있는
-// 모든 곳에서 공용으로 사용한다. 레이아웃이 확정된 뒤(다음 프레임)에 호출해야
-// 폭 측정이 정확하다.
+// 곡 행 제목/앨범명/아티스트명이 칸 폭보다 길 때 자동으로 스크롤하는 마퀴.
+// `.marquee-clip`(overflow 컨테이너) > `.marquee-inner` 구조를 전제로 하며,
+// 브라우즈/재생목록/앨범 상세/재생바 등 곡 정보가 있는 모든 곳에서 공용으로
+// 사용한다. 레이아웃이 확정된 뒤(다음 프레임)에 호출해야 폭 측정이 정확하다.
 //
 // 제목을 두 벌 나란히 두고 정확히 한 벌 폭(+간격)만큼 한 방향으로 이동시켜,
 // 끝에 닿으면 순간적으로 처음 제목 텍스트가 이어지는 것처럼 보이는 이음매 없는
@@ -17,6 +16,20 @@
 const PIXELS_PER_SECOND = 40;
 const LOOP_GAP_PX = 48;
 const PAUSE_MS = 3000;
+
+// 곡 행의 제목/앨범명/아티스트명 칸을 공용 마퀴 구조(overflow:hidden 컨테이너 +
+// 텍스트를 담는 내부 span)로 만들어준다. clipClassName은 열의 폭(flex-basis)을
+// 정하고, innerClassName은 필요한 경우(제목처럼 색상을 별도로 상속받아야 하는
+// 경우)에만 추가로 지정한다.
+export function createMarqueeClip(clipClassName, innerClassName, text) {
+  const clip = document.createElement("span");
+  clip.className = `${clipClassName} marquee-clip`;
+  const inner = document.createElement("span");
+  inner.className = innerClassName ? `${innerClassName} marquee-inner` : "marquee-inner";
+  inner.textContent = text;
+  clip.appendChild(inner);
+  return clip;
+}
 
 function stopMarquee(inner) {
   if (inner._marqueeAnim) {
@@ -61,9 +74,9 @@ export function applyColumnPriority(rootEl) {
 
 export function applyMarquee(rootEl) {
   if (!rootEl) return;
-  const clips = rootEl.querySelectorAll(".playlist-row-title-clip");
+  const clips = rootEl.querySelectorAll(".marquee-clip");
   clips.forEach((clip) => {
-    const inner = clip.querySelector(".playlist-row-title-inner");
+    const inner = clip.querySelector(".marquee-inner");
     if (!inner) return;
 
     stopMarquee(inner);

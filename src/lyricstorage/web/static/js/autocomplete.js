@@ -25,6 +25,7 @@ export function buildAutocomplete(inputEl, listEl, getValues) {
 
   function select(value) {
     inputEl.value = value;
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
     hide();
   }
 

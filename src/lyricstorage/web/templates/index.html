@@ -85,8 +85,8 @@
         </div>
         <div class="stats-controls-row">
           <div class="tabs" id="browse-tabs">
-            <button class="tab-btn active" data-mode="song" type="button">곡</button>
-            <button class="tab-btn" data-mode="album" type="button">앨범</button>
+            <button class="tab-btn" data-mode="song" type="button">곡</button>
+            <button class="tab-btn active" data-mode="album" type="button">앨범</button>
           </div>
           <input type="text" id="browse-search" placeholder="검색..." />
           <div class="spacer"></div>
@@ -102,10 +102,10 @@
         </div>
         <input type="file" id="browse-file-input" accept=".mp3,.wav,.m4a" multiple hidden />
         <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
-        <div id="browse-songs-panel" class="tab-panel active">
+        <div id="browse-songs-panel" class="tab-panel">
           <ul id="browse-songs-list" class="playlist-list"></ul>
         </div>
-        <div id="browse-albums-panel" class="tab-panel">
+        <div id="browse-albums-panel" class="tab-panel active">
           <div id="browse-albums-list" class="card-grid"></div>
         </div>
         <div id="browse-album-detail-panel" class="tab-panel">
@@ -212,8 +212,8 @@
             <span id="now-playing-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
           </div>
           <div class="now-playing-text">
-            <div class="playlist-row-title-clip">
-              <span id="now-playing-title" class="track-title playlist-row-title-inner">재생 중인 곡 없음</span>
+            <div class="playlist-row-title-clip marquee-clip">
+              <span id="now-playing-title" class="track-title marquee-inner">재생 중인 곡 없음</span>
             </div>
             <div id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</div>
           </div>
