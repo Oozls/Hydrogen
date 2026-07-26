@@ -45,10 +45,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const folderInput = document.getElementById("browse-folder-input");
 
   let tracks = [];
+  let libraryName = null;
   let mode = "song";
   let selectedTrackIds = new Set();
   let lastClickedIndex = null;
   let currentAlbumGroup = null;
+  let renderedAlbumGroups = [];
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -105,6 +107,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       }
       const library = await api.getLibrary();
       tracks = library.tracks;
+      libraryName = library.name;
       render();
     } catch (err) {
       await alertDialog(err.message);
@@ -338,6 +341,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     const q = searchInput.value.trim().toLowerCase();
     albumsList.innerHTML = "";
     const groups = groupAlbums(tracks).filter((g) => matchesAlbum(g, q));
+    renderedAlbumGroups = groups;
     if (!groups.length) {
       renderEmpty(albumsList);
       return;
@@ -460,6 +464,91 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 
+  // -- 드래그로 순서 변경 (재생목록 화면과 동일한 SortableJS 인터페이스) ------
+  // 검색어가 있으면 화면에 보이는 목록이 전체 라이브러리의 일부일 뿐이라 드래그
+  // 인덱스가 실제 순서와 어긋나므로, 검색 중에는 곡/앨범 목록 드래그를 막는다.
+  // (앨범 상세는 검색으로 걸러지지 않는 목록이라 항상 켜둔다.)
+  async function resyncFromServer() {
+    const library = await api.getLibrary();
+    tracks = library.tracks;
+    libraryName = library.name;
+  }
+
+  const songsSortable = window.Sortable.create(songsList, {
+    animation: 150,
+    onEnd: async (evt) => {
+      if (evt.oldIndex === evt.newIndex) return;
+      try {
+        const result = await api.reorderPlaylist(libraryName, evt.oldIndex, evt.newIndex);
+        tracks = result.tracks;
+      } catch (err) {
+        await alertDialog(err.message);
+      }
+      render();
+    },
+  });
+
+  const albumsSortable = window.Sortable.create(albumsList, {
+    animation: 150,
+    onEnd: async (evt) => {
+      if (evt.oldIndex === evt.newIndex) return;
+      const moved = renderedAlbumGroups.splice(evt.oldIndex, 1)[0];
+      renderedAlbumGroups.splice(evt.newIndex, 0, moved);
+      const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
+      try {
+        const result = await api.reorderPlaylistFull(libraryName, newOrder);
+        tracks = result.tracks;
+      } catch (err) {
+        await alertDialog(err.message);
+        await resyncFromServer();
+      }
+      render();
+    },
+  });
+
+  window.Sortable.create(albumDetailList, {
+    animation: 150,
+    onEnd: async (evt) => {
+      if (evt.oldIndex === evt.newIndex || !currentAlbumGroup) return;
+      // 원본 배열은 건드리지 않고 사본으로 새 순서를 계산한다 — API 실패 시
+      // currentAlbumGroup을 그대로 다시 그리면 되도록 하기 위함.
+      const reordered = currentAlbumGroup.tracks.slice();
+      const moved = reordered.splice(evt.oldIndex, 1)[0];
+      reordered.splice(evt.newIndex, 0, moved);
+
+      // 이 앨범 트랙들이 전역 라이브러리 배열에서 원래 차지하던 슬롯(오름차순)에,
+      // 새로 정렬된 순서를 그대로 채워 넣는다. 다른 앨범 트랙들의 위치는 그대로다.
+      const idSet = new Set(reordered.map((t) => t.track_id));
+      const slots = [];
+      tracks.forEach((t, i) => {
+        if (idSet.has(t.track_id)) slots.push(i);
+      });
+      const newTracks = tracks.slice();
+      slots.forEach((slotIndex, i) => {
+        newTracks[slotIndex] = reordered[i];
+      });
+
+      try {
+        const result = await api.reorderPlaylistFull(libraryName, newTracks.map((t) => t.track_id));
+        tracks = result.tracks;
+        const groups = groupAlbums(tracks);
+        const match = groups.find(
+          (g) => g.album === currentAlbumGroup.album && g.artist === currentAlbumGroup.artist
+        );
+        currentAlbumGroup = match || currentAlbumGroup;
+      } catch (err) {
+        await alertDialog(err.message);
+      }
+      renderAlbumDetailRows(currentAlbumGroup);
+    },
+  });
+
+  searchInput.addEventListener("input", () => {
+    const disabled = searchInput.value.trim() !== "";
+    songsSortable.option("disabled", disabled);
+    albumsSortable.option("disabled", disabled);
+  });
+
   return {
     async show() {
       panelEl.classList.add("active");
@@ -468,6 +557,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       renderLoading(albumsList);
       const library = await api.getLibrary();
       tracks = library.tracks;
+      libraryName = library.name;
       switchMode("album");
     },
     hide() {
@@ -476,6 +566,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     async refreshAfterAlbumUpdate() {
       const library = await api.getLibrary();
       tracks = library.tracks;
+      libraryName = library.name;
       if (currentAlbumGroup) {
         const groups = groupAlbums(tracks);
         const match = groups.find(

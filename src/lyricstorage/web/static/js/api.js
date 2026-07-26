@@ -35,6 +35,10 @@ export const api = {
     request("POST", `/api/playlists/${encodeURIComponent(name)}/reorder`, {
       json: { from_index: fromIndex, to_index: toIndex },
     }),
+  reorderPlaylistFull: (name, trackIds) =>
+    request("POST", `/api/playlists/${encodeURIComponent(name)}/reorder-full`, {
+      json: { track_ids: trackIds },
+    }),
   removeTracks: (name, indices) =>
     request("POST", `/api/playlists/${encodeURIComponent(name)}/tracks/remove-batch`, {
       json: { indices },

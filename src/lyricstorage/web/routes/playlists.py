@@ -105,6 +105,26 @@ def reorder_playlist(name: str):
     return jsonify(playlist_to_json(playlist))
 
 
+@bp.post("/<name>/reorder-full")
+def reorder_playlist_full(name: str):
+    """브라우즈의 앨범/앨범 상세 곡 목록처럼, 여러 트랙(그룹) 순서를 한 번에
+    새로 정해야 하는 드래그 결과를 전체 track_id 순서로 통째로 반영한다."""
+    playlist = playlist_repo.load_playlist(name)
+    if playlist is None:
+        return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
+    data = request.get_json(silent=True) or {}
+    track_ids = data.get("track_ids")
+    if not isinstance(track_ids, list) or not all(isinstance(t, str) for t in track_ids):
+        return jsonify({"error": "track_ids가 필요합니다."}), 400
+    try:
+        playlist.reorder(track_ids)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    playlist.save()
+    applog.log_info("ACTION", f"플레이리스트 순서 재배열: {name}")
+    return jsonify(playlist_to_json(playlist))
+
+
 @bp.post("/<name>/tracks/remove-batch")
 def remove_tracks(name: str):
     playlist = playlist_repo.load_playlist(name)

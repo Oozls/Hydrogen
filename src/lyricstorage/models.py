@@ -205,6 +205,15 @@ class PlaylistModel:
         to_index = max(0, min(to_index, len(self.tracks)))
         self.tracks.insert(to_index, track)
 
+    def reorder(self, track_ids: list[str]) -> None:
+        """주어진 track_id 순서대로 트랙을 통째로 재배열한다(브라우즈의 곡/앨범
+        목록처럼, 드래그로 만든 순서를 그룹 단위로 한 번에 반영해야 하는 경우용).
+        track_ids는 현재 트랙 집합과 정확히 같은 id 집합이어야 한다."""
+        by_id = {storage.path_hash(t.path): t for t in self.tracks}
+        if len(track_ids) != len(self.tracks) or set(track_ids) != set(by_id.keys()):
+            raise ValueError("잘못된 순서 목록입니다.")
+        self.tracks = [by_id[tid] for tid in track_ids]
+
     def to_dict(self) -> dict:
         return {"name": self.name, "tracks": [t.to_dict() for t in self.tracks]}
 
