@@ -80,6 +80,14 @@ export function setupPlaylist(
     pageTitleEl.textContent = currentPlaylist.name || "";
   }
 
+  // 재생목록 자체가 재생 중이면(중복곡도 정확히 구분되도록) 인덱스로 비교하고,
+  // 브라우즈에서 임시 재생 중인 곡처럼 다른 재생목록이 로드돼 있으면 곡 ID로 비교한다.
+  function isTrackPlaying(track, index) {
+    if (!player.currentTrack) return false;
+    if (player.playlist === currentPlaylist) return index === player.currentIndex;
+    return player.currentTrack.track_id === track.track_id;
+  }
+
   function sortedTracks() {
     const tracks = currentPlaylist.tracks.slice();
     if (sortMode === "title") {
@@ -108,7 +116,7 @@ export function setupPlaylist(
       const li = document.createElement("li");
       li.className = "playlist-row";
       li.dataset.trackId = track.track_id;
-      const isPlaying = index === player.currentIndex;
+      const isPlaying = isTrackPlaying(track, index);
       if (isPlaying) li.classList.add("playing");
       if (selectedIndices.has(index)) li.classList.add("selected");
 
@@ -471,6 +479,8 @@ export function setupPlaylist(
       checkboxWrap.appendChild(checkboxBox);
       li.appendChild(checkboxWrap);
       if (checkbox.checked) li.classList.add("selected");
+      const isPlaying = !!player.currentTrack && player.currentTrack.track_id === track.track_id;
+      if (isPlaying) li.classList.add("playing");
 
       const label = document.createElement("span");
       label.className = "playlist-row-label";
@@ -479,7 +489,7 @@ export function setupPlaylist(
       titleClip.className = "playlist-row-title-clip";
       const titleInner = document.createElement("span");
       titleInner.className = "playlist-row-title playlist-row-title-inner";
-      titleInner.textContent = track.title || track.track_id;
+      titleInner.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
       titleClip.appendChild(titleInner);
       label.appendChild(titleClip);
 

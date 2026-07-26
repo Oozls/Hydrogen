@@ -145,6 +145,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       li.className = "playlist-row";
       const selected = selectedTrackIds.has(track.track_id);
       if (selected) li.classList.add("selected");
+      const isPlaying = !!player.currentTrack && player.currentTrack.track_id === track.track_id;
+      if (isPlaying) li.classList.add("playing");
 
       const checkboxWrap = document.createElement("label");
       checkboxWrap.className = "row-checkbox";
@@ -170,7 +172,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       titleClip.className = "playlist-row-title-clip";
       const titleInner = document.createElement("span");
       titleInner.className = "playlist-row-title playlist-row-title-inner";
-      titleInner.textContent = track.title || track.track_id;
+      titleInner.textContent = (isPlaying ? "▶ " : "") + (track.title || track.track_id);
       titleClip.appendChild(titleInner);
       label.appendChild(titleClip);
 
@@ -412,6 +414,16 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   folderInput.addEventListener("change", async () => {
     await handleUpload(folderInput.files);
     folderInput.value = "";
+  });
+
+  // 재생 곡이 바뀔 때마다 현재 보이는 목록(곡 목록 또는 앨범 상세)을 다시 그려
+  // 재생 중 표시(강조 + ▶ 접두사)를 갱신한다.
+  player.addEventListener("trackchange", () => {
+    if (albumDetailPanel.classList.contains("active")) {
+      renderAlbumDetailRows(currentAlbumGroup);
+    } else {
+      render();
+    }
   });
 
   // 현재 화면에 보이는 목록에 대해서만 리사이즈 시 마퀴를 재계산한다.
