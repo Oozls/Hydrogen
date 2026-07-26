@@ -54,7 +54,7 @@ def save_lyrics(track_id: str):
     return jsonify(
         {
             "saved_count": len(lines),
-            "path": str(saved_path),
+            "path": str(saved_path) if saved_path else None,
             "lines": [_line_json(line) for line in lines],
         }
     )

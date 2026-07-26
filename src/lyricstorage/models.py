@@ -275,7 +275,7 @@ class LyricTrack:
     def clear(self) -> None:
         self.lines.clear()
 
-    def save(self) -> Path:
+    def save(self) -> Optional[Path]:
         raw = [(line.timestamp_ms, line.text) for line in self.lines]
         return lyrics_io.save_lyrics(self.track_path, raw)
 

@@ -55,8 +55,22 @@ def find_lyrics_path(track_path: str) -> Path | None:
     return None
 
 
-def save_lyrics(track_path: str, lines: list[tuple[int, str]]) -> Path:
-    """mp3 옆에 저장을 시도하고, 쓰기 실패 시 앱 캐시 폴더로 폴백."""
+def delete_lyrics(track_path: str) -> None:
+    for candidate in (sidecar_path(track_path), storage.fallback_lyrics_path(track_path)):
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def save_lyrics(track_path: str, lines: list[tuple[int, str]]) -> Path | None:
+    """mp3 옆에 저장을 시도하고, 쓰기 실패 시 앱 캐시 폴더로 폴백. 가사가 한 줄도
+    없으면(lines가 비어있으면) 빈 사이드카 파일을 새로 만드는 대신 기존 파일을
+    지우고 아무것도 만들지 않는다 — 곡을 재생만 해도(가사를 달지 않아도) 빈
+    .lrc 파일이 생기는 것을 막기 위함."""
+    if not lines:
+        delete_lyrics(track_path)
+        return None
     content = to_lrc(lines)
     sidecar = sidecar_path(track_path)
     try:
