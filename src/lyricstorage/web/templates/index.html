@@ -89,8 +89,8 @@
         </div>
         <div class="stats-controls-row">
           <div class="tabs" id="browse-tabs">
-            <button class="tab-btn" data-mode="song" type="button">곡</button>
             <button class="tab-btn active" data-mode="album" type="button">앨범</button>
+            <button class="tab-btn" data-mode="song" type="button">곡</button>
           </div>
           <input type="text" id="browse-search" placeholder="검색..." />
           <select id="browse-search-field" class="search-scope-select" title="검색 범위">
@@ -137,7 +137,9 @@
               <span id="album-detail-art-placeholder" class="icon icon-lg" style="--icon: url(/static/icons/music.svg)"></span>
             </div>
             <div class="album-detail-text">
-              <div id="album-detail-title" class="track-title"></div>
+              <div class="album-detail-title-clip marquee-clip">
+                <div id="album-detail-title" class="track-title marquee-inner"></div>
+              </div>
               <div id="album-detail-artist" class="track-artist"></div>
             </div>
             <div class="spacer"></div>
@@ -250,14 +252,8 @@
             <div class="playlist-row-title-clip marquee-clip">
               <span id="now-playing-title" class="track-title marquee-inner"></span>
             </div>
-            <div class="now-playing-subline">
-              <span class="now-playing-artist-clip marquee-clip">
-                <span id="now-playing-artist" class="track-artist marquee-inner"></span>
-              </span>
-              <span id="now-playing-album-sep" class="now-playing-album-sep" hidden>·</span>
-              <button id="now-playing-album" type="button" class="track-album-link marquee-clip" hidden title="앨범 보기">
-                <span id="now-playing-album-text" class="marquee-inner"></span>
-              </button>
+            <div class="now-playing-subline marquee-clip">
+              <span id="now-playing-subline-text" class="track-artist marquee-inner"></span>
             </div>
           </div>
         </div>

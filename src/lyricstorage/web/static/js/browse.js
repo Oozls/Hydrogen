@@ -4,6 +4,7 @@ import { alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
+import { openImageLightbox } from "./imageLightbox.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
 
@@ -64,6 +65,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const songsPageLabel = document.getElementById("browse-songs-page-label");
   const albumsList = document.getElementById("browse-albums-list");
   const albumDetailList = document.getElementById("browse-album-detail-list");
+  const albumDetailTitleClip = document.querySelector(".album-detail-title-clip");
   const albumDetailTitle = document.getElementById("album-detail-title");
   const albumDetailArtist = document.getElementById("album-detail-artist");
   const albumDetailArt = document.getElementById("album-detail-art");
@@ -493,6 +495,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     albumDetailTitle.textContent = group.album || "(앨범 없음)";
     albumDetailArtist.textContent = group.artist || "";
     showAlbumDetailArt(`${api.artUrl(group.track_id)}?t=${Date.now()}`);
+    requestAnimationFrame(() => applyMarquee(albumDetailTitleClip));
   }
 
   function openAlbumDetail(group) {
@@ -632,6 +635,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     render();
   });
 
+  albumDetailArt.classList.add("art-clickable");
+  albumDetailArt.addEventListener("click", () => openImageLightbox(albumDetailArt.src));
+
   btnAlbumDetailBack.addEventListener("click", closeAlbumDetail);
   btnAlbumDetailDownload.addEventListener("click", () => {
     if (!currentAlbumGroup) return;
@@ -692,6 +698,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       if (albumDetailPanel.classList.contains("active")) {
         applyColumnPriority(albumDetailList);
         applyMarquee(albumDetailList);
+        applyMarquee(albumDetailTitleClip);
       } else if (songsPanel.classList.contains("active")) {
         applyColumnPriority(songsList);
         applyMarquee(songsList);

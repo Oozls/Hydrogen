@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { setIcon } from "./icons.js";
 import { applyMarquee } from "./marquee.js";
 import { showArtSpinner } from "./artspinner.js";
+import { openImageLightbox } from "./imageLightbox.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
@@ -27,10 +28,8 @@ export function setupNowPlaying(player, onOpenAlbum) {
   const artEl = document.getElementById("now-playing-art");
   const artPlaceholder = document.getElementById("now-playing-art-placeholder");
   const titleEl = document.getElementById("now-playing-title");
-  const artistEl = document.getElementById("now-playing-artist");
-  const albumSepEl = document.getElementById("now-playing-album-sep");
-  const albumBtn = document.getElementById("now-playing-album");
-  const albumTextEl = document.getElementById("now-playing-album-text");
+  const sublineEl = document.querySelector(".now-playing-subline");
+  const sublineTextEl = document.getElementById("now-playing-subline-text");
   const nowPlayingTextEl = document.querySelector(".now-playing-text");
 
   const seekSlider = document.getElementById("seek-slider");
@@ -80,27 +79,27 @@ export function setupNowPlaying(player, onOpenAlbum) {
     });
   }
 
-  function updateAlbumLink(track) {
-    const album = track && track.album;
-    albumBtn.hidden = !album;
-    albumSepEl.hidden = !album;
-    albumTextEl.textContent = album || "";
+  // 아티스트명/앨범명을 한 줄("아티스트 · 앨범")로 합쳐 보여준다. 앨범이 있으면
+  // 클릭해서 브라우즈의 해당 앨범 상세로 이동할 수 있다(클릭 대상을 아티스트/
+  // 앨범 부분으로 나누지 않고 줄 전체로 단순화).
+  function updateSubline(track) {
+    const parts = [track && track.artist, track && track.album].filter(Boolean);
+    sublineTextEl.textContent = parts.join(" · ");
+    sublineEl.classList.toggle("clickable", Boolean(track && track.album && onOpenAlbum));
   }
 
   function setTrack(track, { bustArtCache = false } = {}) {
     if (!track) {
       titleEl.textContent = "";
-      artistEl.textContent = "";
       artEl.style.display = "none";
       artPlaceholder.style.display = "";
-      updateAlbumLink(null);
+      updateSubline(null);
       requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
       updateMediaSessionMetadata(null);
       return;
     }
     titleEl.textContent = track.title || "제목 없음";
-    artistEl.textContent = track.artist || "아티스트 미상";
-    updateAlbumLink(track);
+    updateSubline(track);
     const stopSpin = showArtSpinner(artEl.parentElement);
     artEl.onerror = () => {
       stopSpin();
@@ -181,13 +180,20 @@ export function setupNowPlaying(player, onOpenAlbum) {
     repeatBadge.textContent = e.detail.repeatMode === "one" ? "1" : "";
   });
 
+  artEl.classList.add("art-clickable");
+  artEl.addEventListener("click", () => {
+    if (artEl.style.display !== "none") openImageLightbox(artEl.src);
+  });
+
   playPauseBtn.addEventListener("click", () => player.togglePlayPause());
   prevBtn.addEventListener("click", () => player.previousTrack());
   nextBtn.addEventListener("click", () => player.nextTrack());
   shuffleBtn.addEventListener("click", () => player.setShuffle(!player.shuffle));
   repeatBtn.addEventListener("click", () => player.cycleRepeat());
   if (onOpenAlbum) {
-    albumBtn.addEventListener("click", () => onOpenAlbum(player.currentTrack));
+    sublineEl.addEventListener("click", () => {
+      if (player.currentTrack && player.currentTrack.album) onOpenAlbum(player.currentTrack);
+    });
   }
 
   // 드래그 중에는 재생 위치 갱신이 슬라이더와 다투지 않도록 무시하고,

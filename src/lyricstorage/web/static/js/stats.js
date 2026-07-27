@@ -137,7 +137,7 @@ export function setupStats(player, onOpenAlbum) {
     }
     const rank = document.createElement("span");
     rank.className = "media-card-rank";
-    rank.textContent = String(i + 1);
+    rank.textContent = `${i + 1} · ${item.count}회`;
     artWrap.appendChild(rank);
     card.appendChild(artWrap);
 
@@ -152,11 +152,6 @@ export function setupStats(player, onOpenAlbum) {
       artist.textContent = item.artist;
       card.appendChild(artist);
     }
-
-    const meta = document.createElement("div");
-    meta.className = "media-card-meta";
-    meta.textContent = `${item.count}회`;
-    card.appendChild(meta);
 
     return card;
   }

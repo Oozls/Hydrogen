@@ -172,47 +172,14 @@ textarea {
 }
 
 .now-playing-subline {
-  display: flex;
-  align-items: center;
   min-width: 0;
 }
-.now-playing-artist-clip {
-  flex: 0.75 1 0;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-}
-.now-playing-album-sep {
-  flex: none;
-  margin: 0 5px;
-  color: var(--text-muted);
-}
-.now-playing-album-sep[hidden] {
-  display: none;
-}
-.track-album-link {
-  flex: 1.25 1 0;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: 14px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.now-playing-subline.clickable {
   cursor: pointer;
-  text-align: left;
 }
-.track-album-link:hover {
+.now-playing-subline.clickable:hover .track-artist {
   color: var(--accent);
   text-decoration: underline;
-}
-.track-album-link[hidden] {
-  display: none;
 }
 
 .main-columns {
@@ -897,9 +864,6 @@ table.lyrics-edit-table {
 .transport-now-playing .track-artist {
   font-size: 12px;
 }
-.transport-now-playing .track-album-link {
-  font-size: 12px;
-}
 
 /* -- range 슬라이더 (seek/volume 공용) -------------------------------------- */
 input[type="range"] {
@@ -1457,7 +1421,7 @@ input[type="range"]:hover::-moz-range-thumb {
   object-fit: cover;
 }
 .album-detail-text {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1517,6 +1481,30 @@ input[type="range"]:hover::-moz-range-thumb {
 .progress-overlay.active {
   display: flex;
 }
+/* -- 이미지 라이트박스(앨범 커버 클릭 시 확대, 공용) ------------------------- */
+.image-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 200;
+  cursor: zoom-out;
+}
+.image-lightbox-overlay[hidden] {
+  display: none;
+}
+.image-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.art-clickable {
+  cursor: zoom-in;
+}
+
 .progress-box {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
