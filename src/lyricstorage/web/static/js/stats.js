@@ -170,7 +170,7 @@ export function setupStats(player, onOpenAlbum) {
     top3El.hidden = false;
     const heading = document.createElement("div");
     heading.className = "stats-track-top3-heading";
-    heading.textContent = "TOP 3 곡";
+    heading.textContent = "TOP 3 앨범";
     top3El.appendChild(heading);
     items.forEach((item, i) => top3El.appendChild(buildTop3Card(item, i)));
   }

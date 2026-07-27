@@ -30,6 +30,7 @@ export function setupNowPlaying(player, onOpenAlbum) {
   const artistEl = document.getElementById("now-playing-artist");
   const albumSepEl = document.getElementById("now-playing-album-sep");
   const albumBtn = document.getElementById("now-playing-album");
+  const albumTextEl = document.getElementById("now-playing-album-text");
   const nowPlayingTextEl = document.querySelector(".now-playing-text");
 
   const seekSlider = document.getElementById("seek-slider");
@@ -83,13 +84,13 @@ export function setupNowPlaying(player, onOpenAlbum) {
     const album = track && track.album;
     albumBtn.hidden = !album;
     albumSepEl.hidden = !album;
-    albumBtn.textContent = album || "";
+    albumTextEl.textContent = album || "";
   }
 
   function setTrack(track, { bustArtCache = false } = {}) {
     if (!track) {
-      titleEl.textContent = "재생 중인 곡 없음";
-      artistEl.textContent = "플레이리스트에서 곡을 선택하세요";
+      titleEl.textContent = "";
+      artistEl.textContent = "";
       artEl.style.display = "none";
       artPlaceholder.style.display = "";
       updateAlbumLink(null);
@@ -222,6 +223,32 @@ export function setupNowPlaying(player, onOpenAlbum) {
       volumeSlider.value = "0";
     }
     volumeSlider.dispatchEvent(new Event("input"));
+  });
+
+  const SEEK_STEP_MS = 10000;
+
+  // 검색창/가사 편집/페이지 번호 입력 등 텍스트를 입력 중일 때는 스페이스바/
+  // 화살표 키가 그 입력에 쓰여야 하므로 단축키를 발동하지 않는다.
+  function isTypingTarget(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (isTypingTarget(document.activeElement)) return;
+    if (e.key === " " || e.code === "Space") {
+      e.preventDefault();
+      player.togglePlayPause();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      player.seek(Math.max(0, player.position() - SEEK_STEP_MS));
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      const target = player.position() + SEEK_STEP_MS;
+      const dur = player.duration();
+      player.seek(dur > 0 ? Math.min(target, dur) : target);
+    }
   });
 
   return { setTrack, updateVolumeFill: () => updateRangeFill(volumeSlider) };

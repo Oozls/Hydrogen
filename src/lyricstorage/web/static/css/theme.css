@@ -173,11 +173,14 @@ textarea {
 
 .now-playing-subline {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   min-width: 0;
 }
-.now-playing-subline .track-artist {
-  flex: 0 1 auto;
+.now-playing-artist-clip {
+  flex: 0.75 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
 }
 .now-playing-album-sep {
   flex: none;
@@ -188,8 +191,10 @@ textarea {
   display: none;
 }
 .track-album-link {
-  flex: 0 1 auto;
+  flex: 1.25 1 0;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   padding: 0;
@@ -886,7 +891,13 @@ table.lyrics-edit-table {
 .transport-now-playing .track-title {
   font-size: 14px;
 }
+.transport-now-playing .playlist-row-title-clip {
+  transform: translateY(6px);
+}
 .transport-now-playing .track-artist {
+  font-size: 12px;
+}
+.transport-now-playing .track-album-link {
   font-size: 12px;
 }
 
@@ -1236,18 +1247,33 @@ input[type="range"]:hover::-moz-range-thumb {
   flex: 0 0 160px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
 .stats-track-top3[hidden] {
   display: none;
 }
 .stats-track-top3-heading {
+  flex: none;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+.stats-track-top3 .media-card {
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 2px;
+}
+.stats-track-top3 .media-card-art-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+.stats-track-top3 .media-card-title {
+  flex: none;
 }
 
 /* -- 카드형 그리드(재생 통계 / 앨범 브라우즈 공용) ----------------------- */

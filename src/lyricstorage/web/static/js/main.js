@@ -22,15 +22,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 
-  const refs = { router: null, pendingAlbumFocusTrackId: null };
+  const refs = { router: null, pendingAlbumFocus: null };
 
   // 재생바/재생 통계에서 앨범명을 클릭하면 브라우즈 > 앨범 탭으로 이동해 그
   // 앨범의 상세 화면을 바로 연다. browseApi가 아직 만들어지기 전이라(순서상
-  // 아래에서 생성) refs에 "다음 브라우즈 진입 시 열어야 할 트랙"만 남겨두고,
-  // onBrowse 라우터 콜백이 이를 소비해 browseApi.show(focusTrackId)에 전달한다.
+  // 아래에서 생성) refs에 "다음 브라우즈 진입 시 열어야 할 앨범"만 남겨두고,
+  // onBrowse 라우터 콜백이 이를 소비해 browseApi.show(focus)에 전달한다.
+  // track_id는(재생 기록 TOP3 앨범처럼) 이후 파일이 바뀌어 더 이상 라이브러리에
+  // 없을 수 있으므로, album/artist도 같이 넘겨 track_id 매칭이 실패해도
+  // album+artist로 앨범을 찾을 수 있게 한다.
   function openAlbumFromTrack(track) {
     if (!track || !track.album) return;
-    refs.pendingAlbumFocusTrackId = track.track_id;
+    refs.pendingAlbumFocus = { track_id: track.track_id, album: track.album, artist: track.artist };
     refs.router.goBrowse();
   }
 
@@ -132,9 +135,9 @@ document.addEventListener("DOMContentLoaded", () => {
       statsApi.hide();
       onStatsRoute = false;
       syncLyricsPanelDisplay();
-      const focusTrackId = refs.pendingAlbumFocusTrackId;
-      refs.pendingAlbumFocusTrackId = null;
-      browseApi.show(focusTrackId);
+      const focus = refs.pendingAlbumFocus;
+      refs.pendingAlbumFocus = null;
+      browseApi.show(focus);
       sidebarApi.setActive(null);
       sidebarApi.refreshDataSize();
     },

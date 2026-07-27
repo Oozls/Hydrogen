@@ -248,12 +248,16 @@
           </div>
           <div class="now-playing-text">
             <div class="playlist-row-title-clip marquee-clip">
-              <span id="now-playing-title" class="track-title marquee-inner">재생 중인 곡 없음</span>
+              <span id="now-playing-title" class="track-title marquee-inner"></span>
             </div>
             <div class="now-playing-subline">
-              <span id="now-playing-artist" class="track-artist">플레이리스트에서 곡을 선택하세요</span>
+              <span class="now-playing-artist-clip marquee-clip">
+                <span id="now-playing-artist" class="track-artist marquee-inner"></span>
+              </span>
               <span id="now-playing-album-sep" class="now-playing-album-sep" hidden>·</span>
-              <button id="now-playing-album" type="button" class="track-album-link" hidden title="앨범 보기"></button>
+              <button id="now-playing-album" type="button" class="track-album-link marquee-clip" hidden title="앨범 보기">
+                <span id="now-playing-album-text" class="marquee-inner"></span>
+              </button>
             </div>
           </div>
         </div>

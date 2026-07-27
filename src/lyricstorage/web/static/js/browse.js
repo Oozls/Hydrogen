@@ -529,6 +529,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
+      // 앨범이 많아지면 화면 밖 카드까지 한꺼번에 이미지를 요청하게 되므로,
+      // 뷰포트(스크롤 컨테이너 포함)에 가까워질 때만 브라우저가 실제로
+      // 불러오도록 네이티브 lazy loading을 사용한다.
+      img.loading = "lazy";
       img.src = api.artUrl(group.track_id);
       img.onload = () => stopSpin();
       img.onerror = () => {
@@ -816,12 +820,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   });
 
   return {
-    // focusTrackId를 넘기면 앨범 탭으로 들어간 뒤 그 곡이 속한 앨범의 상세
-    // 화면을 곧바로 연다(재생바 앨범명 클릭 등 외부 진입점용). 라우터의
+    // focus를 넘기면 앨범 탭으로 들어간 뒤 그 앨범의 상세 화면을 곧바로 연다
+    // (재생바 앨범명 클릭, 재생 통계 TOP3 앨범 클릭 등 외부 진입점용). 라우터의
     // onBrowse가 이 인자와 함께 호출하므로, show() 안에서 한 번의 흐름으로
     // 처리해야 라이브러리 로딩/모드 전환과 상세 열기 사이에 경쟁 상태가 생기지
-    // 않는다.
-    async show(focusTrackId) {
+    // 않는다. track_id를 우선 매칭하되, 재생 기록처럼 그 트랙이 더 이상
+    // 라이브러리에 없을 수 있는 경우를 대비해 album+artist로도 매칭한다.
+    async show(focus) {
       panelEl.classList.add("active");
       searchInput.value = "";
       searchFieldSelect.value = "all";
@@ -831,8 +836,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       tracks = library.tracks;
       libraryName = library.name;
       switchMode("album");
-      if (focusTrackId) {
-        const group = groupAlbums(tracks).find((g) => g.tracks.some((t) => t.track_id === focusTrackId));
+      if (focus) {
+        const group = groupAlbums(tracks).find(
+          (g) =>
+            g.tracks.some((t) => t.track_id === focus.track_id) ||
+            (focus.album && g.album === focus.album && g.artist === focus.artist)
+        );
         if (group) openAlbumDetail(group);
       }
     },
