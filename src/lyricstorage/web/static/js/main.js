@@ -82,18 +82,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
 
   // 가사 패널은 기본적으로 숨겨져 있고, 트랜스포트 바의 토글 버튼으로 세션 중에만
-  // 켜고 끌 수 있다(새로고침하면 다시 숨김으로 시작). 통계 화면에서는 토글 상태와
-  // 무관하게 항상 숨긴다.
+  // 켜고 끌 수 있다(새로고침하면 다시 숨김으로 시작). 통계 화면을 포함해 어느
+  // 화면에서든 토글할 수 있다. 다만 통계 화면의 TOP 3 앨범 패널과는 공간이
+  // 겹치므로, 가사 패널이 켜져 있는 동안은 TOP 3 앨범을 숨긴다.
   let lyricsVisible = false;
-  let onStatsRoute = false;
   function syncLyricsPanelDisplay() {
-    lyricsPanelEl.style.display = !onStatsRoute && lyricsVisible ? "" : "none";
+    lyricsPanelEl.style.display = lyricsVisible ? "" : "none";
   }
   syncLyricsPanelDisplay();
   lyricsToggleBtn.addEventListener("click", () => {
     lyricsVisible = !lyricsVisible;
     lyricsToggleBtn.classList.toggle("active", lyricsVisible);
     syncLyricsPanelDisplay();
+    statsApi.setLyricsActive(lyricsVisible);
   });
 
   const browseApi = setupBrowse(
@@ -133,8 +134,6 @@ document.addEventListener("DOMContentLoaded", () => {
     onBrowse: () => {
       playlistApi.hide();
       statsApi.hide();
-      onStatsRoute = false;
-      syncLyricsPanelDisplay();
       const focus = refs.pendingAlbumFocus;
       refs.pendingAlbumFocus = null;
       browseApi.show(focus);
@@ -144,8 +143,6 @@ document.addEventListener("DOMContentLoaded", () => {
     onPlaylist: (name) => {
       browseApi.hide();
       statsApi.hide();
-      onStatsRoute = false;
-      syncLyricsPanelDisplay();
       playlistApi.show();
       playlistApi.loadPlaylist(name);
       sidebarApi.setActive(name);
@@ -154,8 +151,6 @@ document.addEventListener("DOMContentLoaded", () => {
     onStats: () => {
       playlistApi.hide();
       browseApi.hide();
-      onStatsRoute = true;
-      syncLyricsPanelDisplay();
       statsApi.show();
       sidebarApi.setActive("__stats__");
       sidebarApi.refreshDataSize();

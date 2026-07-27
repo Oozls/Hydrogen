@@ -80,6 +80,9 @@ export function setupStats(player, onOpenAlbum) {
   let trackPageSize = TRACK_PAGE_SIZE_FALLBACK;
   let lastTrackPageTotalPages = 1;
   let trackPageLabelEditing = false;
+  // 가사 패널이 열려 있으면 통계 화면의 TOP 3 앨범 패널은 숨긴다(공간 확보).
+  let lyricsActive = false;
+  let lastAlbumItems = [];
 
   async function refresh() {
     if (group === "track") {
@@ -96,7 +99,8 @@ export function setupStats(player, onOpenAlbum) {
       trackItems = await enrichTracks(trackData.items);
       trackPage = 0;
       renderTrackPage();
-      renderTop3Albums(albumData.items.slice(0, 3));
+      lastAlbumItems = albumData.items.slice(0, 3);
+      renderTop3Albums(lastAlbumItems);
     } else {
       const data = await api.getTopStats(period, group, offset);
       periodLabel.textContent = formatRange(data.range_start, data.range_end, period);
@@ -158,7 +162,7 @@ export function setupStats(player, onOpenAlbum) {
 
   function renderTop3Albums(items) {
     top3El.innerHTML = "";
-    if (!items.length) {
+    if (lyricsActive || !items.length) {
       top3El.hidden = true;
       return;
     }
@@ -503,6 +507,10 @@ export function setupStats(player, onOpenAlbum) {
     },
     hide() {
       panelEl.classList.remove("active");
+    },
+    setLyricsActive(active) {
+      lyricsActive = active;
+      if (group === "track") renderTop3Albums(lastAlbumItems);
     },
   };
 }

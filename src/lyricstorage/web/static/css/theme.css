@@ -750,6 +750,130 @@ table.lyrics-edit-table {
 .lyrics-text-input:focus {
   outline: none;
 }
+.lyrics-detail-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.lyrics-detail-edit-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+
+/* -- 가사 상세 편집(타이밍 태깅) 모달 --------------------------------------- */
+.lyrics-editor-dialog {
+  gap: 0;
+}
+.lyrics-editor-phase {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.lyrics-editor-phase.active {
+  display: flex;
+}
+.lyrics-editor-hint {
+  margin: 4px 0 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.lyrics-editor-draft-textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.lyrics-editor-draft-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.lyrics-editor-transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.lyrics-editor-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.lyrics-editor-progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.lyrics-editor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lyrics-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  color: var(--text-muted);
+}
+.lyrics-editor-row.tagged {
+  color: var(--text-primary);
+}
+.lyrics-editor-row.current {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  font-weight: 600;
+}
+.lyrics-editor-row-time {
+  flex: 0 0 72px;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  text-align: right;
+}
+.lyrics-editor-row-text {
+  flex: 1;
+  min-width: 0;
+}
+.lyrics-editor-offset-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.lyrics-editor-offset-field input {
+  width: 80px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.lyrics-editor-offset-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 
 /* -- 트랜스포트 바 -------------------------------------------------------------- */
 .transport-bar {

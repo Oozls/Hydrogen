@@ -1,5 +1,6 @@
 import { api } from "./api.js";
-import { confirmDialog } from "./dialog.js";
+import { confirmDialog, alertDialog } from "./dialog.js";
+import { setupLyricsEditor } from "./lyricsEditor.js";
 
 // LyricTrack.current_index와 동일한 이진 탐색: timestamp_ms <= position인
 // 마지막 줄의 인덱스를 반환, 없으면 -1.
@@ -50,8 +51,12 @@ export function setupLyrics(player, onLyricsSaved) {
   const addRowBtn = document.getElementById("btn-lyrics-add-row");
   const removeRowBtn = document.getElementById("btn-lyrics-remove-row");
   const clearBtn = document.getElementById("btn-lyrics-clear");
+  const detailEditBtn = document.getElementById("btn-lyrics-detail-edit");
+
+  const lyricsEditorApi = setupLyricsEditor(player);
 
   let trackId = null;
+  let trackLabel = "";
   let lines = []; // {timestamp_ms, text, html}
   let lastHighlighted = -2;
   let selectedRow = null;
@@ -124,6 +129,25 @@ export function setupLyrics(player, onLyricsSaved) {
     tr.classList.add("selected");
   }
 
+  // 시간칸/가사칸에서 위/아래 화살표로 그 줄의 타임코드를 ±100ms씩 조정한다
+  // (가사를 들으며 미세 보정할 때 마우스 없이 빠르게 맞추기 위함).
+  function bumpTimestamp(timeInput, deltaMs) {
+    const current = parseMinSecMs(timeInput.value);
+    const base = current === null ? 0 : current;
+    timeInput.value = formatMinSecMs(Math.max(0, base + deltaMs));
+    scheduleAutoSave(600);
+  }
+
+  function handleTimestampArrowKey(timeInput, e) {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      bumpTimestamp(timeInput, 100);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      bumpTimestamp(timeInput, -100);
+    }
+  }
+
   function renderEditRow(line) {
     const tr = document.createElement("tr");
 
@@ -134,6 +158,7 @@ export function setupLyrics(player, onLyricsSaved) {
     timeInput.value = formatMinSecMs(line.timestamp_ms);
     timeInput.addEventListener("input", () => scheduleAutoSave(1800));
     timeInput.addEventListener("blur", () => flushSave());
+    timeInput.addEventListener("keydown", (e) => handleTimestampArrowKey(timeInput, e));
     timeTd.appendChild(timeInput);
 
     const textTd = document.createElement("td");
@@ -143,6 +168,7 @@ export function setupLyrics(player, onLyricsSaved) {
     textarea.rows = 1;
     textarea.addEventListener("input", () => scheduleAutoSave(1800));
     textarea.addEventListener("blur", () => flushSave());
+    textarea.addEventListener("keydown", (e) => handleTimestampArrowKey(timeInput, e));
     textTd.appendChild(textarea);
 
     tr.appendChild(timeTd);
@@ -187,6 +213,7 @@ export function setupLyrics(player, onLyricsSaved) {
       await performSave();
     }
     trackId = track ? track.track_id : null;
+    trackLabel = track ? [track.title, track.artist].filter(Boolean).join(" - ") : "";
     if (!trackId) {
       lines = [];
       renderView();
@@ -273,6 +300,19 @@ export function setupLyrics(player, onLyricsSaved) {
       clearTimeout(autoSaveTimer);
       performSave();
     }
+  });
+
+  detailEditBtn.addEventListener("click", async () => {
+    if (!trackId) {
+      await alertDialog("먼저 곡을 재생하거나 선택하세요.");
+      return;
+    }
+    lyricsEditorApi.open(trackId, trackLabel, lines, (newLines) => {
+      lines = newLines;
+      renderView();
+      renderEdit();
+      if (onLyricsSaved) onLyricsSaved(trackId);
+    });
   });
 
   // "저장" 버튼이 없어진 뒤로는 전체 지우기가 되돌릴 수 없는 작업이라 확인을 받는다.

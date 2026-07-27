@@ -175,6 +175,10 @@
                 <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
               </button>
               <div class="spacer"></div>
+              <button id="btn-lyrics-detail-edit" class="lyrics-detail-edit-btn" type="button">
+                <span class="icon icon-sm" style="--icon: url(/static/icons/edit-3.svg)"></span>
+                상세 편집
+              </button>
               <button id="btn-lyrics-clear" class="icon-btn" title="가사 전체 지우기">
                 <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
               </button>
@@ -423,6 +427,58 @@
     <div class="dialog-actions">
       <button id="album-info-cancel" type="button">취소</button>
       <button id="album-info-save" class="primary" type="button">저장</button>
+    </div>
+  </dialog>
+
+  <dialog id="lyrics-editor-dialog" class="library-picker-dialog library-picker-dialog-wide lyrics-editor-dialog">
+    <div class="library-picker-header">
+      <h3 id="lyrics-editor-title">가사 상세 편집</h3>
+      <div class="spacer"></div>
+      <button id="lyrics-editor-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+
+    <div id="lyrics-editor-phase-draft" class="lyrics-editor-phase active">
+      <p class="lyrics-editor-hint">가사를 한 줄에 한 소절씩, Enter로 줄을 나누어 입력하세요.</p>
+      <textarea id="lyrics-editor-draft" class="lyrics-editor-draft-textarea" placeholder="가사를 입력하세요..."></textarea>
+      <div class="dialog-actions">
+        <button id="lyrics-editor-to-tagging" class="primary" type="button">다음: 타이밍 입력</button>
+      </div>
+    </div>
+
+    <div id="lyrics-editor-phase-tagging" class="lyrics-editor-phase">
+      <div class="lyrics-editor-transport">
+        <button id="lyrics-editor-restart" class="icon-btn" type="button" title="처음부터">
+          <span class="icon" style="--icon: url(/static/icons/skip-back.svg)"></span>
+        </button>
+        <button id="lyrics-editor-playpause" class="icon-btn" type="button" title="재생/일시정지">
+          <span class="icon" style="--icon: url(/static/icons/play.svg)"></span>
+        </button>
+        <span id="lyrics-editor-time" class="lyrics-editor-time">0:00 / 0:00</span>
+        <div class="spacer"></div>
+        <span id="lyrics-editor-progress" class="lyrics-editor-progress">0 / 0</span>
+      </div>
+      <p class="lyrics-editor-hint">가사가 들리는 순간 Enter, 잘못 눌렀으면 Backspace로 되돌립니다.</p>
+      <ol id="lyrics-editor-tagging-list" class="lyrics-editor-list"></ol>
+      <div class="dialog-actions">
+        <button id="lyrics-editor-back-to-draft" type="button">가사 다시 쓰기</button>
+        <div class="spacer"></div>
+        <button id="lyrics-editor-to-offset" class="primary" type="button" disabled>다음: 보정 및 저장</button>
+      </div>
+    </div>
+
+    <div id="lyrics-editor-phase-offset" class="lyrics-editor-phase">
+      <label class="lyrics-editor-offset-field">
+        보정값(ms) — 사람이 반응하는 데 걸리는 시간만큼 전체 타임코드를 앞당깁니다
+        <input type="number" id="lyrics-editor-offset" min="0" max="1000" step="10" value="200" />
+      </label>
+      <ol id="lyrics-editor-preview-list" class="lyrics-editor-list"></ol>
+      <div class="dialog-actions">
+        <button id="lyrics-editor-back-to-tagging" type="button">다시 태깅</button>
+        <div class="spacer"></div>
+        <button id="lyrics-editor-save" class="primary" type="button">저장</button>
+      </div>
     </div>
   </dialog>
 
