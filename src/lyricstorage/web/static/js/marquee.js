@@ -17,6 +17,18 @@ const PIXELS_PER_SECOND = 40;
 const LOOP_GAP_PX = 48;
 const PAUSE_MS = 3000;
 
+// 곡 행 텍스트에 쓰는 커스텀 웹폰트(Apple SD Gothic Neo, Noto Sans JP)는
+// font-display: swap이라, 최초 렌더 시점엔 아직 폭이 다른 대체 폰트로 표시되다가
+// 로딩이 끝나면 실제 폰트로 바뀐다. applyColumnPriority/applyMarquee는 렌더 직후
+// 딱 한 번만 폭을 재는데, 그 시점이 폰트 로딩 완료 전이면(특히 느린 모바일
+// 네트워크에서 앱을 열자마자 목록을 빠르게 넘길 때) 대체 폰트 기준으로 잘못된
+// 숨김 판단이 그대로 굳어버린다. 폰트 로딩이 끝나면, 이미 각 화면에 있는
+// 리사이즈 시 재계산 로직이 다시 돌도록 가짜 resize 이벤트를 한 번 발생시켜
+// 전체 목록의 폭 측정을 실제 폰트 기준으로 바로잡는다.
+if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => window.dispatchEvent(new Event("resize")));
+}
+
 // 곡 행의 제목/앨범명/아티스트명 칸을 공용 마퀴 구조(overflow:hidden 컨테이너 +
 // 텍스트를 담는 내부 span)로 만들어준다. clipClassName은 열의 폭(flex-basis)을
 // 정하고, innerClassName은 필요한 경우(제목처럼 색상을 별도로 상속받아야 하는

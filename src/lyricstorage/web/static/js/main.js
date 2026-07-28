@@ -88,6 +88,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let lyricsVisible = false;
   function syncLyricsPanelDisplay() {
     lyricsPanelEl.style.display = lyricsVisible ? "" : "none";
+    // 가사 패널이 나타나거나 사라지면 옆에 있는 재생목록/브라우즈/통계 패널의
+    // 실제 폭이 바뀌므로, 각 화면에 이미 있는 리사이즈 시 재계산 로직(컬럼 우선순위
+    // 숨김/마퀴 스크롤 여부)이 다시 돌도록 가짜 resize 이벤트를 발생시킨다.
+    window.dispatchEvent(new Event("resize"));
   }
   syncLyricsPanelDisplay();
   lyricsToggleBtn.addEventListener("click", () => {

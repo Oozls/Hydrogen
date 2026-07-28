@@ -1,3 +1,9 @@
+/* Hiragino Sans는 애플이 라이선스 받아 macOS/iOS에 번들한 상용 폰트라 자체 웹폰트로
+   배포할 수 없다. 대신 무료 오픈소스이면서 결이 비슷한 Noto Sans JP를 쓰고, --font-sans
+   스택 맨 뒤에 둬서 앞선 폰트들이 못 그리는 일본어 글자(히라가나/가타카나 등)에만
+   자동으로 적용되게 한다(다른 언어 글자에는 영향 없음). */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
 @font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 100; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Thin.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Thin.ttf') format('truetype'); }
 @font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 200; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-ExtraLight.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-ExtraLight.ttf') format('truetype'); }
 @font-face { font-family: 'Apple SD Gothic Neo'; font-weight: 300; font-style: normal; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Light.woff2') format('woff2'), url('https://cdn.jsdelivr.net/gh/fonts-archive/AppleSDGothicNeo/AppleSDGothicNeo-Light.ttf') format('truetype'); }
@@ -20,7 +26,7 @@
   --text-secondary: #8b90a3;
   --text-muted: #5c6076;
   --icon-on-accent: #0f1117;
-  --font-sans: "Apple SD Gothic Neo", -apple-system, "Malgun Gothic", "Segoe UI", sans-serif;
+  --font-sans: "Apple SD Gothic Neo", -apple-system, "Malgun Gothic", "Segoe UI", "Noto Sans JP", sans-serif;
   --transport-bar-height: 100px;
 }
 
@@ -1497,6 +1503,32 @@ input[type="range"]:hover::-moz-range-thumb {
 .media-card-meta {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+/* 브라우즈 앨범 탭: 아티스트별 구획. 바깥 컨테이너는 구획들의 세로 스크롤
+   목록이고, 카드 그리드 자체(.card-grid와 같은 그리드 규칙)는 구획마다 따로
+   둔다 — 그래야 드래그 정렬(SortableJS)도 구획 내에서만 일어난다. */
+.album-sections {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.album-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.album-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  align-content: start;
 }
 
 /* -- 브라우즈 --------------------------------------------------------- */

@@ -119,8 +119,8 @@ def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dic
         if played_at_str > bucket["last_played_at"]:
             bucket["last_played_at"] = played_at_str
 
-    # "곡" 그룹은 많이 들은 순이 아니라 최근에 들은 순으로 보여준다(최근 재생 목록).
-    sort_key = (lambda b: b["last_played_at"]) if group == "track" else (lambda b: b["count"])
+    # "곡" 그룹은 재생 횟수가 많은 순으로 보여주되, 횟수가 같으면 최근에 들은 곡을 먼저 보여준다.
+    sort_key = (lambda b: (b["count"], b["last_played_at"])) if group == "track" else (lambda b: b["count"])
     items = sorted(buckets.values(), key=sort_key, reverse=True)
     if limit is not None:
         items = items[:limit]

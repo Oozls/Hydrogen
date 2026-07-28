@@ -86,6 +86,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let lastClickedIndex = null;
   let currentAlbumGroup = null;
   let renderedAlbumGroups = [];
+  let albumSectionSortables = [];
   let songsPage = 0;
   let songsPageSize = SONGS_PAGE_SIZE_FALLBACK;
 
@@ -512,71 +513,135 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     currentAlbumGroup = null;
   }
 
+  function buildAlbumCard(group) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    const stopSpin = showArtSpinner(artWrap);
+    const img = document.createElement("img");
+    img.className = "media-card-art";
+    img.alt = "";
+    // 앨범이 많아지면 화면 밖 카드까지 한꺼번에 이미지를 요청하게 되므로,
+    // 뷰포트(스크롤 컨테이너 포함)에 가까워질 때만 브라우저가 실제로
+    // 불러오도록 네이티브 lazy loading을 사용한다.
+    img.loading = "lazy";
+    img.src = api.artUrl(group.track_id);
+    img.onload = () => stopSpin();
+    img.onerror = () => {
+      stopSpin();
+      img.remove();
+      artWrap.appendChild(iconSpan("music", "icon-lg"));
+    };
+    artWrap.appendChild(img);
+    card.appendChild(artWrap);
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "media-card-title-row";
+    const title = createMarqueeClip("media-card-title", "", group.album || "(앨범 없음)");
+    titleRow.appendChild(title);
+
+    // 순서 변경은 이 손잡이를 잡고 드래그할 때만 시작된다(SortableJS의
+    // handle 옵션) — 앨범 클릭(상세 열기)과 절대 겹치지 않는다.
+    const dragHandle = document.createElement("button");
+    dragHandle.type = "button";
+    dragHandle.className = "icon-btn media-card-drag-handle";
+    dragHandle.title = "드래그해서 순서 변경";
+    dragHandle.appendChild(iconSpan("grip-vertical", "icon-sm"));
+    dragHandle.addEventListener("click", (e) => e.stopPropagation());
+    titleRow.appendChild(dragHandle);
+
+    card.appendChild(titleRow);
+
+    if (group.artist) {
+      const artist = document.createElement("div");
+      artist.className = "media-card-artist";
+      artist.textContent = group.artist;
+      card.appendChild(artist);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "media-card-meta";
+    meta.textContent = `${group.tracks.length}곡`;
+    card.appendChild(meta);
+
+    card.addEventListener("click", () => openAlbumDetail(group));
+    return card;
+  }
+
+  // 앨범 탭은 아티스트별로 구획을 나눠 보여준다. 아티스트명(+같은 아티스트
+  // 안에서는 앨범명)순으로 정렬해야 같은 아티스트의 앨범들이 인접해서 하나의
+  // 구획으로 묶인다. 드래그 정렬(SortableJS)도 구획마다 별도 인스턴스라 같은
+  // 아티스트 구획 안에서만 순서를 바꿀 수 있고, 다른 아티스트 구획으로는 넘어가지
+  // 않는다 — 구획 경계가 항상 아티스트명 정렬과 일치하도록 지키기 위함이다.
   function renderAlbums() {
     const q = searchInput.value.trim().toLowerCase();
     const field = searchFieldSelect.value;
     albumsList.innerHTML = "";
+    albumSectionSortables.forEach((s) => s.destroy());
+    albumSectionSortables = [];
+
     const groups = groupAlbums(tracks).filter((g) => matchesAlbum(g, q, field));
+    groups.sort(
+      (a, b) =>
+        (a.artist || "").localeCompare(b.artist || "", "ko") ||
+        (a.album || "").localeCompare(b.album || "", "ko")
+    );
     renderedAlbumGroups = groups;
     if (!groups.length) {
       renderEmpty(albumsList);
       return;
     }
-    groups.forEach((group) => {
-      const card = document.createElement("div");
-      card.className = "media-card media-card-clickable";
 
-      const artWrap = document.createElement("div");
-      artWrap.className = "media-card-art-wrap";
-      const stopSpin = showArtSpinner(artWrap);
-      const img = document.createElement("img");
-      img.className = "media-card-art";
-      img.alt = "";
-      // 앨범이 많아지면 화면 밖 카드까지 한꺼번에 이미지를 요청하게 되므로,
-      // 뷰포트(스크롤 컨테이너 포함)에 가까워질 때만 브라우저가 실제로
-      // 불러오도록 네이티브 lazy loading을 사용한다.
-      img.loading = "lazy";
-      img.src = api.artUrl(group.track_id);
-      img.onload = () => stopSpin();
-      img.onerror = () => {
-        stopSpin();
-        img.remove();
-        artWrap.appendChild(iconSpan("music", "icon-lg"));
-      };
-      artWrap.appendChild(img);
-      card.appendChild(artWrap);
+    const sections = [];
+    for (const group of groups) {
+      const artist = group.artist || "";
+      const last = sections[sections.length - 1];
+      if (last && last.artist === artist) last.groups.push(group);
+      else sections.push({ artist, groups: [group] });
+    }
 
-      const titleRow = document.createElement("div");
-      titleRow.className = "media-card-title-row";
-      const title = createMarqueeClip("media-card-title", "", group.album || "(앨범 없음)");
-      titleRow.appendChild(title);
+    sections.forEach((section) => {
+      const sectionEl = document.createElement("div");
+      sectionEl.className = "album-section";
 
-      // 순서 변경은 이 손잡이를 잡고 드래그할 때만 시작된다(SortableJS의
-      // handle 옵션) — 앨범 클릭(상세 열기)과 절대 겹치지 않는다.
-      const dragHandle = document.createElement("button");
-      dragHandle.type = "button";
-      dragHandle.className = "icon-btn media-card-drag-handle";
-      dragHandle.title = "드래그해서 순서 변경";
-      dragHandle.appendChild(iconSpan("grip-vertical", "icon-sm"));
-      dragHandle.addEventListener("click", (e) => e.stopPropagation());
-      titleRow.appendChild(dragHandle);
+      const header = document.createElement("div");
+      header.className = "album-section-header";
+      header.textContent = section.artist || "(아티스트 없음)";
+      sectionEl.appendChild(header);
 
-      card.appendChild(titleRow);
+      const grid = document.createElement("div");
+      grid.className = "album-section-grid";
+      section.groups.forEach((group) => grid.appendChild(buildAlbumCard(group)));
+      sectionEl.appendChild(grid);
 
-      if (group.artist) {
-        const artist = document.createElement("div");
-        artist.className = "media-card-artist";
-        artist.textContent = group.artist;
-        card.appendChild(artist);
-      }
+      albumsList.appendChild(sectionEl);
 
-      const meta = document.createElement("div");
-      meta.className = "media-card-meta";
-      meta.textContent = `${group.tracks.length}곡`;
-      card.appendChild(meta);
-
-      card.addEventListener("click", () => openAlbumDetail(group));
-      albumsList.appendChild(card);
+      const sectionSortable = window.Sortable.create(grid, {
+        animation: 150,
+        forceFallback: true,
+        handle: ".media-card-drag-handle",
+        onEnd: async (evt) => {
+          if (evt.oldIndex === evt.newIndex) return;
+          albumSectionSortables.forEach((s) => s.option("disabled", true));
+          const moved = section.groups.splice(evt.oldIndex, 1)[0];
+          section.groups.splice(evt.newIndex, 0, moved);
+          renderedAlbumGroups = sections.flatMap((s) => s.groups);
+          const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
+          try {
+            const result = await api.reorderPlaylistFull(libraryName, newOrder);
+            tracks = result.tracks;
+          } catch (err) {
+            await alertDialog(err.message);
+            await resyncFromServer();
+            render();
+          } finally {
+            albumSectionSortables.forEach((s) => s.option("disabled", isSongSearchActive()));
+          }
+        },
+      });
+      albumSectionSortables.push(sectionSortable);
     });
 
     // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다(곡 목록과 동일).
@@ -755,29 +820,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     },
   });
 
-  const albumsSortable = window.Sortable.create(albumsList, {
-    animation: 150,
-    forceFallback: true,
-    handle: ".media-card-drag-handle",
-    onEnd: async (evt) => {
-      if (evt.oldIndex === evt.newIndex) return;
-      albumsSortable.option("disabled", true);
-      const moved = renderedAlbumGroups.splice(evt.oldIndex, 1)[0];
-      renderedAlbumGroups.splice(evt.newIndex, 0, moved);
-      const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
-      try {
-        const result = await api.reorderPlaylistFull(libraryName, newOrder);
-        tracks = result.tracks;
-      } catch (err) {
-        await alertDialog(err.message);
-        await resyncFromServer();
-        render();
-      } finally {
-        albumsSortable.option("disabled", isSongSearchActive());
-      }
-    },
-  });
-
   const albumDetailSortable = window.Sortable.create(albumDetailList, {
     animation: 150,
     forceFallback: true,
@@ -823,7 +865,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   searchInput.addEventListener("input", () => {
     const disabled = isSongSearchActive();
     songsSortable.option("disabled", disabled);
-    albumsSortable.option("disabled", disabled);
+    albumSectionSortables.forEach((s) => s.option("disabled", disabled));
   });
 
   return {

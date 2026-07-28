@@ -74,7 +74,7 @@ export function setupStats(player, onOpenAlbum) {
   let period = "day";
   let group = "track";
   let offset = 0;
-  // "곡" 그룹은 앨범 커버 카드 대신 일반 곡 목록처럼(최근 재생 순) 보여준다.
+  // "곡" 그룹은 앨범 커버 카드 대신 일반 곡 목록처럼(재생 횟수 순, 동률이면 최근 재생 순) 보여준다.
   let trackItems = [];
   let trackPage = 0;
   let trackPageSize = TRACK_PAGE_SIZE_FALLBACK;
