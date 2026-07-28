@@ -554,13 +554,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
     card.appendChild(titleRow);
 
-    if (group.artist) {
-      const artist = document.createElement("div");
-      artist.className = "media-card-artist";
-      artist.textContent = group.artist;
-      card.appendChild(artist);
-    }
-
+    // 아티스트명은 이미 구획 헤더(.album-section-header)에 보여주므로 카드
+    // 안에서는 중복 표시하지 않는다.
     const meta = document.createElement("div");
     meta.className = "media-card-meta";
     meta.textContent = `${group.tracks.length}곡`;
@@ -583,11 +578,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     albumSectionSortables = [];
 
     const groups = groupAlbums(tracks).filter((g) => matchesAlbum(g, q, field));
-    groups.sort(
-      (a, b) =>
-        (a.artist || "").localeCompare(b.artist || "", "ko") ||
-        (a.album || "").localeCompare(b.album || "", "ko")
-    );
+    // 아티스트명으로만 정렬한다(구획 경계/순서 결정용). Array.sort는 안정 정렬이라
+    // 같은 아티스트 안에서는 원래 순서(= 라이브러리의 트랙 순서, 즉 드래그로 정한
+    // 순서)가 그대로 유지된다 — 여기서 앨범명까지 같이 정렬해버리면 드래그로 바꾼
+    // 구획 내 순서가 다음 렌더링마다 알파벳순으로 되돌아가 버린다.
+    groups.sort((a, b) => (a.artist || "").localeCompare(b.artist || "", "ko"));
     renderedAlbumGroups = groups;
     if (!groups.length) {
       renderEmpty(albumsList);
