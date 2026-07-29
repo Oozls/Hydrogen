@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import applog
+from lyricstorage import applog, lyrics_io
 from lyricstorage.markdown_render import to_html
 from lyricstorage.models import LyricLine, LyricTrack
 from lyricstorage.web.lookup import find_track_by_id
@@ -58,3 +58,38 @@ def save_lyrics(track_id: str):
             "lines": [_line_json(line) for line in lines],
         }
     )
+
+
+@bp.get("/<track_id>/lyrics/backups")
+def list_lyrics_backups(track_id: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+    return jsonify({"backups": lyrics_io.list_backups(track.path)})
+
+
+@bp.get("/<track_id>/lyrics/backups/<name>")
+def get_lyrics_backup(track_id: str, name: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+    try:
+        raw = lyrics_io.read_backup(track.path, name)
+    except FileNotFoundError:
+        return jsonify({"error": "백업을 찾을 수 없습니다."}), 404
+    lines = [LyricLine(ms, text) for ms, text in raw]
+    return jsonify({"lines": [_line_json(line) for line in lines]})
+
+
+@bp.post("/<track_id>/lyrics/backups/<name>/restore")
+def restore_lyrics_backup(track_id: str, name: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+    try:
+        lyrics_io.restore_backup(track.path, name)
+    except FileNotFoundError:
+        return jsonify({"error": "백업을 찾을 수 없습니다."}), 404
+    lyric_track = LyricTrack.load_for_track(track.path)
+    applog.log_info("ACTION", f"가사 백업 복원: {track_id} ({name})")
+    return jsonify({"lines": [_line_json(line) for line in lyric_track.lines]})

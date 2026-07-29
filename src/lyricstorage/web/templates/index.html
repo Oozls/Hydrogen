@@ -174,6 +174,9 @@
               <button id="btn-lyrics-remove-row" class="icon-btn" title="선택한 줄 삭제">
                 <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
               </button>
+              <button id="btn-lyrics-backups" class="icon-btn" title="가사 백업 보기">
+                <span class="icon" style="--icon: url(/static/icons/clock.svg)"></span>
+              </button>
               <div class="spacer"></div>
               <button id="btn-lyrics-detail-edit" class="lyrics-detail-edit-btn" type="button">
                 <span class="icon icon-sm" style="--icon: url(/static/icons/edit-3.svg)"></span>
@@ -334,6 +337,27 @@
     <div class="dialog-actions">
       <button id="library-picker-cancel" type="button">취소</button>
       <button id="library-picker-ok" class="primary" type="button">확인</button>
+    </div>
+  </dialog>
+
+  <dialog id="lyrics-backups-dialog" class="library-picker-dialog lyrics-backups-dialog">
+    <div class="library-picker-header">
+      <h3 id="lyrics-backups-title">가사 백업</h3>
+      <div class="spacer"></div>
+      <button id="lyrics-backups-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <div id="lyrics-backups-list-view">
+      <ul id="lyrics-backups-list" class="playlist-list lyrics-backups-list"></ul>
+      <p id="lyrics-backups-empty" class="lyrics-backups-empty" hidden>아직 백업이 없습니다.</p>
+    </div>
+    <div id="lyrics-backups-preview" class="lyrics-backups-preview" hidden>
+      <div id="lyrics-backups-preview-body" class="file-content-body lyrics-backups-preview-body"></div>
+      <div class="dialog-actions">
+        <button id="lyrics-backups-preview-back" type="button">목록으로</button>
+        <button id="lyrics-backups-restore" class="primary" type="button">이 백업으로 복원</button>
+      </div>
     </div>
   </dialog>
 

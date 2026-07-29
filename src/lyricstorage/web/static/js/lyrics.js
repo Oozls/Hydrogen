@@ -53,6 +53,17 @@ export function setupLyrics(player, onLyricsSaved) {
   const clearBtn = document.getElementById("btn-lyrics-clear");
   const detailEditBtn = document.getElementById("btn-lyrics-detail-edit");
 
+  const backupsBtn = document.getElementById("btn-lyrics-backups");
+  const backupsDialog = document.getElementById("lyrics-backups-dialog");
+  const backupsCloseBtn = document.getElementById("lyrics-backups-close");
+  const backupsListView = document.getElementById("lyrics-backups-list-view");
+  const backupsListEl = document.getElementById("lyrics-backups-list");
+  const backupsEmptyEl = document.getElementById("lyrics-backups-empty");
+  const backupsPreviewView = document.getElementById("lyrics-backups-preview");
+  const backupsPreviewBody = document.getElementById("lyrics-backups-preview-body");
+  const backupsPreviewBackBtn = document.getElementById("lyrics-backups-preview-back");
+  const backupsRestoreBtn = document.getElementById("lyrics-backups-restore");
+
   const lyricsEditorApi = setupLyricsEditor(player);
 
   let trackId = null;
@@ -313,6 +324,68 @@ export function setupLyrics(player, onLyricsSaved) {
       renderEdit();
       if (onLyricsSaved) onLyricsSaved(trackId);
     });
+  });
+
+  function formatBackupTimestamp(iso) {
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  let previewingBackupName = null;
+
+  function showBackupsList() {
+    previewingBackupName = null;
+    backupsPreviewView.hidden = true;
+    backupsListView.hidden = false;
+  }
+
+  async function showBackupPreview(name) {
+    const data = await api.getLyricsBackup(trackId, name);
+    previewingBackupName = name;
+    backupsPreviewBody.textContent = data.lines.length
+      ? data.lines.map((l) => `[${formatMinSecMs(l.timestamp_ms)}] ${l.text}`).join("\n")
+      : "(빈 가사)";
+    backupsListView.hidden = true;
+    backupsPreviewView.hidden = false;
+  }
+
+  async function renderBackupsList() {
+    backupsListEl.innerHTML = "";
+    const { backups } = await api.getLyricsBackups(trackId);
+    backupsEmptyEl.hidden = backups.length > 0;
+    for (const backup of backups) {
+      const li = document.createElement("li");
+      li.className = "lyrics-backup-row";
+      li.textContent = formatBackupTimestamp(backup.timestamp);
+      li.addEventListener("click", () => showBackupPreview(backup.name));
+      backupsListEl.appendChild(li);
+    }
+  }
+
+  backupsBtn.addEventListener("click", async () => {
+    if (!trackId) {
+      await alertDialog("먼저 곡을 재생하거나 선택하세요.");
+      return;
+    }
+    showBackupsList();
+    backupsDialog.showModal();
+    await renderBackupsList();
+  });
+
+  backupsCloseBtn.addEventListener("click", () => backupsDialog.close());
+  backupsPreviewBackBtn.addEventListener("click", showBackupsList);
+
+  backupsRestoreBtn.addEventListener("click", async () => {
+    if (!previewingBackupName || !trackId) return;
+    if (!(await confirmDialog("이 백업으로 복원할까요? 현재 가사는 자동으로 백업된 뒤 교체됩니다.")))
+      return;
+    const result = await api.restoreLyricsBackup(trackId, previewingBackupName);
+    lines = result.lines;
+    renderView();
+    renderEdit();
+    if (onLyricsSaved) onLyricsSaved(trackId);
+    backupsDialog.close();
   });
 
   // "저장" 버튼이 없어진 뒤로는 전체 지우기가 되돌릴 수 없는 작업이라 확인을 받는다.

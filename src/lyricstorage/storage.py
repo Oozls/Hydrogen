@@ -39,6 +39,18 @@ def lyrics_cache_dir() -> Path:
     return path
 
 
+def lyrics_dir() -> Path:
+    path = app_data_dir() / "lyrics"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def lyrics_backups_dir() -> Path:
+    path = app_data_dir() / "lyrics_backups"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def songs_dir() -> Path:
     path = app_data_dir() / "songs"
     path.mkdir(parents=True, exist_ok=True)

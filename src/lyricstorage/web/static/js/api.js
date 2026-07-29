@@ -86,6 +86,11 @@ export const api = {
   getLyrics: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics`),
   saveLyrics: (trackId, lines) =>
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
+  getLyricsBackups: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics/backups`),
+  getLyricsBackup: (trackId, name) =>
+    request("GET", `/api/tracks/${trackId}/lyrics/backups/${encodeURIComponent(name)}`),
+  restoreLyricsBackup: (trackId, name) =>
+    request("POST", `/api/tracks/${trackId}/lyrics/backups/${encodeURIComponent(name)}/restore`),
   setRating: (trackId, rating) =>
     request("PUT", `/api/tracks/${trackId}/rating`, { json: { rating } }),
   updateTrackMetadata: (trackId, patch) =>

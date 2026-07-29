@@ -1094,6 +1094,44 @@ input[type="range"]:hover::-moz-range-thumb {
   font-size: 13px;
   white-space: nowrap;
 }
+.lyrics-backups-dialog {
+  width: 380px;
+  max-height: 70vh;
+  max-height: 70dvh;
+}
+/* dialog는 닫혀있을 때 UA 기본값(display:none)이어야 하므로, flex 레이아웃은
+   showModal로 [open]이 붙었을 때만 적용한다(library-picker-dialog-wide와 동일 이유). */
+.lyrics-backups-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.lyrics-backups-list {
+  max-height: 50vh;
+  max-height: 50dvh;
+}
+.lyrics-backup-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 1px 2px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.lyrics-backup-row:hover {
+  background: #1f2330;
+}
+.lyrics-backups-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px 0;
+}
+.lyrics-backups-preview-body {
+  max-height: 50vh;
+  max-height: 50dvh;
+  margin-top: 0;
+}
 .confirm-dialog {
   width: 360px;
 }
