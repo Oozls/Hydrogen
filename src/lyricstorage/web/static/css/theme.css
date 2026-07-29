@@ -215,6 +215,13 @@ textarea {
   display: flex;
 }
 
+/* 가사 패널은 DOM상 browse-panel과 stats-panel 사이에 있어서, 통계 화면에서
+   가사를 켜면 flex 문서 순서상 통계 패널보다 왼쪽에 와버린다. order로 항상
+   맨 뒤(오른쪽/아래)에 오도록 고정한다. */
+.lyrics-panel {
+  order: 1;
+}
+
 .sidebar {
   flex: 0 0 220px;
   display: flex;
@@ -1531,11 +1538,18 @@ input[type="range"]:hover::-moz-range-thumb {
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
 }
+/* 구획(아티스트)당 앨범들은 한 행에 가로로 나란히 두고, 다 못 들어가면 그
+   행만 가로로 스크롤한다 — 폭이 좁다고 grid처럼 줄바꿈해서 한 아티스트의
+   앨범들이 세로로 한 줄(단일 열)이 되어버리는 걸 막기 위함이다. */
 .album-section-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  display: flex;
   gap: 12px;
-  align-content: start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+.album-section-grid .media-card {
+  flex: 0 0 170px;
 }
 
 /* -- 브라우즈 --------------------------------------------------------- */

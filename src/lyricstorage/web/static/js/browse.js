@@ -616,6 +616,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       const sectionSortable = window.Sortable.create(grid, {
         animation: 150,
         forceFallback: true,
+        direction: "horizontal",
         handle: ".media-card-drag-handle",
         onEnd: async (evt) => {
           if (evt.oldIndex === evt.newIndex) return;
