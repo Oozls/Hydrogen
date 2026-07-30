@@ -1170,6 +1170,15 @@ input[type="range"]:hover::-moz-range-thumb {
   word-break: break-word;
   color: var(--text-primary);
 }
+textarea.file-content-body {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  outline: none;
+}
+textarea.file-content-body:disabled {
+  color: var(--text-secondary);
+}
 .library-picker-dialog-wide {
   width: 90vw;
   max-width: 90vw;

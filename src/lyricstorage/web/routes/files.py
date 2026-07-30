@@ -83,6 +83,22 @@ def content():
     return jsonify({"content": text})
 
 
+@bp.put("/content")
+def save_content():
+    try:
+        target = _resolve_safe_path(request.args.get("path", ""))
+    except ValueError:
+        abort(400)
+    if not target.is_file() or target.suffix.lower() not in TEXT_EXTENSIONS:
+        abort(404)
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    if not isinstance(content, str):
+        abort(400)
+    target.write_text(content, encoding="utf-8")
+    return jsonify({"ok": True})
+
+
 @bp.delete("/entry")
 def delete_entry():
     try:

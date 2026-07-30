@@ -14,6 +14,9 @@ const contentDialog = document.getElementById("file-content-dialog");
 const contentTitleEl = document.getElementById("file-content-title");
 const contentBodyEl = document.getElementById("file-content-body");
 const contentCloseBtn = document.getElementById("file-content-close");
+const contentSaveBtn = document.getElementById("file-content-save");
+
+let openEntry = null;
 
 const CHEVRON_RIGHT = "url(/static/icons/chevron-right.svg)";
 const CHEVRON_DOWN = "url(/static/icons/chevron-down.svg)";
@@ -29,18 +32,39 @@ function isTextFile(name) {
 }
 
 async function openContent(entry) {
+  openEntry = entry;
   contentTitleEl.textContent = entry.name;
-  contentBodyEl.textContent = "불러오는 중...";
+  contentBodyEl.value = "불러오는 중...";
+  contentBodyEl.disabled = true;
+  contentSaveBtn.disabled = true;
   contentDialog.showModal();
   try {
     const data = await fetchJSON(`/api/files/content?path=${encodeURIComponent(entry.path)}`);
-    contentBodyEl.textContent = data.content;
+    contentBodyEl.value = data.content;
+    contentBodyEl.disabled = false;
+    contentSaveBtn.disabled = false;
   } catch (err) {
-    contentBodyEl.textContent = err.message;
+    contentBodyEl.value = err.message;
   }
 }
 
 contentCloseBtn.addEventListener("click", () => contentDialog.close());
+
+contentSaveBtn.addEventListener("click", async () => {
+  if (!openEntry) return;
+  contentSaveBtn.disabled = true;
+  try {
+    await fetchJSON(`/api/files/content?path=${encodeURIComponent(openEntry.path)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: contentBodyEl.value }),
+    });
+  } catch (err) {
+    await alertDialog(err.message);
+  } finally {
+    contentSaveBtn.disabled = false;
+  }
+});
 
 async function deleteEntry(entry, node) {
   const ok = await confirmDialog(`"${entry.name}" 파일을 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`);
