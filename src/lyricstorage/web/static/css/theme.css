@@ -1588,6 +1588,11 @@ input[type="range"]:hover::-moz-range-thumb {
 }
 .album-section-grid .media-card {
   flex: 0 0 170px;
+  /* flex-shrink:0이어도 자식(제목 텍스트 등)의 min-content 폭이 카드 폭을
+     떠받치는 것을 막으려면 min-width를 auto가 아니게 명시해야 한다 — 안 그러면
+     긴 앨범명일 때 카드 자체가 텍스트 폭만큼 늘어나 커버까지 커져 보인다. */
+  min-width: 170px;
+  max-width: 170px;
 }
 
 /* -- 브라우즈 --------------------------------------------------------- */
