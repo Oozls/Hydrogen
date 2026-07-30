@@ -141,7 +141,7 @@ class Track:
     artist: str = ""
     album: str = ""
     duration_ms: int = 0
-    rating: int = 0
+    rating: float = 0.0
 
     @classmethod
     def from_file(cls, path: str) -> "Track":
@@ -165,7 +165,7 @@ class Track:
             artist=data.get("artist", ""),
             album=data.get("album", ""),
             duration_ms=data.get("duration_ms", 0),
-            rating=data.get("rating", 0),
+            rating=float(data.get("rating", 0) or 0),
         )
 
 

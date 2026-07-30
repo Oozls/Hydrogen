@@ -427,7 +427,8 @@ textarea {
   color: var(--text-primary);
 }
 
-select#playlist-sort {
+select#playlist-sort,
+select#today-limit-select {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -970,6 +971,7 @@ table.lyrics-edit-table {
   margin-right: 4px;
 }
 .rating-heart {
+  position: relative;
   background: transparent;
   border: none;
   padding: 0;
@@ -986,12 +988,28 @@ table.lyrics-edit-table {
   /* icon-sm(12px) 대신 하트 전용 크기를 명시해서 5개가 나란히 있을 때도
      한눈에 잘 보이게 한다. width/height를 고정해 outline(heart)과
      filled(heart-filled) 두 SVG가 항상 동일한 픽셀 크기로 그려진다. */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 18px;
   height: 18px;
+}
+.rating-heart-base {
   color: var(--text-muted);
 }
-.rating-heart.filled .icon {
+.rating-heart-fill {
+  /* 채워진 하트를 왼쪽부터 잘라 보여줘(clip-path) 0.5점 단위를 "반쪽 하트"로
+     표현한다 — 상태는 JS(rating.js)가 클릭/마우스 위치에 따라 empty(전체
+     가림)/half(왼쪽 절반만)/full(안 가림) 클래스를 토글해서 결정한다. */
   color: var(--accent);
+  clip-path: inset(0 100% 0 0);
+}
+.rating-heart-fill.half {
+  clip-path: inset(0 50% 0 0);
+}
+.rating-heart-fill.full {
+  clip-path: inset(0 0 0 0);
 }
 .rating-heart:hover {
   background: var(--bg-elevated);

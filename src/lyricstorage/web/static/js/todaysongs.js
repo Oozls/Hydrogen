@@ -21,12 +21,15 @@ function createRatingBadge(rating) {
 
 const DEFAULT_LIMIT = 8;
 
-export function setupTodaySongs(player, playlistApi, onEditTrack, onBulkEdit) {
+export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onBulkEdit) {
   const panelEl = document.getElementById("today-panel");
   const listEl = document.getElementById("today-songs-list");
   const rerollBtn = document.getElementById("btn-today-reroll");
+  const limitSelect = document.getElementById("today-limit-select");
 
   let items = [];
+  let limit = bootstrap.settings.today_limit || DEFAULT_LIMIT;
+  limitSelect.value = String(limit);
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -135,7 +138,7 @@ export function setupTodaySongs(player, playlistApi, onEditTrack, onBulkEdit) {
   async function load(reroll) {
     renderLoading();
     try {
-      const result = await api.getTodaySongs(DEFAULT_LIMIT, reroll);
+      const result = await api.getTodaySongs(limit, reroll);
       items = result.items;
     } catch (err) {
       items = [];
@@ -145,6 +148,16 @@ export function setupTodaySongs(player, playlistApi, onEditTrack, onBulkEdit) {
   }
 
   rerollBtn.addEventListener("click", () => load(String(Date.now())));
+
+  // 개수를 바꾸면 설정에 저장해 다음에 열 때도 유지되고, 재뽑기 없이(오늘의
+  // 추첨 순서는 그대로 두고) 늘어나거나 줄어든 개수만큼만 다시 불러온다 —
+  // 추첨이 순서대로 진행되는 결정적 시드라 개수를 늘려도 기존 상위 곡들의
+  // 순서는 그대로 유지된다.
+  limitSelect.addEventListener("change", () => {
+    limit = Number(limitSelect.value) || DEFAULT_LIMIT;
+    api.updateSettings({ today_limit: limit }).catch(() => {});
+    load();
+  });
 
   player.addEventListener("trackchange", () => {
     if (panelEl.classList.contains("active")) render();

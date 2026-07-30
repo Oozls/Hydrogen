@@ -81,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupRating(player);
   const statsApi = setupStats(player, openAlbumFromTrack);
   const todaySongsApi = setupTodaySongs(
+    bootstrap,
     player,
     playlistApi,
     (track) => trackInfoApi.open(track),

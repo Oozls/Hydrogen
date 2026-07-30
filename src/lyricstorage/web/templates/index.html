@@ -261,6 +261,16 @@
         <div class="overlay-header">
           <span class="section-title">오늘의 곡</span>
           <div class="spacer"></div>
+          <select id="today-limit-select" title="표시할 곡 수">
+            <option value="4">4곡</option>
+            <option value="6">6곡</option>
+            <option value="8">8곡</option>
+            <option value="10">10곡</option>
+            <option value="12">12곡</option>
+            <option value="16">16곡</option>
+            <option value="20">20곡</option>
+            <option value="30">30곡</option>
+          </select>
           <button id="btn-today-reroll" class="icon-btn" title="다시 뽑기">
             <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
           </button>
@@ -310,21 +320,26 @@
           </button>
         </div>
         <div class="controls-volume">
-          <div id="track-rating" class="track-rating" title="레이팅">
+          <div id="track-rating" class="track-rating" title="레이팅(클릭한 위치가 왼쪽 절반이면 0.5점 단위로 매겨집니다)">
             <button type="button" class="rating-heart" data-value="1">
-              <span class="icon icon-sm" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-base" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-fill" style="--icon: url(/static/icons/heart-filled.svg)"></span>
             </button>
             <button type="button" class="rating-heart" data-value="2">
-              <span class="icon icon-sm" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-base" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-fill" style="--icon: url(/static/icons/heart-filled.svg)"></span>
             </button>
             <button type="button" class="rating-heart" data-value="3">
-              <span class="icon icon-sm" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-base" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-fill" style="--icon: url(/static/icons/heart-filled.svg)"></span>
             </button>
             <button type="button" class="rating-heart" data-value="4">
-              <span class="icon icon-sm" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-base" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-fill" style="--icon: url(/static/icons/heart-filled.svg)"></span>
             </button>
             <button type="button" class="rating-heart" data-value="5">
-              <span class="icon icon-sm" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-base" style="--icon: url(/static/icons/heart.svg)"></span>
+              <span class="icon icon-sm rating-heart-fill" style="--icon: url(/static/icons/heart-filled.svg)"></span>
             </button>
           </div>
           <button id="btn-lyrics-toggle" class="icon-btn toggle-btn" title="가사 표시">

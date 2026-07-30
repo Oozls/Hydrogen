@@ -88,6 +88,27 @@ def save_play_history(history: list[dict[str, Any]]) -> None:
     )
 
 
+def recommend_exposures_path() -> Path:
+    return app_data_dir() / "recommend_exposures.json"
+
+
+def load_recommend_exposures() -> list[dict[str, Any]]:
+    path = recommend_exposures_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_recommend_exposures(exposures: list[dict[str, Any]]) -> None:
+    recommend_exposures_path().write_text(
+        json.dumps(exposures, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
 def load_settings() -> dict[str, Any]:
     path = settings_path()
     if not path.exists():

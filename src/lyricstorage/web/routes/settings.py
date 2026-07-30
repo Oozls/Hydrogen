@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import applog, storage
+from lyricstorage import applog, recommend, storage
 
 bp = Blueprint("settings", __name__, url_prefix="/api/settings")
 
@@ -16,6 +16,7 @@ def get_settings():
         {
             "last_playlist": settings.get("last_playlist"),
             "volume": settings.get("volume", 80),
+            "today_limit": settings.get("today_limit", recommend.DEFAULT_LIMIT),
         }
     )
 
@@ -32,6 +33,12 @@ def update_settings():
         try:
             settings["volume"] = max(0, min(100, int(data["volume"])))
             applied["volume"] = settings["volume"]
+        except (TypeError, ValueError):
+            pass
+    if "today_limit" in data:
+        try:
+            settings["today_limit"] = max(1, min(30, int(data["today_limit"])))
+            applied["today_limit"] = settings["today_limit"]
         except (TypeError, ValueError):
             pass
     storage.save_settings(settings)

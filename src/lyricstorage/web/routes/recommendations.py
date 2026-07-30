@@ -27,5 +27,5 @@ def get_today():
 
     playlist = playlist_repo.load_or_create_global()
     tracks = [track_to_json(t) for t in playlist.tracks]
-    items = recommend.pick_today_songs(tracks, limit=limit, seed=seed)
+    items = recommend.pick_today_songs(tracks, limit=limit, seed=seed, record_exposure=not reroll)
     return jsonify({"date": today, "items": items})

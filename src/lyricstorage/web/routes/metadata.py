@@ -52,8 +52,13 @@ def update_rating(track_id: str):
 
     data = request.get_json(silent=True) or {}
     rating = data.get("rating")
-    if not isinstance(rating, int) or isinstance(rating, bool) or not (0 <= rating <= 5):
-        return jsonify({"error": "레이팅은 0~5 사이의 정수여야 합니다."}), 400
+    if isinstance(rating, bool) or not isinstance(rating, (int, float)):
+        return jsonify({"error": "레이팅은 0~5 사이 0.5 단위 숫자여야 합니다."}), 400
+    rating = float(rating)
+    # 0.5 단위인지 확인(부동소수 오차 감안): *2가 정수에 가까워야 한다.
+    if not (0 <= rating <= 5) or abs(rating * 2 - round(rating * 2)) > 1e-6:
+        return jsonify({"error": "레이팅은 0~5 사이 0.5 단위 숫자여야 합니다."}), 400
+    rating = round(rating * 2) / 2
 
     playlist_repo.update_track_in_all_playlists(track.path, rating=rating)
     track.rating = rating
