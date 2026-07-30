@@ -109,6 +109,48 @@ def save_recommend_exposures(exposures: list[dict[str, Any]]) -> None:
     )
 
 
+def recommend_config_path() -> Path:
+    return app_data_dir() / "recommend_config.json"
+
+
+def load_recommend_config() -> dict[str, Any]:
+    path = recommend_config_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_recommend_config(config: dict[str, Any]) -> None:
+    recommend_config_path().write_text(
+        json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def recommend_weight_history_path() -> Path:
+    return app_data_dir() / "recommend_weight_history.json"
+
+
+def load_recommend_weight_history() -> list[dict[str, Any]]:
+    path = recommend_weight_history_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_recommend_weight_history(history: list[dict[str, Any]]) -> None:
+    recommend_weight_history_path().write_text(
+        json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
 def load_settings() -> dict[str, Any]:
     path = settings_path()
     if not path.exists():

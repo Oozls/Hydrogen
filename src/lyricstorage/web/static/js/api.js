@@ -121,6 +121,8 @@ export const api = {
       "GET",
       `/api/recommendations/today?limit=${limit || 8}${reroll ? `&reroll=${encodeURIComponent(reroll)}` : ""}`
     ),
+  getTodayWeights: () => request("GET", "/api/recommendations/weights"),
+  updateTodayWeights: (patch) => request("PUT", "/api/recommendations/weights", { json: patch }),
   updateAlbum: (album, artist, newAlbum, artFile) => {
     const formData = new FormData();
     formData.append("album", album);

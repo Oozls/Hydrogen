@@ -271,11 +271,15 @@
             <option value="20">20곡</option>
             <option value="30">30곡</option>
           </select>
+          <button id="btn-today-weights-toggle" class="icon-btn" title="가중치 조절">
+            <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
+          </button>
           <button id="btn-today-reroll" class="icon-btn" title="다시 뽑기">
             <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
           </button>
         </div>
         <p class="today-panel-hint">재생 기록이 적거나 없는 곡 중에서, 취향에 맞게 골라봤어요.</p>
+
         <ul id="today-songs-list" class="playlist-list"></ul>
         <div id="today-songs-pagination" class="pagination-row" hidden>
           <button id="today-songs-prev-page" class="icon-btn" type="button" title="이전 페이지">
@@ -409,6 +413,29 @@
         <button id="lyrics-backups-preview-back" type="button">목록으로</button>
         <button id="lyrics-backups-restore" class="primary" type="button">이 백업으로 복원</button>
       </div>
+    </div>
+  </dialog>
+
+  <dialog id="today-weights-dialog" class="library-picker-dialog today-weights-dialog">
+    <div class="library-picker-header">
+      <h3>오늘의 곡 가중치</h3>
+      <div class="spacer"></div>
+      <button id="today-weights-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <div class="today-weights-mode-row">
+      <label class="today-weights-mode-toggle">
+        <input type="checkbox" id="today-weights-auto-toggle" checked />
+        자동 학습
+      </label>
+    </div>
+    <!-- 슬라이더 행은 백엔드가 내려주는 요소 목록(FEATURE_KEYS)에 맞춰 todaysongs.js가
+         매번 새로 그린다 — 요소가 추가/제거돼도 이 마크업을 손댈 필요가 없다. -->
+    <div id="today-weights-sliders" class="today-weights-sliders"></div>
+    <div class="today-weights-graph">
+      <svg id="today-weights-svg" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+      <div id="today-weights-legend" class="today-weights-legend"></div>
     </div>
   </dialog>
 

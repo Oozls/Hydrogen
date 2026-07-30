@@ -25,6 +25,25 @@ const DEFAULT_LIMIT = 8;
 const PAGE_SIZE_FALLBACK = 50;
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
+// recommend.py의 FEATURE_KEYS와 이름을 맞춘 색상표. 슬라이더/그래프는 실제 요소
+// 목록을 서버 응답(labels)에서 매번 읽어오므로, 여기 없는 새 요소가 추가돼도
+// 폴백 색상으로 자동으로 그려진다.
+const WEIGHT_COLORS = {
+  rating: "#7c9cff",
+  artist: "#ff8a65",
+  album: "#66d9a8",
+  never_played: "#f2c94c",
+  explicit: "#c792ea",
+  freshness: "#4fc3f7",
+};
+const WEIGHT_COLOR_FALLBACK = "#9aa0b4";
+function weightColor(key) {
+  return WEIGHT_COLORS[key] || WEIGHT_COLOR_FALLBACK;
+}
+const WEIGHT_CHART_W = 400;
+const WEIGHT_CHART_H = 120;
+const WEIGHT_CHART_PAD_Y = 10;
+
 export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onBulkEdit) {
   const panelEl = document.getElementById("today-panel");
   const listEl = document.getElementById("today-songs-list");
@@ -34,6 +53,14 @@ export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onB
   const prevPageBtn = document.getElementById("today-songs-prev-page");
   const nextPageBtn = document.getElementById("today-songs-next-page");
   const pageLabel = document.getElementById("today-songs-page-label");
+
+  const weightsToggleBtn = document.getElementById("btn-today-weights-toggle");
+  const weightsDialogEl = document.getElementById("today-weights-dialog");
+  const weightsCloseBtn = document.getElementById("today-weights-close");
+  const weightsAutoToggle = document.getElementById("today-weights-auto-toggle");
+  const weightsSlidersEl = document.getElementById("today-weights-sliders");
+  const weightsSvgEl = document.getElementById("today-weights-svg");
+  const weightsLegendEl = document.getElementById("today-weights-legend");
 
   let items = [];
   let limit = bootstrap.settings.today_limit || DEFAULT_LIMIT;
@@ -229,6 +256,142 @@ export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onB
   pageLabel.title = "클릭해서 페이지 번호 입력";
   pageLabel.addEventListener("click", startEditingPage);
 
+  let weightsState = null;
+
+  // 재생 화면의 seek/volume 슬라이더와 동일하게, 채워진 부분을 --range-progress
+  // 퍼센트로 표현해 theme.css의 그라디언트 트랙 배경이 이를 참조하게 한다.
+  function updateRangeFill(el) {
+    const min = Number(el.min) || 0;
+    const max = Number(el.max) || 0;
+    const value = Number(el.value) || 0;
+    const pct = max === min ? 0 : ((value - min) / (max - min)) * 100;
+    el.style.setProperty("--range-progress", `${pct}%`);
+  }
+
+  // 슬라이더 행을 서버가 내려준 요소 목록(labels) 순서대로 매번 새로 그린다 —
+  // recommend.py 쪽에 새 요소가 추가/제거돼도 이 파일을 손댈 필요가 없다.
+  function renderWeightSliders(state) {
+    const isManual = state.mode === "manual";
+    weightsAutoToggle.checked = !isManual;
+    weightsSlidersEl.innerHTML = "";
+    Object.keys(state.labels || {}).forEach((key) => {
+      const row = document.createElement("div");
+      row.className = "today-weight-row";
+
+      const label = document.createElement("span");
+      label.className = "today-weight-label";
+      label.textContent = state.labels[key] || key;
+      label.title = state.labels[key] || key;
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.className = "today-weight-slider";
+      slider.min = String(state.min);
+      slider.max = String(state.max);
+      slider.step = "0.01";
+      slider.disabled = !isManual;
+      slider.value = String(state.weights[key] ?? 0);
+
+      const valueEl = document.createElement("span");
+      valueEl.className = "today-weight-value";
+      valueEl.textContent = Number(slider.value).toFixed(2);
+
+      updateRangeFill(slider);
+      slider.addEventListener("input", () => {
+        updateRangeFill(slider);
+        valueEl.textContent = Number(slider.value).toFixed(2);
+      });
+      slider.addEventListener("change", async () => {
+        if (!weightsState || weightsState.mode !== "manual") return;
+        try {
+          await api.updateTodayWeights({ manual_weights: { [key]: Number(slider.value) } });
+        } catch (err) {
+          await alertDialog(err.message);
+          return;
+        }
+        load();
+      });
+
+      row.appendChild(label);
+      row.appendChild(slider);
+      row.appendChild(valueEl);
+      weightsSlidersEl.appendChild(row);
+    });
+  }
+
+  function renderWeightLegend(state) {
+    weightsLegendEl.innerHTML = "";
+    Object.keys(state.labels || {}).forEach((key) => {
+      const item = document.createElement("span");
+      item.className = "today-weights-legend-item";
+      const swatch = document.createElement("span");
+      swatch.className = "today-weights-legend-swatch";
+      swatch.style.background = weightColor(key);
+      item.appendChild(swatch);
+      item.appendChild(document.createTextNode(state.labels[key] || key));
+      weightsLegendEl.appendChild(item);
+    });
+  }
+
+  // 새로고침/다시 뽑기마다 서버에 쌓이는 가중치 이력을 요소별 꺾은선 그래프로
+  // 그린다 — 0~1 사이 값이 아니라 WEIGHT_MIN~WEIGHT_MAX 범위라 그 범위로 스케일링.
+  function renderWeightChart(state) {
+    weightsSvgEl.innerHTML = "";
+    const history = state.history;
+    if (!history || history.length === 0) return;
+    const keys = Object.keys(state.labels || {});
+    const n = history.length;
+    const range = state.max - state.min || 1;
+    const yFor = (v) =>
+      WEIGHT_CHART_H - WEIGHT_CHART_PAD_Y - ((v - state.min) / range) * (WEIGHT_CHART_H - WEIGHT_CHART_PAD_Y * 2);
+    const xFor = (i) => (n <= 1 ? WEIGHT_CHART_W / 2 : (i / (n - 1)) * WEIGHT_CHART_W);
+
+    keys.forEach((key) => {
+      const points = history.map((entry, i) => `${xFor(i)},${yFor(entry.weights?.[key] ?? 0)}`).join(" ");
+      const poly = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      poly.setAttribute("points", points);
+      poly.setAttribute("fill", "none");
+      poly.setAttribute("stroke", weightColor(key));
+      poly.setAttribute("stroke-width", "2");
+      poly.setAttribute("vector-effect", "non-scaling-stroke");
+      weightsSvgEl.appendChild(poly);
+    });
+  }
+
+  async function loadWeights() {
+    try {
+      weightsState = await api.getTodayWeights();
+    } catch (_err) {
+      return;
+    }
+    renderWeightSliders(weightsState);
+    renderWeightLegend(weightsState);
+    renderWeightChart(weightsState);
+  }
+
+  weightsToggleBtn.addEventListener("click", () => {
+    weightsDialogEl.showModal();
+    loadWeights();
+  });
+  weightsCloseBtn.addEventListener("click", () => weightsDialogEl.close());
+
+  // 자동 학습 <-> 수동 조절 전환. 수동으로 바꾸는 순간에는 그 직전까지 자동
+  // 학습되던 값을 그대로 이어받아서, 슬라이더가 갑자기 기본값으로 튀지 않게 한다.
+  weightsAutoToggle.addEventListener("change", async () => {
+    const goingManual = !weightsAutoToggle.checked;
+    const patch = { mode: goingManual ? "manual" : "auto" };
+    if (goingManual && weightsState) {
+      patch.manual_weights = { ...weightsState.weights };
+    }
+    try {
+      await api.updateTodayWeights(patch);
+    } catch (err) {
+      await alertDialog(err.message);
+      return;
+    }
+    load();
+  });
+
   async function load(reroll) {
     renderLoading();
     try {
@@ -240,6 +403,9 @@ export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onB
     }
     page = 0;
     render();
+    // pick_today_songs가 이번 호출에서도 가중치 이력에 한 점을 남겼으니, 다이얼로그가
+    // 열려 있으면 그래프/슬라이더도 같이 최신 상태로 맞춘다.
+    if (weightsDialogEl.open) loadWeights();
   }
 
   rerollBtn.addEventListener("click", () => load(String(Date.now())));
