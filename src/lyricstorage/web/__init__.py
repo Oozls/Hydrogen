@@ -27,6 +27,8 @@ def create_app() -> Flask:
     # 곡을 1000개 넘게 한 번에 선택하면 파일 크기와 무관하게 413로 거부된다.
     # 로컬 개인용 라이브러리 앱이라 큰 폴더도 문제없이 올릴 수 있게 넉넉히 늘린다.
     app.config["MAX_FORM_PARTS"] = 20000
+    # 업로드 요청 본문(폴더 통째 업로드 등) 최대 크기를 2048MB로 설정.
+    app.config["MAX_CONTENT_LENGTH"] = 2048 * 1024 * 1024
 
     @app.before_request
     def _log_request_start():

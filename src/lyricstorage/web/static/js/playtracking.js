@@ -6,7 +6,7 @@ const THRESHOLD_MS = 10_000;
 const CHECK_INTERVAL_MS = 1_000;
 
 function requiredMs(track) {
-  return track && track.duration_ms > 0 ? track.duration_ms * 0.9 : THRESHOLD_MS;
+  return track && track.duration_ms > 0 ? track.duration_ms * 0.3 : THRESHOLD_MS;
 }
 
 export function setupPlayTracking(player) {
