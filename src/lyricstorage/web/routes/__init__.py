@@ -15,6 +15,7 @@ def register_routes(app: Flask) -> None:
     from lyricstorage.web.routes.metadata import bp as metadata_bp
     from lyricstorage.web.routes.pages import bp as pages_bp
     from lyricstorage.web.routes.playlists import bp as playlists_bp
+    from lyricstorage.web.routes.recommendations import bp as recommendations_bp
     from lyricstorage.web.routes.settings import bp as settings_bp
     from lyricstorage.web.routes.stats import bp as stats_bp
 
@@ -26,6 +27,7 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(metadata_bp)
     app.register_blueprint(lyrics_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(recommendations_bp)
     app.register_blueprint(albums_bp)
     app.register_blueprint(logs_bp)
     app.register_blueprint(files_bp)

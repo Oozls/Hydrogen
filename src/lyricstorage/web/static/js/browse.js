@@ -63,6 +63,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const songsPrevPageBtn = document.getElementById("browse-songs-prev-page");
   const songsNextPageBtn = document.getElementById("browse-songs-next-page");
   const songsPageLabel = document.getElementById("browse-songs-page-label");
+  const songsTop3El = document.getElementById("browse-songs-top3");
   const albumsList = document.getElementById("browse-albums-list");
   const albumDetailList = document.getElementById("browse-album-detail-list");
   const albumDetailTitleClip = document.querySelector(".album-detail-title-clip");
@@ -89,6 +90,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let albumSectionSortables = [];
   let songsPage = 0;
   let songsPageSize = SONGS_PAGE_SIZE_FALLBACK;
+  let todaySongs = [];
+  // 가사 패널이 열려 있으면 재생 통계 TOP 3 앨범과 마찬가지로 이 위젯도 숨긴다(공간 확보).
+  let lyricsActive = false;
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -364,6 +368,75 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     renderChunk();
   }
 
+  // 재생 통계 화면의 "TOP 3 앨범" 위젯(#stats-track-top3)과 동일한 디자인(.media-card)을
+  // 그대로 재사용해, 오늘의 곡 추천 상위 3곡을 카드로 보여준다.
+  function buildTodaySongCard(item, i) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+    card.title = "재생";
+    card.addEventListener("click", () => playFromList(item, todaySongs, "오늘의 곡"));
+
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    const stopSpin = showArtSpinner(artWrap);
+    const img = document.createElement("img");
+    img.className = "media-card-art";
+    img.alt = "";
+    img.src = api.artUrl(item.track_id);
+    img.onload = () => stopSpin();
+    img.onerror = () => {
+      stopSpin();
+      img.remove();
+      artWrap.appendChild(iconSpan("music", "icon-lg"));
+    };
+    artWrap.appendChild(img);
+    const rank = document.createElement("span");
+    rank.className = "media-card-rank";
+    rank.textContent = `${i + 1}위`;
+    artWrap.appendChild(rank);
+    card.appendChild(artWrap);
+
+    const title = document.createElement("div");
+    title.className = "media-card-title";
+    title.textContent = item.title || item.track_id;
+    card.appendChild(title);
+
+    if (item.artist) {
+      const artist = document.createElement("div");
+      artist.className = "media-card-artist";
+      artist.textContent = item.artist;
+      card.appendChild(artist);
+    }
+
+    return card;
+  }
+
+  function renderTodaySongsTop3() {
+    songsTop3El.innerHTML = "";
+    if (lyricsActive || !todaySongs.length) {
+      songsTop3El.hidden = true;
+      return;
+    }
+    songsTop3El.hidden = false;
+    const heading = document.createElement("div");
+    heading.className = "stats-track-top3-heading";
+    heading.textContent = "오늘의 곡";
+    songsTop3El.appendChild(heading);
+    todaySongs.slice(0, 3).forEach((item, i) => songsTop3El.appendChild(buildTodaySongCard(item, i)));
+  }
+
+  // 실패해도(네트워크 오류 등) 브라우즈 화면 전체를 방해하지 않도록 조용히
+  // 위젯만 숨긴다 — 오늘의 곡은 부가 기능이다.
+  async function loadTodaySongs() {
+    try {
+      const data = await api.getTodaySongs();
+      todaySongs = data.items;
+    } catch (_err) {
+      todaySongs = [];
+    }
+    renderTodaySongsTop3();
+  }
+
   function renderSongs() {
     const validIds = new Set(tracks.map((t) => t.track_id));
     for (const id of selectedTrackIds) {
@@ -392,6 +465,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       recalcSongsPageSize
     );
     renderSongsPagination(filtered.length, totalPages);
+    renderTodaySongsTop3();
   }
 
   function renderSongsPagination(totalCount, totalPages) {
@@ -881,6 +955,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       tracks = library.tracks;
       libraryName = library.name;
       switchMode("album");
+      loadTodaySongs();
       if (focus) {
         const group = groupAlbums(tracks).find(
           (g) =>
@@ -916,6 +991,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       selectedTrackIds.clear();
       lastClickedIndex = null;
       render();
+    },
+    setLyricsActive(active) {
+      lyricsActive = active;
+      renderTodaySongsTop3();
     },
   };
 }

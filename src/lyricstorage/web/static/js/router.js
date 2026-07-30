@@ -5,14 +5,16 @@ function parseRoute(hash) {
     if (name) return { type: "playlist", name };
   }
   if (raw === "stats") return { type: "stats" };
+  if (raw === "today") return { type: "today" };
   return { type: "browse" };
 }
 
-export function setupRouter({ onBrowse, onPlaylist, onStats }) {
+export function setupRouter({ onBrowse, onPlaylist, onStats, onToday }) {
   function dispatch() {
     const route = parseRoute(location.hash);
     if (route.type === "playlist") onPlaylist(route.name);
     else if (route.type === "stats") onStats();
+    else if (route.type === "today") onToday();
     else onBrowse();
   }
 
@@ -36,6 +38,9 @@ export function setupRouter({ onBrowse, onPlaylist, onStats }) {
     },
     goStats() {
       navigate("#/stats");
+    },
+    goToday() {
+      navigate("#/today");
     },
   };
 }

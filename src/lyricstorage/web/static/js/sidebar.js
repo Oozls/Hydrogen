@@ -12,13 +12,14 @@ function fmtBytes(bytes) {
   return `${gb.toFixed(2)} GB`;
 }
 
-export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStats }) {
+export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStats, onGoToday }) {
   const sidebarEl = document.getElementById("sidebar");
   const toggleBtn = document.getElementById("btn-sidebar-toggle");
   const backdrop = document.getElementById("sidebar-backdrop");
   const homeBtn = document.getElementById("btn-sidebar-browse");
   const listEl = document.getElementById("sidebar-playlist-list");
   const statsBtn = document.getElementById("btn-sidebar-stats");
+  const todayBtn = document.getElementById("btn-sidebar-today");
   const dataSizeText = document.getElementById("sidebar-data-size-text");
 
   let names = bootstrap.playlist_names.slice();
@@ -44,6 +45,7 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStat
   function render() {
     homeBtn.classList.toggle("active", activeName === null);
     statsBtn.classList.toggle("active", activeName === "__stats__");
+    todayBtn.classList.toggle("active", activeName === "__today__");
     listEl.innerHTML = "";
     for (const name of names) {
       const li = document.createElement("li");
@@ -74,6 +76,12 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStat
   if (onGoStats) {
     statsBtn.addEventListener("click", () => {
       onGoStats();
+      closeDrawer();
+    });
+  }
+  if (onGoToday) {
+    todayBtn.addEventListener("click", () => {
+      onGoToday();
       closeDrawer();
     });
   }

@@ -116,6 +116,11 @@ export const api = {
     }),
   getTopStats: (period, group, offset) =>
     request("GET", `/api/stats/top?period=${period}&group=${group}&offset=${offset}`),
+  getTodaySongs: (limit, reroll) =>
+    request(
+      "GET",
+      `/api/recommendations/today?limit=${limit || 8}${reroll ? `&reroll=${encodeURIComponent(reroll)}` : ""}`
+    ),
   updateAlbum: (album, artist, newAlbum, artFile) => {
     const formData = new FormData();
     formData.append("album", album);

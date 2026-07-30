@@ -6,6 +6,7 @@ import { setupTrackInfo } from "./trackinfo.js";
 import { setupBulkEdit } from "./bulkedit.js";
 import { setupPlayTracking } from "./playtracking.js";
 import { setupStats } from "./stats.js";
+import { setupTodaySongs } from "./todaysongs.js";
 import { setupBrowse } from "./browse.js";
 import { setupAlbumInfo } from "./albuminfo.js";
 import { setupSidebar } from "./sidebar.js";
@@ -42,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
     onSelectPlaylist: (name) => refs.router.goPlaylist(name),
     onGoBrowse: () => refs.router.goBrowse(),
     onGoStats: () => refs.router.goStats(),
+    onGoToday: () => refs.router.goToday(),
   });
   const playlistApi = setupPlaylist(
     player,
@@ -78,6 +80,12 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPlayTracking(player);
   setupRating(player);
   const statsApi = setupStats(player, openAlbumFromTrack);
+  const todaySongsApi = setupTodaySongs(
+    player,
+    playlistApi,
+    (track) => trackInfoApi.open(track),
+    (ids) => bulkEditApi.open(ids)
+  );
   const lyricsPanelEl = document.getElementById("lyrics-panel");
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
 
@@ -99,6 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lyricsToggleBtn.classList.toggle("active", lyricsVisible);
     syncLyricsPanelDisplay();
     statsApi.setLyricsActive(lyricsVisible);
+    browseApi.setLyricsActive(lyricsVisible);
   });
 
   const browseApi = setupBrowse(
@@ -138,6 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
     onBrowse: () => {
       playlistApi.hide();
       statsApi.hide();
+      todaySongsApi.hide();
       const focus = refs.pendingAlbumFocus;
       refs.pendingAlbumFocus = null;
       browseApi.show(focus);
@@ -147,6 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
     onPlaylist: (name) => {
       browseApi.hide();
       statsApi.hide();
+      todaySongsApi.hide();
       playlistApi.show();
       playlistApi.loadPlaylist(name);
       sidebarApi.setActive(name);
@@ -155,8 +166,17 @@ document.addEventListener("DOMContentLoaded", () => {
     onStats: () => {
       playlistApi.hide();
       browseApi.hide();
+      todaySongsApi.hide();
       statsApi.show();
       sidebarApi.setActive("__stats__");
+      sidebarApi.refreshDataSize();
+    },
+    onToday: () => {
+      playlistApi.hide();
+      browseApi.hide();
+      statsApi.hide();
+      todaySongsApi.show();
+      sidebarApi.setActive("__today__");
       sidebarApi.refreshDataSize();
     },
   });

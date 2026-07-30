@@ -31,6 +31,10 @@
             <span class="icon icon-sm" style="--icon: url(/static/icons/folder.svg)"></span>
             <span id="sidebar-data-size-text">계산 중...</span>
           </div>
+          <button id="btn-sidebar-today" class="sidebar-nav-btn" type="button">
+            <span class="icon" style="--icon: url(/static/icons/sunrise.svg)"></span>
+            <span>오늘의 곡</span>
+          </button>
           <button id="btn-sidebar-stats" class="sidebar-nav-btn" type="button">
             <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
             <span>재생 통계</span>
@@ -113,15 +117,20 @@
         <input type="file" id="browse-file-input" accept=".mp3,.wav,.m4a" multiple hidden />
         <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
         <div id="browse-songs-panel" class="tab-panel">
-          <ul id="browse-songs-list" class="playlist-list"></ul>
-          <div id="browse-songs-pagination" class="pagination-row" hidden>
-            <button id="browse-songs-prev-page" class="icon-btn" type="button" title="이전 페이지">
-              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
-            </button>
-            <span id="browse-songs-page-label" class="pagination-label"></span>
-            <button id="browse-songs-next-page" class="icon-btn" type="button" title="다음 페이지">
-              <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
-            </button>
+          <div class="stats-track-body">
+            <div class="stats-track-list-col">
+              <ul id="browse-songs-list" class="playlist-list"></ul>
+              <div id="browse-songs-pagination" class="pagination-row" hidden>
+                <button id="browse-songs-prev-page" class="icon-btn" type="button" title="이전 페이지">
+                  <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+                </button>
+                <span id="browse-songs-page-label" class="pagination-label"></span>
+                <button id="browse-songs-next-page" class="icon-btn" type="button" title="다음 페이지">
+                  <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+                </button>
+              </div>
+            </div>
+            <div id="browse-songs-top3" class="stats-track-top3" hidden></div>
           </div>
         </div>
         <div id="browse-albums-panel" class="tab-panel active">
@@ -232,18 +241,32 @@
         </div>
         <div id="stats-list" class="card-grid"></div>
         <div id="stats-track-body" class="stats-track-body" hidden>
-          <ul id="stats-track-list" class="playlist-list"></ul>
+          <div class="stats-track-list-col">
+            <ul id="stats-track-list" class="playlist-list"></ul>
+            <div id="stats-track-pagination" class="pagination-row" hidden>
+              <button id="stats-track-prev-page" class="icon-btn" type="button" title="이전 페이지">
+                <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+              </button>
+              <span id="stats-track-page-label" class="pagination-label"></span>
+              <button id="stats-track-next-page" class="icon-btn" type="button" title="다음 페이지">
+                <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+              </button>
+            </div>
+          </div>
           <div id="stats-track-top3" class="stats-track-top3" hidden></div>
         </div>
-        <div id="stats-track-pagination" class="pagination-row" hidden>
-          <button id="stats-track-prev-page" class="icon-btn" type="button" title="이전 페이지">
-            <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
-          </button>
-          <span id="stats-track-page-label" class="pagination-label"></span>
-          <button id="stats-track-next-page" class="icon-btn" type="button" title="다음 페이지">
-            <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+      </div>
+
+      <div id="today-panel" class="panel today-panel page-panel">
+        <div class="overlay-header">
+          <span class="section-title">오늘의 곡</span>
+          <div class="spacer"></div>
+          <button id="btn-today-reroll" class="icon-btn" title="다시 뽑기">
+            <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
           </button>
         </div>
+        <p class="today-panel-hint">재생 기록이 적거나 없는 곡 중에서, 취향에 맞게 골라봤어요.</p>
+        <ul id="today-songs-list" class="playlist-list"></ul>
       </div>
     </main>
 

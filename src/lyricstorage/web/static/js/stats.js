@@ -1,7 +1,7 @@
 import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
-import { createMarqueeClip, applyMarquee } from "./marquee.js";
+import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 const TRACK_PAGE_SIZE_FALLBACK = 50;
@@ -271,29 +271,6 @@ export function setupStats(player, onOpenAlbum) {
     return li;
   }
 
-  // 브라우즈/재생목록의 applyColumnPriority(제목 옆 앨범/아티스트 자연 폭 기준)와
-  // 달리, 여기서는 재생 횟수/마지막 재생 등 고정 컬럼이 더 많아 곡 목록 너비 대비
-  // 제목 영역이 유독 좁아지기 쉽다. 그래서 기준을 단순화해서, 앨범/아티스트를
-  // 보여줬을 때 제목 영역이 곡 목록 전체 너비의 절반보다 좁아지면 숨긴다.
-  function applyTrackColumnPriority() {
-    const listWidth = trackListEl.clientWidth;
-    if (!listWidth) return;
-    trackListEl.querySelectorAll(".playlist-row").forEach((row) => {
-      const titleClip = row.querySelector(".playlist-row-title-clip");
-      const album = row.querySelector(".playlist-row-album");
-      const artist = row.querySelector(".playlist-row-artist");
-      if (!titleClip || (!album && !artist)) return;
-
-      // 실제 제목 폭을 다시 재려면 우선 숨김을 풀어야 한다.
-      if (album) album.hidden = false;
-      if (artist) artist.hidden = false;
-
-      const shouldHide = titleClip.clientWidth < listWidth / 2;
-      if (album) album.hidden = shouldHide;
-      if (artist) artist.hidden = shouldHide;
-    });
-  }
-
   function renderTrackPage() {
     trackListEl.innerHTML = "";
     if (!trackItems.length) {
@@ -321,7 +298,7 @@ export function setupStats(player, onOpenAlbum) {
     }
 
     requestAnimationFrame(() => {
-      applyTrackColumnPriority();
+      applyColumnPriority(trackListEl);
       applyMarquee(trackListEl);
       recalcTrackPageSize();
     });
@@ -490,7 +467,7 @@ export function setupStats(player, onOpenAlbum) {
     marqueeResizeTimer = setTimeout(() => {
       if (!panelEl.classList.contains("active")) return;
       if (group === "track") {
-        applyTrackColumnPriority();
+        applyColumnPriority(trackListEl);
         applyMarquee(trackListEl);
         recalcTrackPageSize();
       } else {
