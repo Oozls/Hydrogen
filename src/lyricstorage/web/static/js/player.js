@@ -321,5 +321,10 @@ export class PlayerEngine extends EventTarget {
     this._intentionalPause = false;
     promoted.play().catch(() => {});
     this._emit("trackchange", { track, index });
+    // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는
+    // this.audio가 아니어서 무시됐다. 지금 this.audio로 승격됐다는 사실만으로는
+    // 네이티브 durationchange가 다시 발생하지 않으므로, 재생바 길이 표시가
+    // 새 트랙 값으로 갱신되도록 수동으로 다시 emit한다.
+    this._emit("durationchange", { durationMs: this.duration() });
   }
 }
