@@ -1612,8 +1612,19 @@ textarea.file-content-body:disabled {
   white-space: nowrap;
 }
 .media-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   color: var(--text-secondary);
   font-size: 12px;
+}
+.media-card-rating {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 브라우즈 앨범 탭: 아티스트별 구획. 바깥 컨테이너는 구획들의 세로 스크롤

@@ -15,6 +15,16 @@ function fmtDuration(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+// 앨범 평균 평점: 평가되지 않은(0점) 곡은 제외하고, 평가된 곡끼리만 평균을 낸다.
+// 한 곡도 평가되지 않았으면 null(빈칸 처리용).
+function albumAverageRating(tracks) {
+  const rated = tracks.filter((t) => t.rating > 0);
+  if (!rated.length) return null;
+  const avg = rated.reduce((sum, t) => sum + t.rating, 0) / rated.length;
+  const rounded = Math.round(avg * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 // field: "all"(기본) | "title" | "album" | "artist" — 검색창 옆 범위 선택에
 // 맞춰 특정 필드만 대상으로 검색할 수 있게 한다.
 function matchesSong(track, q, field = "all") {
@@ -632,7 +642,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // 안에서는 중복 표시하지 않는다.
     const meta = document.createElement("div");
     meta.className = "media-card-meta";
-    meta.textContent = `${group.tracks.length}곡`;
+    const metaCount = document.createElement("span");
+    metaCount.textContent = `${group.tracks.length}곡`;
+    meta.appendChild(metaCount);
+
+    const avgRating = albumAverageRating(group.tracks);
+    if (avgRating != null) {
+      const ratingEl = document.createElement("span");
+      ratingEl.className = "media-card-rating";
+      ratingEl.appendChild(iconSpan("heart-filled", "icon-sm"));
+      ratingEl.appendChild(document.createTextNode(avgRating));
+      meta.appendChild(ratingEl);
+    }
     card.appendChild(meta);
 
     card.addEventListener("click", () => openAlbumDetail(group));
