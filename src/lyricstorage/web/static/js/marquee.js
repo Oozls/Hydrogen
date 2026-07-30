@@ -53,34 +53,74 @@ function stopMarquee(inner) {
 
 // 곡 행의 앨범명/아티스트명은 공간이 부족할 때 제목보다 먼저 희생된다. 앨범+아티스트를
 // 원래 폭 그대로 보여준다고 가정했을 때 제목에게 남는 공간이 앨범+아티스트의 원래 폭
-// 합보다 좁아지면, 제목을 지키기 위해 앨범/아티스트를 통째로 숨긴다. 행마다 텍스트
-// 길이가 다르므로 고정 픽셀 기준(미디어 쿼리)이 아니라 실측 텍스트 폭으로 판단한다.
-// applyMarquee와 마찬가지로 레이아웃이 확정된 뒤(다음 프레임)에 호출해야 하고, 제목
-// 폭 측정에 영향을 주므로 applyMarquee보다 먼저 호출해야 한다.
+// 합보다 좁아지면, 제목을 지키기 위해 앨범/아티스트를 통째로 숨긴다. 그렇지 않고 여유가
+// 있으면(제목을 침범하지 않는 한도 안에서) 칸이 넘치는 만큼 폭을 넓혀 스크롤 없이 보여
+// 준다 — 표처럼 정렬을 유지해야 하므로 이 폭은 행마다 따로가 아니라 목록 전체에서 한
+// 번에 계산해 모든 행에 동일하게 적용한다. 고정 픽셀 기준(미디어 쿼리)이 아니라 실측
+// 텍스트 폭으로 판단한다. applyMarquee와 마찬가지로 레이아웃이 확정된 뒤(다음 프레임)에
+// 호출해야 하고, 제목 폭 측정에 영향을 주므로 applyMarquee보다 먼저 호출해야 한다.
 const LABEL_GAP_PX = 10;
 
+// 앨범/아티스트 칸은 표처럼 목록 전체에서 폭이 맞아야 하므로, 행마다 따로
+// 넓히지 않고 목록 단위로 한 번에 계산해 모든 행에 같은 폭을 적용한다.
 export function applyColumnPriority(rootEl) {
   if (!rootEl) return;
   const rows = rootEl.querySelectorAll(".playlist-row");
+  const entries = [];
   rows.forEach((row) => {
     const label = row.querySelector(".playlist-row-label");
     const album = row.querySelector(".playlist-row-album");
     const artist = row.querySelector(".playlist-row-artist");
     if (!label || (!album && !artist)) return;
 
-    // 실제 텍스트 폭을 다시 재려면 우선 숨김을 풀어야 한다(숨겨진 요소는 scrollWidth가 0).
-    if (album) album.hidden = false;
-    if (artist) artist.hidden = false;
+    // 실제 텍스트 폭을 다시 재려면 우선 숨김/이전 렌더의 폭 조정을 풀어야 한다
+    // (숨겨진 요소는 scrollWidth가 0이고, 리사이즈로 재계산할 때는 지난번에
+    // 넓혀둔 폭이 그대로 남아있어 측정을 왜곡한다).
+    if (album) { album.hidden = false; album.style.flexBasis = ""; }
+    if (artist) { artist.hidden = false; artist.style.flexBasis = ""; }
+    entries.push({ label, album, artist });
+  });
+  if (!entries.length) return;
 
-    const naturalWidth = (album ? album.scrollWidth : 0) + (artist ? artist.scrollWidth : 0);
+  const gapCount = (entries[0].album ? 1 : 0) + (entries[0].artist ? 1 : 0);
+  // 행 구조(체크박스/가사 아이콘/재생시간/레이팅 등)는 모든 행이 동일해서 라벨
+  // 폭도 원래 같아야 하지만, 혹시 모를 오차에 대비해 가장 좁은 값을 기준으로 삼는다.
+  const labelWidth = Math.min(...entries.map((e) => e.label.clientWidth));
+  const safeCombinedWidth = Math.max(0, (labelWidth - LABEL_GAP_PX * gapCount) / 2);
+
+  // 1차: 행마다 "자기 폭 그대로" 보여줬을 때 제목 몫을 침범하는지로 숨김 여부를
+  // 정하고, 숨기지 않는 행들 중 각 칸이 필요로 하는 최대 폭을 구한다.
+  let maxAlbumWidth = 0;
+  let maxArtistWidth = 0;
+  entries.forEach((e) => {
+    const naturalWidth = (e.album ? e.album.scrollWidth : 0) + (e.artist ? e.artist.scrollWidth : 0);
     if (naturalWidth === 0) return;
+    const shouldHide = naturalWidth > safeCombinedWidth;
+    if (e.album) e.album.hidden = shouldHide;
+    if (e.artist) e.artist.hidden = shouldHide;
+    if (shouldHide) return;
+    if (e.album) maxAlbumWidth = Math.max(maxAlbumWidth, e.album.scrollWidth);
+    if (e.artist) maxArtistWidth = Math.max(maxArtistWidth, e.artist.scrollWidth);
+  });
+  if (maxAlbumWidth === 0 && maxArtistWidth === 0) return;
 
-    const gapCount = (album ? 1 : 0) + (artist ? 1 : 0);
-    const titleSpaceIfShown = label.clientWidth - naturalWidth - LABEL_GAP_PX * gapCount;
-    const shouldHide = titleSpaceIfShown < naturalWidth;
+  // 2차: 서로 다른 행에서 뽑힌 최대 폭끼리 더하면 안전 한도를 넘을 수 있으니
+  // (예: 앨범명이 긴 행과 아티스트명이 긴 행이 서로 다름), 넘칠 경우 두 칸을
+  // 같은 비율로 줄여 제목 몫을 지킨다.
+  const desiredCombined = maxAlbumWidth + maxArtistWidth;
+  const scale = desiredCombined > safeCombinedWidth ? safeCombinedWidth / desiredCombined : 1;
+  const albumWidth = Math.floor(maxAlbumWidth * scale);
+  const artistWidth = Math.floor(maxArtistWidth * scale);
 
-    if (album) album.hidden = shouldHide;
-    if (artist) artist.hidden = shouldHide;
+  // 이미 기본 폭(CSS의 flex-basis)에 다 들어가는 칸은 그대로 두고, 목록 전체에서
+  // 실제로 더 넓혀야 하는 칸에만 같은 폭을 적용해 모든 행에서 정렬을 맞춘다.
+  entries.forEach((e) => {
+    if (e.album && !e.album.hidden && albumWidth > e.album.clientWidth) {
+      e.album.style.flexBasis = `${albumWidth}px`;
+    }
+    if (e.artist && !e.artist.hidden && artistWidth > e.artist.clientWidth) {
+      e.artist.style.flexBasis = `${artistWidth}px`;
+    }
   });
 }
 
