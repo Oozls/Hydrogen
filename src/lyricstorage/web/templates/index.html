@@ -177,6 +177,9 @@
               <button id="btn-lyrics-backups" class="icon-btn" title="가사 백업 보기">
                 <span class="icon" style="--icon: url(/static/icons/clock.svg)"></span>
               </button>
+              <button id="btn-lyrics-text-mode" class="icon-btn toggle-btn" title="텍스트(lrc)로 편집">
+                <span class="icon" style="--icon: url(/static/icons/file-text.svg)"></span>
+              </button>
               <div class="spacer"></div>
               <button id="btn-lyrics-detail-edit" class="lyrics-detail-edit-btn" type="button">
                 <span class="icon icon-sm" style="--icon: url(/static/icons/edit-3.svg)"></span>
@@ -197,6 +200,7 @@
                 <tbody id="lyrics-edit-body"></tbody>
               </table>
             </div>
+            <textarea id="lyrics-edit-text-area" class="lyrics-edit-text-area" spellcheck="false" hidden></textarea>
           </div>
         </div>
       </section>

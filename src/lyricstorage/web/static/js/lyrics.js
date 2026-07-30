@@ -38,6 +38,39 @@ function parseMinSecMs(text) {
   return parseInt(minStr, 10) * 60_000 + parseInt(secStr, 10) * 1000 + parseInt(msStr, 10);
 }
 
+// 텍스트(.lrc) 편집 모드 전용 변환. 저장 포맷과 동일한 [mm:ss.xx] 규칙을 그대로
+// 써서, 여기서 만든 텍스트를 파일 탐색기에서 본 실제 .lrc 파일과 그대로 맞바꿀 수 있게 한다.
+function formatLrcTimestamp(ms) {
+  ms = Math.max(0, ms);
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const centis = Math.floor((ms % 1000) / 10);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+}
+
+function linesToLrcText(list) {
+  return list.map((l) => `[${formatLrcTimestamp(l.timestamp_ms)}]${l.text.replace(/\n/g, "\\n")}`).join("\n");
+}
+
+const LRC_LINE_RE = /^\[(\d{1,3}):(\d{2})(?:[.:](\d{1,2}))?\](.*)$/;
+
+function parseLrcText(text) {
+  const result = [];
+  for (const raw of text.split("\n")) {
+    const match = LRC_LINE_RE.exec(raw.trim());
+    if (!match) continue;
+    const [, minStr, secStr, fracStr, content] = match;
+    let ms = parseInt(minStr, 10) * 60_000 + parseInt(secStr, 10) * 1000;
+    if (fracStr) ms += parseInt(fracStr.padEnd(2, "0").slice(0, 2), 10) * 10;
+    const lineText = content.trim().replace(/\\n/g, "\n");
+    if (!lineText) continue;
+    result.push({ timestamp_ms: ms, text: lineText });
+  }
+  result.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+  return result;
+}
+
 export function setupLyrics(player, onLyricsSaved) {
   const tabViewBtn = document.getElementById("tab-lyrics-view-btn");
   const tabEditBtn = document.getElementById("tab-lyrics-edit-btn");
@@ -64,6 +97,9 @@ export function setupLyrics(player, onLyricsSaved) {
   const backupsPreviewBackBtn = document.getElementById("lyrics-backups-preview-back");
   const backupsRestoreBtn = document.getElementById("lyrics-backups-restore");
 
+  const textModeBtn = document.getElementById("btn-lyrics-text-mode");
+  const textArea = document.getElementById("lyrics-edit-text-area");
+
   const lyricsEditorApi = setupLyricsEditor(player);
 
   let trackId = null;
@@ -71,6 +107,7 @@ export function setupLyrics(player, onLyricsSaved) {
   let lines = []; // {timestamp_ms, text, html}
   let lastHighlighted = -2;
   let selectedRow = null;
+  let textModeOn = false;
 
   // 편집 탭이 display:none인 동안엔 scrollHeight가 0으로 읽혀 textarea 높이가
   // 찌그러진 채로 고정된다. 탭이 실제로 보이게 된 "다음" 프레임에 전부 재측정한다.
@@ -212,6 +249,7 @@ export function setupLyrics(player, onLyricsSaved) {
     requestAnimationFrame(() => {
       for (const { grow } of rows) grow();
     });
+    if (textModeOn) textArea.value = linesToLrcText(lines);
   }
 
   async function setTrack(track) {
@@ -243,6 +281,21 @@ export function setupLyrics(player, onLyricsSaved) {
   let saving = false;
   let saveAgainAfter = false;
 
+  function collectTableLines() {
+    const rows = Array.from(editBody.querySelectorAll("tr"));
+    const validLines = [];
+    rows.forEach((tr) => {
+      const timeText = tr.querySelector(".lyrics-time-input").value;
+      const text = tr.querySelector(".lyrics-text-input").value.trim();
+      if (!text) return;
+      const ms = parseMinSecMs(timeText);
+      if (ms === null) return;
+      validLines.push({ timestamp_ms: ms, text });
+    });
+    validLines.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+    return validLines;
+  }
+
   // 편집 중인 textarea/시간칸의 포커스·커서 위치가 날아가지 않도록, 저장은
   // 편집 테이블을 다시 그리지 않는다. 시간 형식이 잘못된 줄은 조용히 건너뛴다.
   async function performSave() {
@@ -253,18 +306,7 @@ export function setupLyrics(player, onLyricsSaved) {
     }
     saving = true;
     try {
-      const rows = Array.from(editBody.querySelectorAll("tr"));
-      const validLines = [];
-      rows.forEach((tr) => {
-        const timeText = tr.querySelector(".lyrics-time-input").value;
-        const text = tr.querySelector(".lyrics-text-input").value.trim();
-        if (!text) return;
-        const ms = parseMinSecMs(timeText);
-        if (ms === null) return;
-        validLines.push({ timestamp_ms: ms, text });
-      });
-
-      validLines.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+      const validLines = textModeOn ? parseLrcText(textArea.value) : collectTableLines();
       const result = await api.saveLyrics(trackId, validLines);
       lines = result.lines;
       renderView();
@@ -312,6 +354,31 @@ export function setupLyrics(player, onLyricsSaved) {
       performSave();
     }
   });
+
+  function setTextMode(on) {
+    textModeOn = on;
+    textModeBtn.classList.toggle("active", on);
+    editScroll.hidden = on;
+    textArea.hidden = !on;
+    addRowBtn.disabled = on;
+    removeRowBtn.disabled = on;
+  }
+
+  textModeBtn.addEventListener("click", () => {
+    if (textModeOn) {
+      lines = parseLrcText(textArea.value);
+      setTextMode(false);
+      renderEdit();
+    } else {
+      textArea.value = linesToLrcText(collectTableLines());
+      setTextMode(true);
+      requestAnimationFrame(() => textArea.focus());
+    }
+    flushSave();
+  });
+
+  textArea.addEventListener("input", () => scheduleAutoSave(1800));
+  textArea.addEventListener("blur", () => flushSave());
 
   detailEditBtn.addEventListener("click", async () => {
     if (!trackId) {
@@ -393,6 +460,7 @@ export function setupLyrics(player, onLyricsSaved) {
     if (!(await confirmDialog("가사를 전체 삭제할까요? 이 작업은 되돌릴 수 없습니다."))) return;
     clearTimeout(autoSaveTimer);
     editBody.innerHTML = "";
+    textArea.value = "";
     selectedRow = null;
     performSave();
   });
