@@ -11,7 +11,7 @@ export function setupTrackInfo(onSaved, onDeleted) {
   const artInput = document.getElementById("track-info-art-input");
   const titleInput = document.getElementById("track-info-title");
   const artistInput = document.getElementById("track-info-artist");
-  const albumInput = document.getElementById("track-info-album");
+  const albumText = document.getElementById("track-info-album");
   const saveBtn = document.getElementById("track-info-save");
   const cancelBtn = document.getElementById("track-info-cancel");
   const deleteBtn = document.getElementById("track-info-delete");
@@ -20,7 +20,6 @@ export function setupTrackInfo(onSaved, onDeleted) {
   let pendingArtFile = null;
   let titleValues = [];
   let artistValues = [];
-  let albumValues = [];
 
   const titleAutocomplete = buildAutocomplete(
     titleInput,
@@ -31,11 +30,6 @@ export function setupTrackInfo(onSaved, onDeleted) {
     artistInput,
     document.getElementById("track-info-artist-suggestions"),
     () => artistValues
-  );
-  const albumAutocomplete = buildAutocomplete(
-    albumInput,
-    document.getElementById("track-info-album-suggestions"),
-    () => albumValues
   );
 
   function showArt(url) {
@@ -58,14 +52,13 @@ export function setupTrackInfo(onSaved, onDeleted) {
     pendingArtFile = null;
     titleInput.value = track.title || "";
     artistInput.value = track.artist || "";
-    albumInput.value = track.album || "";
+    albumText.textContent = track.album || "(앨범 없음)";
     showArt(`${api.artUrl(trackId)}?t=${Date.now()}`);
     dialog.showModal();
 
     const library = await api.getLibrary();
     titleValues = distinctValues(library.tracks, "title");
     artistValues = distinctValues(library.tracks, "artist");
-    albumValues = distinctValues(library.tracks, "album");
   }
 
   artBtn.addEventListener("click", () => artInput.click());
@@ -79,7 +72,6 @@ export function setupTrackInfo(onSaved, onDeleted) {
   cancelBtn.addEventListener("click", () => {
     titleAutocomplete.hide();
     artistAutocomplete.hide();
-    albumAutocomplete.hide();
     dialog.close();
   });
 
@@ -97,7 +89,6 @@ export function setupTrackInfo(onSaved, onDeleted) {
       await api.deleteTrackEntirely(deletedId);
       titleAutocomplete.hide();
       artistAutocomplete.hide();
-      albumAutocomplete.hide();
       dialog.close();
       onDeleted(deletedId);
     } catch (err) {
@@ -116,7 +107,6 @@ export function setupTrackInfo(onSaved, onDeleted) {
       const updated = await api.updateTrackMetadata(trackId, {
         title,
         artist: artistInput.value.trim(),
-        album: albumInput.value.trim(),
       });
       if (pendingArtFile) {
         await api.uploadTrackArt(trackId, pendingArtFile);

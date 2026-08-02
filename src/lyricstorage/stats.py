@@ -5,10 +5,16 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from lyricstorage import albums as albums_repo
 from lyricstorage import storage
 
 PERIODS = {"day", "week", "month"}
 GROUPS = {"track", "artist", "album"}
+
+
+def split_artists(artist: str) -> list[str]:
+    """곡 아티스트 문자열을 쉼표로 나눠 여러 아티스트로 분리한다(예: "A, B" -> ["A", "B"])."""
+    return [part.strip() for part in (artist or "").split(",") if part.strip()]
 
 
 def log_play(
@@ -79,6 +85,12 @@ def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dic
         listened_ms = entry.get("listened_ms") or 0
         played_at_str = entry["played_at"]
 
+        def bump(bucket: dict[str, Any]) -> None:
+            bucket["count"] += 1
+            bucket["listened_ms"] += listened_ms
+            if played_at_str > bucket["last_played_at"]:
+                bucket["last_played_at"] = played_at_str
+
         if group == "track":
             key = entry.get("track_id")
             bucket = buckets.setdefault(
@@ -96,9 +108,15 @@ def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dic
             bucket["title"] = title
             bucket["artist"] = artist
             bucket["album"] = album
+            bump(bucket)
         elif group == "artist":
-            key = artist or "(아티스트 없음)"
-            bucket = buckets.setdefault(key, {"artist": key, "count": 0, "listened_ms": 0, "last_played_at": played_at_str})
+            # 한 곡에 아티스트가 여럿(쉼표 구분)이면 각 아티스트에게 개별로 집계한다.
+            names = list(dict.fromkeys(split_artists(artist))) or ["(아티스트 없음)"]
+            for name in names:
+                bucket = buckets.setdefault(
+                    name, {"artist": name, "count": 0, "listened_ms": 0, "last_played_at": played_at_str}
+                )
+                bump(bucket)
         else:  # album
             album_label = album or "(앨범 없음)"
             key = (album_label, artist)
@@ -113,17 +131,20 @@ def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dic
                     "last_played_at": played_at_str,
                 },
             )
-
-        bucket["count"] += 1
-        bucket["listened_ms"] += listened_ms
-        if played_at_str > bucket["last_played_at"]:
-            bucket["last_played_at"] = played_at_str
+            bump(bucket)
 
     # "곡" 그룹은 재생 횟수가 많은 순으로 보여주되, 횟수가 같으면 최근에 들은 곡을 먼저 보여준다.
     sort_key = (lambda b: (b["count"], b["last_played_at"])) if group == "track" else (lambda b: b["count"])
     items = sorted(buckets.values(), key=sort_key, reverse=True)
     if limit is not None:
         items = items[:limit]
+    if group == "album":
+        # 재생 이력엔 재생 당시의 앨범명만 남아있으므로, 현재 앨범 객체를 이름으로
+        # 찾아 album_id를 붙여준다(프런트가 전용 표지를 가져오려면 필요) — 그
+        # 사이 앨범이 이름 변경/삭제됐으면 못 찾을 수 있고, 그때는 표지 없이 보여준다.
+        for item in items:
+            album = albums_repo.find_album_by_name(item["album"])
+            item["album_id"] = album.id if album else None
     return {
         "period": period,
         "group": group,

@@ -1177,6 +1177,53 @@ input[type="range"]:hover::-moz-range-thumb {
 .track-info-dialog {
   width: 420px;
 }
+.album-art-prompt-dialog {
+  width: 460px;
+}
+.album-art-prompt-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.album-art-prompt-list {
+  max-height: 50vh;
+  max-height: 50dvh;
+}
+.album-art-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 1px 2px;
+}
+.album-art-prompt-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.album-art-prompt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-art-prompt-artist {
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-art-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.album-art-prompt-done {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
 .file-content-dialog {
   width: 80vw;
   max-width: 900px;
@@ -1525,6 +1572,16 @@ textarea.file-content-body:disabled {
 .stats-track-body[hidden] {
   display: none;
 }
+.stats-artist-detail-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stats-artist-detail-panel[hidden] {
+  display: none;
+}
 /* 곡 목록 + 페이지네이션을 한 열로 묶어 TOP3 위젯과 나란한 flex 항목으로 만든다.
    페이지네이션이 이 열 안에 있어야 가운데 정렬 기준이 TOP3 폭을 포함한 전체가
    아니라 곡 목록 폭만이 된다. */
@@ -1712,6 +1769,38 @@ textarea.file-content-body:disabled {
   gap: 2px;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+/* 아티스트 탭(브라우즈/재생 통계 공용): 앨범 커버 최대 4개로 채운 콜라주.
+   2개는 좌우 반반, 3개는 위 두 칸(좌/우) + 아래 한 칸(전체 폭), 4개는 2x2 사분면. */
+.artist-card-art-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 1px;
+}
+.artist-card-art-grid.count-2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+.artist-card-art-grid.count-3,
+.artist-card-art-grid.count-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.artist-card-art-grid.count-3 .artist-card-art-cell:nth-child(3) {
+  grid-column: 1 / span 2;
+}
+.artist-card-art-cell {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+.artist-card-art-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* 브라우즈 앨범 탭: 아티스트별 구획. 바깥 컨테이너는 구획들의 세로 스크롤

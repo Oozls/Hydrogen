@@ -108,8 +108,18 @@ export const api = {
   audioUrl: (trackId) => `/api/tracks/${trackId}/audio`,
   artUrl: (trackId) => `/api/tracks/${trackId}/art`,
   downloadUrl: (trackId) => `/api/tracks/${trackId}/download`,
-  albumDownloadUrl: (album, artist) =>
-    `/api/albums/download?album=${encodeURIComponent(album || "")}&artist=${encodeURIComponent(artist || "")}`,
+  getAlbums: () => request("GET", "/api/albums"),
+  getAlbum: (albumId) => request("GET", `/api/albums/${albumId}`),
+  updateAlbum: (albumId, { name, artist, year }) =>
+    request("PUT", `/api/albums/${albumId}`, { json: { name, artist, year } }),
+  uploadAlbumArt: (albumId, file) => {
+    const formData = new FormData();
+    formData.append("art", file);
+    return request("POST", `/api/albums/${albumId}/art`, { formData });
+  },
+  albumArtUrl: (albumId) => `/api/albums/${albumId}/art`,
+  useTrackArtForAlbum: (albumId) => request("POST", `/api/albums/${albumId}/art/from-track`),
+  albumDownloadUrl: (albumId) => `/api/albums/${albumId}/download`,
   logPlay: (trackId, title, artist, album, listenedMs) =>
     request("POST", "/api/stats/plays", {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },
@@ -123,12 +133,4 @@ export const api = {
     ),
   getTodayWeights: () => request("GET", "/api/recommendations/weights"),
   updateTodayWeights: (patch) => request("PUT", "/api/recommendations/weights", { json: patch }),
-  updateAlbum: (album, artist, newAlbum, artFile) => {
-    const formData = new FormData();
-    formData.append("album", album);
-    formData.append("artist", artist);
-    formData.append("new_album", newAlbum);
-    if (artFile) formData.append("art", artFile);
-    return request("POST", "/api/albums/update", { formData });
-  },
 };

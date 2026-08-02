@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
+from lyricstorage import albums as albums_repo
+from lyricstorage import storage
+from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel, read_album_art
 
 _OLD_GLOBAL_PLAYLIST_NAME = "기본 플레이리스트"
 
@@ -37,12 +39,51 @@ def _migrate_old_global_name() -> None:
     old_path.unlink(missing_ok=True)
 
 
+def _migrate_track_albums() -> None:
+    """앨범을 (album, artist) 문자열 쌍이 아닌 독립된 Album 객체로 승격시킨다.
+    data/albums.json이 이미 있으면(=이미 마이그레이션됨) 아무 것도 하지 않는다."""
+    if storage.albums_path().exists():
+        return
+
+    playlist = load_playlist(GLOBAL_PLAYLIST_NAME)
+    if playlist is None:
+        storage.albums_path().write_text("[]", encoding="utf-8")
+        return
+
+    album_id_by_path: dict[str, str] = {}
+    album_id_by_key: dict[tuple[str, str], str] = {}
+    for track in playlist.tracks:
+        key = (track.album, track.artist)
+        album_id = album_id_by_key.get(key)
+        if album_id is None:
+            album = albums_repo.create_album(name=track.album, artist=track.artist)
+            art_bytes = read_album_art(track.path)
+            if art_bytes:
+                ext = albums_repo.sniff_image_ext(art_bytes)
+                albums_repo.write_album_cover(album.id, art_bytes, ext)
+            album_id = album.id
+            album_id_by_key[key] = album_id
+        album_id_by_path[track.path] = album_id
+
+    for _name, path in PlaylistModel.list_saved_names():
+        changed_playlist = PlaylistModel.load(path)
+        changed = False
+        for track in changed_playlist.tracks:
+            album_id = album_id_by_path.get(track.path)
+            if album_id and track.album_id != album_id:
+                track.album_id = album_id
+                changed = True
+        if changed:
+            changed_playlist.save()
+
+
 def load_or_create_global() -> PlaylistModel:
     _migrate_old_global_name()
     playlist = load_playlist(GLOBAL_PLAYLIST_NAME)
     if playlist is None:
         playlist = PlaylistModel(GLOBAL_PLAYLIST_NAME)
         playlist.save()
+    _migrate_track_albums()
     return playlist
 
 
@@ -54,6 +95,26 @@ def update_track_in_all_playlists(track_path: str, **fields) -> None:
         changed = False
         for track in playlist.tracks:
             if track.path == track_path:
+                for key, value in fields.items():
+                    setattr(track, key, value)
+                changed = True
+        if changed:
+            playlist.save()
+
+
+def find_tracks_by_album_id(album_id: str) -> list:
+    playlist = load_or_create_global()
+    return [t for t in playlist.tracks if t.album_id == album_id]
+
+
+def update_tracks_by_album_id(album_id: str, **fields) -> None:
+    """앨범명이 바뀌었을 때, 그 앨범에 속한 모든 트랙 사본(전체 플레이리스트)의
+    캐시된 필드(예: album)를 일괄 갱신한다."""
+    for _name, path in PlaylistModel.list_saved_names():
+        playlist = PlaylistModel.load(path)
+        changed = False
+        for track in playlist.tracks:
+            if track.album_id == album_id:
                 for key, value in fields.items():
                     setattr(track, key, value)
                 changed = True

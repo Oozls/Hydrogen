@@ -27,6 +27,7 @@ from typing import Any
 
 from lyricstorage import storage
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
+from lyricstorage.stats import split_artists
 
 DEFAULT_LIMIT = 8
 
@@ -107,9 +108,13 @@ def _play_counts(history: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
-def _affinity_by(history: list[dict[str, Any]], key: str, *, now: datetime | None = None) -> dict[str, float]:
+def _affinity_by(
+    history: list[dict[str, Any]], key: str, *, now: datetime | None = None, split: bool = False
+) -> dict[str, float]:
     """아티스트/앨범별 선호도. 재생일이 오래될수록 AFFINITY_HALF_LIFE_DAYS마다
-    영향력이 절반으로 줄어드는 지수 감쇠를 적용해, 최근 취향 변화를 더 잘 따라간다."""
+    영향력이 절반으로 줄어드는 지수 감쇠를 적용해, 최근 취향 변화를 더 잘 따라간다.
+    split=True(아티스트 전용)면 "A, B"처럼 쉼표로 묶인 값을 여러 이름으로 나눠
+    각각에 같은 가중치를 더한다(한 곡에 아티스트가 여럿이어도 개별로 선호도가 쌓이게)."""
     now = now or datetime.now()
     counts: dict[str, float] = {}
     for entry in history:
@@ -124,7 +129,9 @@ def _affinity_by(history: list[dict[str, Any]], key: str, *, now: datetime | Non
                 weight = 0.5 ** (days_ago / AFFINITY_HALF_LIFE_DAYS)
             except ValueError:
                 pass
-        counts[value] = counts.get(value, 0.0) + weight
+        names = list(dict.fromkeys(split_artists(value))) if split else [value]
+        for name in names:
+            counts[name] = counts.get(name, 0.0) + weight
     return counts
 
 
@@ -315,7 +322,7 @@ def pick_today_songs(
 
     history = storage.load_play_history()
     play_counts = _play_counts(history)
-    artist_affinity = _affinity_by(history, "artist")
+    artist_affinity = _affinity_by(history, "artist", split=True)
     album_affinity = _affinity_by(history, "album")
     max_artist = max(artist_affinity.values(), default=0) or 1
     max_album = max(album_affinity.values(), default=0) or 1
@@ -345,6 +352,14 @@ def pick_today_songs(
     if not candidates:
         candidates = ordered_tracks
 
+    def artist_affinity_score(track_artist: str) -> float:
+        # 아티스트가 여럿(쉼표 구분)이면 각자의 선호도 평균을 쓴다 — 공동 작업곡이
+        # 유명 아티스트 한 명 덕에 과대평가되지 않게.
+        names = split_artists(track_artist)
+        if not names:
+            return 0.0
+        return sum(artist_affinity.get(name, 0) for name in names) / len(names) / max_artist
+
     def features(track: dict[str, Any]) -> dict[str, float]:
         track_id = track.get("track_id") or ""
         pc = play_counts.get(track_id, 0)
@@ -352,7 +367,7 @@ def pick_today_songs(
         is_explicit = bool(track.get("has_lyrics")) or track_id in explicit_ids
         return {
             "rating": (track.get("rating") or 0) / 5,
-            "artist": artist_affinity.get(track.get("artist") or "", 0) / max_artist,
+            "artist": artist_affinity_score(track.get("artist") or ""),
             "album": album_affinity.get(track.get("album") or "", 0) / max_album,
             "never_played": 1.0 if pc == 0 else 0.0,
             "explicit": 1.0 if is_explicit else 0.0,
@@ -379,15 +394,16 @@ def pick_today_songs(
         current_weights = []
         for t in pool:
             w = score_by_id[t["track_id"]]
-            w *= DIVERSITY_ARTIST_PENALTY ** picked_artist_counts.get(t.get("artist") or "", 0)
+            # 아티스트가 여럿이면 이미 뽑힌 곡과 하나라도 겹칠 때마다 페널티를 곱한다.
+            for name in split_artists(t.get("artist") or ""):
+                w *= DIVERSITY_ARTIST_PENALTY ** picked_artist_counts.get(name, 0)
             w *= DIVERSITY_ALBUM_PENALTY ** picked_album_counts.get(t.get("album") or "", 0)
             current_weights.append(max(0.001, w))
         chosen = rng.choices(pool, weights=current_weights, k=1)[0]
         picked.append(chosen)
         pool.remove(chosen)
-        artist = chosen.get("artist") or ""
-        if artist:
-            picked_artist_counts[artist] = picked_artist_counts.get(artist, 0) + 1
+        for name in list(dict.fromkeys(split_artists(chosen.get("artist") or ""))):
+            picked_artist_counts[name] = picked_artist_counts.get(name, 0) + 1
         album = chosen.get("album") or ""
         if album:
             picked_album_counts[album] = picked_album_counts.get(album, 0) + 1

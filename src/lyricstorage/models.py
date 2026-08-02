@@ -13,6 +13,7 @@ from mutagen.id3 import ID3, ID3NoHeaderError, APIC, TALB, TIT2, TPE1
 from mutagen.mp4 import MP4, MP4Cover
 from mutagen.wave import WAVE
 
+from lyricstorage import albums as albums_repo
 from lyricstorage import lyrics_io, storage
 
 GLOBAL_PLAYLIST_NAME = "글로벌 플레이리스트"
@@ -138,15 +139,18 @@ def write_album_art(path: str, image_bytes: bytes, mime: str) -> None:
 class Track:
     path: str
     title: str = ""
-    artist: str = ""
+    artist: str = ""  # 곡 아티스트(앨범 아티스트와 별개)
     album: str = ""
+    album_id: str = ""
     duration_ms: int = 0
     rating: float = 0.0
 
     @classmethod
     def from_file(cls, path: str) -> "Track":
         tags = _read_tags(path)
-        return cls(path=str(path), **tags)
+        track = cls(path=str(path), **tags)
+        track.album_id = albums_repo.get_or_create_album(track.album, track.artist).id
+        return track
 
     @property
     def has_lyrics(self) -> bool:
@@ -164,6 +168,7 @@ class Track:
             title=data.get("title", ""),
             artist=data.get("artist", ""),
             album=data.get("album", ""),
+            album_id=data.get("album_id", ""),
             duration_ms=data.get("duration_ms", 0),
             rating=float(data.get("rating", 0) or 0),
         )

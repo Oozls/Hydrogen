@@ -93,7 +93,8 @@
         </div>
         <div class="stats-controls-row">
           <div class="tabs" id="browse-tabs">
-            <button class="tab-btn active" data-mode="album" type="button">앨범</button>
+            <button class="tab-btn active" data-mode="artist" type="button">아티스트</button>
+            <button class="tab-btn" data-mode="album" type="button">앨범</button>
             <button class="tab-btn" data-mode="song" type="button">곡</button>
           </div>
           <input type="text" id="browse-search" placeholder="검색..." />
@@ -116,6 +117,9 @@
         </div>
         <input type="file" id="browse-file-input" accept=".mp3,.wav,.m4a" multiple hidden />
         <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
+        <div id="browse-artists-panel" class="tab-panel active">
+          <div id="browse-artists-list" class="card-grid"></div>
+        </div>
         <div id="browse-songs-panel" class="tab-panel">
           <div class="stats-track-body">
             <div class="stats-track-list-col">
@@ -133,8 +137,8 @@
             <div id="browse-songs-top3" class="stats-track-top3" hidden></div>
           </div>
         </div>
-        <div id="browse-albums-panel" class="tab-panel active">
-          <div id="browse-albums-list" class="album-sections"></div>
+        <div id="browse-albums-panel" class="tab-panel">
+          <div id="browse-albums-list" class="card-grid"></div>
         </div>
         <div id="browse-album-detail-panel" class="tab-panel">
           <div class="album-detail-header">
@@ -254,6 +258,17 @@
             </div>
           </div>
           <div id="stats-track-top3" class="stats-track-top3" hidden></div>
+        </div>
+        <div id="stats-artist-detail-panel" class="stats-artist-detail-panel" hidden>
+          <div class="album-detail-header">
+            <button id="btn-stats-artist-detail-back" class="icon-btn" title="뒤로">
+              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+            </button>
+            <div class="album-detail-text">
+              <div id="stats-artist-detail-title" class="track-title"></div>
+            </div>
+          </div>
+          <div id="stats-artist-detail-list" class="album-sections"></div>
         </div>
       </div>
 
@@ -466,10 +481,10 @@
       <input type="text" id="track-info-artist" autocomplete="off" />
       <ul class="autocomplete-list" id="track-info-artist-suggestions" hidden></ul>
     </label>
-    <label class="track-info-field">앨범
-      <input type="text" id="track-info-album" autocomplete="off" />
-      <ul class="autocomplete-list" id="track-info-album-suggestions" hidden></ul>
-    </label>
+    <div class="track-info-field">
+      앨범
+      <div id="track-info-album" class="album-info-readonly"></div>
+    </div>
     <div class="dialog-actions">
       <button id="track-info-delete" class="danger" type="button">완전 삭제</button>
       <div class="spacer"></div>
@@ -522,14 +537,29 @@
     <label class="track-info-field">앨범명
       <input type="text" id="album-info-album" autocomplete="off" />
     </label>
-    <div class="track-info-field">
-      아티스트
-      <div id="album-info-artist" class="album-info-readonly"></div>
-    </div>
+    <label class="track-info-field">앨범 아티스트
+      <input type="text" id="album-info-artist" autocomplete="off" />
+    </label>
+    <label class="track-info-field">연도
+      <input type="number" id="album-info-year" autocomplete="off" />
+    </label>
     <div class="dialog-actions">
       <button id="album-info-cancel" type="button">취소</button>
       <button id="album-info-save" class="primary" type="button">저장</button>
     </div>
+  </dialog>
+
+  <dialog id="album-art-prompt-dialog" class="library-picker-dialog album-art-prompt-dialog">
+    <div class="library-picker-header">
+      <h3>앨범 표지 설정</h3>
+      <div class="spacer"></div>
+      <button id="album-art-prompt-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <p class="album-art-prompt-desc">방금 추가한 곡 중 표지가 없는 앨범이 있습니다. 곡 내부 표지를 사용하거나 직접 업로드하세요.</p>
+    <ul id="album-art-prompt-list" class="playlist-list album-art-prompt-list"></ul>
+    <input type="file" id="album-art-prompt-file-input" accept="image/png,image/jpeg" hidden />
   </dialog>
 
   <dialog id="lyrics-editor-dialog" class="library-picker-dialog library-picker-dialog-wide lyrics-editor-dialog">

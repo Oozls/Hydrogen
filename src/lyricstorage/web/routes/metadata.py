@@ -6,6 +6,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
+from lyricstorage import albums as albums_repo
 from lyricstorage import applog
 from lyricstorage.models import write_album_art, write_tags
 from lyricstorage.web import playlist_repo
@@ -27,20 +28,17 @@ def update_metadata(track_id: str):
     data = request.get_json(silent=True) or {}
     title = str(data.get("title") or "").strip()
     artist = str(data.get("artist") or "").strip()
-    album = str(data.get("album") or "").strip()
     if not title:
         return jsonify({"error": "제목을 입력하세요."}), 400
 
     try:
-        write_tags(track.path, title=title, artist=artist, album=album)
+        write_tags(track.path, title=title, artist=artist, album=track.album)
     except OSError as exc:
         return jsonify({"error": f"파일에 태그를 쓰지 못했습니다: {exc}"}), 500
 
-    playlist_repo.update_track_in_all_playlists(
-        track.path, title=title, artist=artist, album=album
-    )
-    track.title, track.artist, track.album = title, artist, album
-    applog.log_info("ACTION", f"곡 정보 수정: {track_id} -> title={title}, artist={artist}, album={album}")
+    playlist_repo.update_track_in_all_playlists(track.path, title=title, artist=artist)
+    track.title, track.artist = title, artist
+    applog.log_info("ACTION", f"곡 정보 수정: {track_id} -> title={title}, artist={artist}(곡 아티스트)")
     return jsonify(track_to_json(track))
 
 
@@ -82,7 +80,12 @@ def update_metadata_batch():
     if "artist" in data:
         fields["artist"] = str(data.get("artist") or "").strip()
     if "album" in data:
-        fields["album"] = str(data.get("album") or "").strip()
+        # "album"은 문자열 오버라이트가 아니라 앨범 이동을 의미한다: 같은 이름의
+        # 앨범이 있으면 그 앨범으로, 없으면 새 앨범(아티스트 미지정)을 만들어 옮긴다.
+        album_name = str(data.get("album") or "").strip()
+        album_target = albums_repo.get_or_create_album(album_name)
+        fields["album"] = album_target.name
+        fields["album_id"] = album_target.id
     if not fields:
         return jsonify({"error": "적용할 항목을 선택하세요."}), 400
 

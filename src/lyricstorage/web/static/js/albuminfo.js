@@ -9,12 +9,12 @@ export function setupAlbumInfo(onSaved) {
   const artBtn = document.getElementById("album-info-art-btn");
   const artInput = document.getElementById("album-info-art-input");
   const albumInput = document.getElementById("album-info-album");
-  const artistText = document.getElementById("album-info-artist");
+  const artistInput = document.getElementById("album-info-artist");
+  const yearInput = document.getElementById("album-info-year");
   const saveBtn = document.getElementById("album-info-save");
   const cancelBtn = document.getElementById("album-info-cancel");
 
-  let originalAlbum = null;
-  let originalArtist = null;
+  let currentAlbumId = null;
   let pendingArtFile = null;
 
   function showArt(url) {
@@ -33,12 +33,12 @@ export function setupAlbumInfo(onSaved) {
   }
 
   function open(group) {
-    originalAlbum = group.album;
-    originalArtist = group.artist;
+    currentAlbumId = group.id;
     pendingArtFile = null;
     albumInput.value = group.album || "";
-    artistText.textContent = group.artist || "(아티스트 없음)";
-    showArt(`${api.artUrl(group.track_id)}?t=${Date.now()}`);
+    artistInput.value = group.artist || "";
+    yearInput.value = group.year || "";
+    showArt(`${api.albumArtUrl(group.id)}?t=${Date.now()}`);
 
     dialog.showModal();
   }
@@ -54,13 +54,18 @@ export function setupAlbumInfo(onSaved) {
   cancelBtn.addEventListener("click", () => dialog.close());
 
   saveBtn.addEventListener("click", async () => {
-    const newAlbum = albumInput.value.trim();
-    if (!newAlbum) {
+    const name = albumInput.value.trim();
+    if (!name) {
       await alertDialog("앨범명을 입력하세요.");
       return;
     }
+    const artist = artistInput.value.trim();
+    const year = yearInput.value.trim() ? Number(yearInput.value.trim()) : null;
     try {
-      const result = await api.updateAlbum(originalAlbum, originalArtist, newAlbum, pendingArtFile);
+      const result = await api.updateAlbum(currentAlbumId, { name, artist, year });
+      if (pendingArtFile) {
+        await api.uploadAlbumArt(currentAlbumId, pendingArtFile);
+      }
       dialog.close();
       onSaved(result.tracks);
     } catch (err) {

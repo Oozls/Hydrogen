@@ -2,6 +2,17 @@ import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
+import { fillArtistArt } from "./artistArt.js";
+
+// 곡 아티스트 문자열을 쉼표로 나눠 여러 아티스트로 분리한다(예: "A, B" -> ["A", "B"]).
+// stats.py의 split_artists와 동일한 규칙 — 재생 순위 집계와 아티스트 상세 화면이
+// 같은 기준으로 아티스트를 나눠야 하기 때문.
+function splitArtists(artist) {
+  return (artist || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 const TRACK_PAGE_SIZE_FALLBACK = 50;
@@ -70,6 +81,10 @@ export function setupStats(player, onOpenAlbum) {
   const trackPrevPageBtn = document.getElementById("stats-track-prev-page");
   const trackNextPageBtn = document.getElementById("stats-track-next-page");
   const trackPageLabel = document.getElementById("stats-track-page-label");
+  const artistDetailPanel = document.getElementById("stats-artist-detail-panel");
+  const artistDetailTitleEl = document.getElementById("stats-artist-detail-title");
+  const artistDetailListEl = document.getElementById("stats-artist-detail-list");
+  const artistDetailBackBtn = document.getElementById("btn-stats-artist-detail-back");
 
   let period = "day";
   let group = "track";
@@ -83,8 +98,31 @@ export function setupStats(player, onOpenAlbum) {
   // 가사 패널이 열려 있으면 통계 화면의 TOP 3 앨범 패널은 숨긴다(공간 확보).
   let lyricsActive = false;
   let lastAlbumItems = [];
+  // 아티스트 그룹 카드의 콜라주 표지를 위해, 곡 아티스트별로 그 아티스트가
+  // 참여한(쉼표 분리 기준) 곡들이 속한 앨범 목록을 미리 계산해둔다.
+  let artistAlbumsMap = new Map();
+  let artistDetailArtist = null;
+  let artistDetailTracks = [];
+
+  // 곡 아티스트별 소속 앨범 맵을 새로 계산한다(아티스트 카드 콜라주/상세 화면
+  // 공용). 라이브러리 스냅샷 전체가 필요하므로 아티스트 그룹을 볼 때만 부른다.
+  async function loadArtistAlbumsMap() {
+    const [library, albumsResult] = await Promise.all([api.getLibrary(), api.getAlbums()]);
+    const albumById = new Map(albumsResult.albums.map((a) => [a.id, a]));
+    const map = new Map();
+    for (const track of library.tracks) {
+      for (const name of splitArtists(track.artist)) {
+        if (!map.has(name)) map.set(name, new Map());
+        if (track.album_id && albumById.has(track.album_id)) {
+          map.get(name).set(track.album_id, albumById.get(track.album_id));
+        }
+      }
+    }
+    artistAlbumsMap = new Map([...map.entries()].map(([name, albums]) => [name, [...albums.values()]]));
+  }
 
   async function refresh() {
+    closeArtistDetail();
     if (group === "track") {
       // 곡 목록과 오른쪽 TOP 3 앨범은 같은 기간을 대상으로 하는 별개의 집계라
       // 병렬로 받아온다(둘 다 이미 있는 /api/stats/top 엔드포인트 재사용).
@@ -108,6 +146,7 @@ export function setupStats(player, onOpenAlbum) {
       trackBodyEl.hidden = true;
       trackPagination.hidden = true;
       listEl.style.display = "";
+      if (group === "artist") await loadArtistAlbumsMap();
       renderList(data.items, group);
     }
   }
@@ -123,12 +162,12 @@ export function setupStats(player, onOpenAlbum) {
 
     const artWrap = document.createElement("div");
     artWrap.className = "media-card-art-wrap";
-    if (item.track_id) {
+    if (item.album_id) {
       const stopSpin = showArtSpinner(artWrap);
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
-      img.src = api.artUrl(item.track_id);
+      img.src = api.albumArtUrl(item.album_id);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();
@@ -371,15 +410,22 @@ export function setupStats(player, onOpenAlbum) {
   function buildCard(item, i, group) {
     const card = document.createElement("div");
     card.className = "media-card";
+    if (group === "artist") {
+      card.classList.add("media-card-clickable");
+      card.title = "이 아티스트가 참여한 곡 보기";
+      card.addEventListener("click", () => openArtistDetail(item.artist));
+    }
 
     const artWrap = document.createElement("div");
     artWrap.className = "media-card-art-wrap";
-    if (group !== "artist" && item.track_id) {
+    if (group === "artist") {
+      fillArtistArt(artWrap, artistAlbumsMap.get(item.artist) || []);
+    } else if (group === "album" && item.album_id) {
       const stopSpin = showArtSpinner(artWrap);
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
-      img.src = api.artUrl(item.track_id);
+      img.src = api.albumArtUrl(item.album_id);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();
@@ -428,6 +474,112 @@ export function setupStats(player, onOpenAlbum) {
     requestAnimationFrame(() => applyMarquee(listEl));
   }
 
+  function buildArtistDetailRow(track) {
+    const li = document.createElement("li");
+    li.className = "playlist-row";
+    li.dataset.trackId = track.track_id;
+    const isPlaying = player.currentTrack && player.currentTrack.track_id === track.track_id;
+    if (isPlaying) li.classList.add("playing");
+
+    const label = document.createElement("span");
+    label.className = "playlist-row-label";
+    label.appendChild(
+      createMarqueeClip(
+        "playlist-row-title-clip",
+        "playlist-row-title",
+        (isPlaying ? "▶ " : "") + (track.title || track.track_id)
+      )
+    );
+    const albumClip = createMarqueeClip("playlist-row-album", "", track.album || "");
+    if (track.album && onOpenAlbum) {
+      albumClip.classList.add("playlist-row-album-link");
+      albumClip.title = "앨범 보기";
+      // 행 자체의 클릭은 재생이라, 앨범명 클릭이 행까지 버블링돼 곧바로
+      // 재생까지 겹쳐 실행되지 않도록 막는다.
+      albumClip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onOpenAlbum(track);
+      });
+    }
+    label.appendChild(albumClip);
+    label.appendChild(createMarqueeClip("playlist-row-artist", "", track.artist || ""));
+    li.appendChild(label);
+
+    const lyricsFlag = iconSpan("mic", "icon-sm accent");
+    if (!track.has_lyrics) lyricsFlag.style.visibility = "hidden";
+    li.appendChild(lyricsFlag);
+
+    const duration = document.createElement("span");
+    duration.className = "playlist-row-duration";
+    duration.textContent = fmtDuration(track.duration_ms);
+    li.appendChild(duration);
+
+    li.appendChild(createRatingBadge(track.rating));
+
+    li.addEventListener("click", () => {
+      const index = artistDetailTracks.findIndex((t) => t.track_id === track.track_id);
+      if (index < 0) return;
+      player.setPlaylist({ name: artistDetailArtist || "아티스트", tracks: artistDetailTracks });
+      player.playIndex(index);
+    });
+    return li;
+  }
+
+  // 곡 아티스트 카드를 클릭하면, 그 아티스트가 참여한(쉼표로 나열된 공동 작업곡
+  // 포함) 모든 곡을 앨범별로 묶어 곡 목록으로 보여준다.
+  async function openArtistDetail(artistName) {
+    const library = await api.getLibrary();
+    const matched = library.tracks.filter((t) => splitArtists(t.artist).includes(artistName));
+
+    const byAlbum = new Map();
+    for (const track of matched) {
+      const key = track.album_id || "";
+      if (!byAlbum.has(key)) byAlbum.set(key, { album: track.album || "(앨범 없음)", tracks: [] });
+      byAlbum.get(key).tracks.push(track);
+    }
+    const sections = [...byAlbum.values()].sort((a, b) => (a.album || "").localeCompare(b.album || "", "ko"));
+
+    artistDetailArtist = artistName;
+    artistDetailTracks = sections.flatMap((s) => s.tracks);
+
+    artistDetailTitleEl.textContent = artistName || "(아티스트 없음)";
+    artistDetailListEl.innerHTML = "";
+    if (!sections.length) {
+      const empty = document.createElement("div");
+      empty.className = "stats-empty";
+      empty.textContent = "참여한 곡을 찾을 수 없습니다.";
+      artistDetailListEl.appendChild(empty);
+    } else {
+      sections.forEach((section) => {
+        const sectionEl = document.createElement("div");
+        sectionEl.className = "album-section";
+        const header = document.createElement("div");
+        header.className = "album-section-header";
+        header.textContent = section.album;
+        sectionEl.appendChild(header);
+        const list = document.createElement("ul");
+        list.className = "playlist-list";
+        section.tracks.forEach((t) => list.appendChild(buildArtistDetailRow(t)));
+        sectionEl.appendChild(list);
+        artistDetailListEl.appendChild(sectionEl);
+      });
+    }
+
+    listEl.style.display = "none";
+    artistDetailPanel.hidden = false;
+    requestAnimationFrame(() => applyMarquee(artistDetailListEl));
+  }
+
+  function closeArtistDetail() {
+    if (artistDetailPanel.hidden) return;
+    artistDetailPanel.hidden = true;
+    artistDetailArtist = null;
+    artistDetailTracks = [];
+    if (group !== "track") listEl.style.display = "";
+  }
+
+  artistDetailBackBtn.addEventListener("click", closeArtistDetail);
+
   function switchTabs(tabsEl, dataKey, onSelect) {
     tabsEl.addEventListener("click", (e) => {
       const btn = e.target.closest(".tab-btn");
@@ -466,7 +618,10 @@ export function setupStats(player, onOpenAlbum) {
     clearTimeout(marqueeResizeTimer);
     marqueeResizeTimer = setTimeout(() => {
       if (!panelEl.classList.contains("active")) return;
-      if (group === "track") {
+      if (!artistDetailPanel.hidden) {
+        applyColumnPriority(artistDetailListEl);
+        applyMarquee(artistDetailListEl);
+      } else if (group === "track") {
         applyColumnPriority(trackListEl);
         applyMarquee(trackListEl);
         recalcTrackPageSize();

@@ -63,6 +63,16 @@ def logs_dir() -> Path:
     return path
 
 
+def album_art_dir() -> Path:
+    path = app_data_dir() / "album_art"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def albums_path() -> Path:
+    return app_data_dir() / "albums.json"
+
+
 def settings_path() -> Path:
     return app_data_dir() / "settings.json"
 

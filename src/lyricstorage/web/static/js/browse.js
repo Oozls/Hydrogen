@@ -7,6 +7,8 @@ import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.
 import { openImageLightbox } from "./imageLightbox.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
+import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
+import { fillArtistArt } from "./artistArt.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -64,7 +66,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const searchInput = document.getElementById("browse-search");
   const searchFieldSelect = document.getElementById("browse-search-field");
   const searchFieldTitleOption = searchFieldSelect.querySelector('option[value="title"]');
+  const searchFieldAlbumOption = searchFieldSelect.querySelector('option[value="album"]');
   const tabsEl = document.getElementById("browse-tabs");
+  const artistsPanel = document.getElementById("browse-artists-panel");
+  const artistsList = document.getElementById("browse-artists-list");
   const songsPanel = document.getElementById("browse-songs-panel");
   const albumsPanel = document.getElementById("browse-albums-panel");
   const albumDetailPanel = document.getElementById("browse-album-detail-panel");
@@ -91,18 +96,21 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const folderInput = document.getElementById("browse-folder-input");
 
   let tracks = [];
+  let albums = [];
   let libraryName = null;
-  let mode = "song";
+  let mode = "artist";
   let selectedTrackIds = new Set();
   let lastClickedIndex = null;
   let currentAlbumGroup = null;
   let renderedAlbumGroups = [];
-  let albumSectionSortables = [];
+  let albumsSortable = null;
   let songsPage = 0;
   let songsPageSize = SONGS_PAGE_SIZE_FALLBACK;
   let todaySongs = [];
   // 가사 패널이 열려 있으면 재생 통계 TOP 3 앨범과 마찬가지로 이 위젯도 숨긴다(공간 확보).
   let lyricsActive = false;
+
+  const albumArtPromptApi = setupAlbumArtPrompt();
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -139,6 +147,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
   }
 
+  async function loadLibraryAndAlbums() {
+    const [library, albumsResult] = await Promise.all([api.getLibrary(), api.getAlbums()]);
+    tracks = library.tracks;
+    albums = albumsResult.albums;
+    libraryName = library.name;
+  }
+
   async function handleUpload(fileList) {
     if (!fileList || !fileList.length) return;
     showProgress(`곡 업로드 중 (${fileList.length}개 파일)`);
@@ -157,10 +172,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
             result.skipped.map((s) => `${s.filename} (${s.reason})`).join("\n")
         );
       }
-      const library = await api.getLibrary();
-      tracks = library.tracks;
-      libraryName = library.name;
+      await loadLibraryAndAlbums();
       render();
+      if (result.albums_missing_art && result.albums_missing_art.length) {
+        albumArtPromptApi.open(result.albums_missing_art, () => loadLibraryAndAlbums().then(render));
+      }
     } catch (err) {
       await alertDialog(err.message);
     } finally {
@@ -579,13 +595,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   function fillAlbumDetailHeader(group) {
     albumDetailTitle.textContent = group.album || "(앨범 없음)";
     albumDetailArtist.textContent = group.artist || "";
-    showAlbumDetailArt(`${api.artUrl(group.track_id)}?t=${Date.now()}`);
+    showAlbumDetailArt(`${api.albumArtUrl(group.id)}?t=${Date.now()}`);
     requestAnimationFrame(() => applyMarquee(albumDetailTitleClip));
   }
 
   function openAlbumDetail(group) {
     currentAlbumGroup = group;
     fillAlbumDetailHeader(group);
+    artistsPanel.classList.remove("active");
     albumsPanel.classList.remove("active");
     albumDetailPanel.classList.add("active");
     renderAlbumDetailRows(group);
@@ -611,7 +628,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // 뷰포트(스크롤 컨테이너 포함)에 가까워질 때만 브라우저가 실제로
     // 불러오도록 네이티브 lazy loading을 사용한다.
     img.loading = "lazy";
-    img.src = api.artUrl(group.track_id);
+    img.src = api.albumArtUrl(group.id);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();
@@ -638,8 +655,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
     card.appendChild(titleRow);
 
-    // 아티스트명은 이미 구획 헤더(.album-section-header)에 보여주므로 카드
-    // 안에서는 중복 표시하지 않는다.
+    const artist = createMarqueeClip("media-card-artist", "", group.artist || "");
+    card.appendChild(artist);
+
     const meta = document.createElement("div");
     meta.className = "media-card-meta";
     const metaCount = document.createElement("span");
@@ -660,79 +678,113 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     return card;
   }
 
-  // 앨범 탭은 아티스트별로 구획을 나눠 보여준다. 아티스트명(+같은 아티스트
-  // 안에서는 앨범명)순으로 정렬해야 같은 아티스트의 앨범들이 인접해서 하나의
-  // 구획으로 묶인다. 드래그 정렬(SortableJS)도 구획마다 별도 인스턴스라 같은
-  // 아티스트 구획 안에서만 순서를 바꿀 수 있고, 다른 아티스트 구획으로는 넘어가지
-  // 않는다 — 구획 경계가 항상 아티스트명 정렬과 일치하도록 지키기 위함이다.
+  // 아티스트 카드의 커버는 '앨범 아티스트'의 앨범 중 무작위로 최대 4개를 골라
+  // 콜라주로 채운다(fillArtistArt, 재생 통계 아티스트 탭과 공유).
+  function buildArtistCard(entry) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    fillArtistArt(artWrap, entry.albums);
+    card.appendChild(artWrap);
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "media-card-title-row";
+    const title = createMarqueeClip("media-card-title", "", entry.name || "(아티스트 없음)");
+    titleRow.appendChild(title);
+    card.appendChild(titleRow);
+
+    const meta = document.createElement("div");
+    meta.className = "media-card-meta";
+    const albumCount = document.createElement("span");
+    albumCount.textContent = `앨범 ${entry.albums.length}개`;
+    meta.appendChild(albumCount);
+    card.appendChild(meta);
+
+    card.addEventListener("click", () => openArtistAlbums(entry.name));
+    return card;
+  }
+
+  // 아티스트 카드를 클릭하면 앨범 탭으로 넘어가 그 아티스트명으로 검색해둔
+  // 상태를 보여준다 — 별도의 "아티스트 상세" 화면 없이 앨범 탭의 검색 필터를
+  // 그대로 재활용한다.
+  function openArtistAlbums(artistName) {
+    switchMode("album");
+    searchInput.value = artistName || "";
+    searchFieldSelect.value = "artist";
+    render();
+  }
+
+  // 아티스트 탭은 곡 아티스트가 아니라 '앨범 아티스트'(Album.artist) 기준으로
+  // 묶는다 — 앨범 안의 개별 곡 아티스트가 달라도 여기엔 앨범 아티스트만 나온다.
+  function renderArtists() {
+    const q = searchInput.value.trim().toLowerCase();
+    artistsList.innerHTML = "";
+
+    const byArtist = new Map();
+    for (const album of albums) {
+      const name = album.artist || "";
+      if (!byArtist.has(name)) byArtist.set(name, []);
+      byArtist.get(name).push(album);
+    }
+    let entries = [...byArtist.entries()].map(([name, albumsForArtist]) => ({
+      name,
+      albums: albumsForArtist,
+    }));
+    entries = entries.filter((e) => !q || (e.name || "(아티스트 없음)").toLowerCase().includes(q));
+    entries.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+
+    if (!entries.length) {
+      renderEmpty(artistsList);
+      return;
+    }
+    entries.forEach((entry) => artistsList.appendChild(buildArtistCard(entry)));
+    requestAnimationFrame(() => applyMarquee(artistsList));
+  }
+
+  // 앨범 탭은 아티스트별 구획 없이 전체 앨범을 하나의 그리드로 보여준다(카드
+  // 안에 아티스트명을 따로 표시). 드래그 정렬(SortableJS)도 구획 경계 없이 그리드
+  // 전체에서 자유롭게 순서를 바꿀 수 있다.
   function renderAlbums() {
     const q = searchInput.value.trim().toLowerCase();
     const field = searchFieldSelect.value;
     albumsList.innerHTML = "";
-    albumSectionSortables.forEach((s) => s.destroy());
-    albumSectionSortables = [];
+    if (albumsSortable) {
+      albumsSortable.destroy();
+      albumsSortable = null;
+    }
 
-    const groups = groupAlbums(tracks).filter((g) => matchesAlbum(g, q, field));
-    // 아티스트명으로만 정렬한다(구획 경계/순서 결정용). Array.sort는 안정 정렬이라
-    // 같은 아티스트 안에서는 원래 순서(= 라이브러리의 트랙 순서, 즉 드래그로 정한
-    // 순서)가 그대로 유지된다 — 여기서 앨범명까지 같이 정렬해버리면 드래그로 바꾼
-    // 구획 내 순서가 다음 렌더링마다 알파벳순으로 되돌아가 버린다.
-    groups.sort((a, b) => (a.artist || "").localeCompare(b.artist || "", "ko"));
+    const groups = groupAlbums(tracks, albums).filter((g) => matchesAlbum(g, q, field));
     renderedAlbumGroups = groups;
     if (!groups.length) {
       renderEmpty(albumsList);
       return;
     }
 
-    const sections = [];
-    for (const group of groups) {
-      const artist = group.artist || "";
-      const last = sections[sections.length - 1];
-      if (last && last.artist === artist) last.groups.push(group);
-      else sections.push({ artist, groups: [group] });
-    }
+    groups.forEach((group) => albumsList.appendChild(buildAlbumCard(group)));
 
-    sections.forEach((section) => {
-      const sectionEl = document.createElement("div");
-      sectionEl.className = "album-section";
-
-      const header = document.createElement("div");
-      header.className = "album-section-header";
-      header.textContent = section.artist || "(아티스트 없음)";
-      sectionEl.appendChild(header);
-
-      const grid = document.createElement("div");
-      grid.className = "album-section-grid";
-      section.groups.forEach((group) => grid.appendChild(buildAlbumCard(group)));
-      sectionEl.appendChild(grid);
-
-      albumsList.appendChild(sectionEl);
-
-      const sectionSortable = window.Sortable.create(grid, {
-        animation: 150,
-        forceFallback: true,
-        direction: "horizontal",
-        handle: ".media-card-drag-handle",
-        onEnd: async (evt) => {
-          if (evt.oldIndex === evt.newIndex) return;
-          albumSectionSortables.forEach((s) => s.option("disabled", true));
-          const moved = section.groups.splice(evt.oldIndex, 1)[0];
-          section.groups.splice(evt.newIndex, 0, moved);
-          renderedAlbumGroups = sections.flatMap((s) => s.groups);
-          const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
-          try {
-            const result = await api.reorderPlaylistFull(libraryName, newOrder);
-            tracks = result.tracks;
-          } catch (err) {
-            await alertDialog(err.message);
-            await resyncFromServer();
-            render();
-          } finally {
-            albumSectionSortables.forEach((s) => s.option("disabled", isSongSearchActive()));
-          }
-        },
-      });
-      albumSectionSortables.push(sectionSortable);
+    albumsSortable = window.Sortable.create(albumsList, {
+      animation: 150,
+      forceFallback: true,
+      handle: ".media-card-drag-handle",
+      onEnd: async (evt) => {
+        if (evt.oldIndex === evt.newIndex) return;
+        albumsSortable.option("disabled", true);
+        const moved = renderedAlbumGroups.splice(evt.oldIndex, 1)[0];
+        renderedAlbumGroups.splice(evt.newIndex, 0, moved);
+        const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
+        try {
+          const result = await api.reorderPlaylistFull(libraryName, newOrder);
+          tracks = result.tracks;
+        } catch (err) {
+          await alertDialog(err.message);
+          await resyncFromServer();
+          render();
+        } finally {
+          albumsSortable.option("disabled", isSongSearchActive());
+        }
+      },
     });
 
     // 레이아웃이 확정된 다음 프레임에 폭을 측정해야 하므로 rAF로 미룬다(곡 목록과 동일).
@@ -741,16 +793,20 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   function render() {
     if (mode === "song") renderSongs();
-    else renderAlbums();
+    else if (mode === "album") renderAlbums();
+    else renderArtists();
   }
 
-  // 앨범 탭은 개별 곡명이 없는 그룹 단위라 "곡명" 범위가 의미가 없다 —
-  // 선택지에서 아예 비활성화하고, 곡 탭에서 곡명을 고른 채로 넘어왔으면
-  // "전체"로 되돌린다.
+  // 앨범/아티스트 탭은 개별 곡명이 없는 그룹 단위라 "곡명" 범위가 의미가 없고,
+  // 아티스트 탭은 앨범명 범위도 의미가 없다 — 각 모드에 안 맞는 선택지는
+  // 비활성화하고, 그 상태로 넘어왔으면 "전체"로 되돌린다.
   function syncSearchFieldOptions() {
     const isAlbumMode = mode === "album";
-    searchFieldTitleOption.disabled = isAlbumMode;
-    if (isAlbumMode && searchFieldSelect.value === "title") searchFieldSelect.value = "all";
+    const isArtistMode = mode === "artist";
+    searchFieldTitleOption.disabled = isAlbumMode || isArtistMode;
+    searchFieldAlbumOption.disabled = isArtistMode;
+    if ((isAlbumMode || isArtistMode) && searchFieldSelect.value === "title") searchFieldSelect.value = "all";
+    if (isArtistMode && searchFieldSelect.value === "album") searchFieldSelect.value = "all";
   }
 
   function switchMode(next) {
@@ -765,6 +821,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     currentAlbumGroup = null;
     songsPanel.classList.toggle("active", mode === "song");
     albumsPanel.classList.toggle("active", mode === "album");
+    artistsPanel.classList.toggle("active", mode === "artist");
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
     syncSearchFieldOptions();
     render();
@@ -773,6 +830,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   tabsEl.addEventListener("click", (e) => {
     const btn = e.target.closest(".tab-btn");
     if (!btn) return;
+    // 아티스트 카드 클릭 시 앨범 탭으로 넘어가며 검색창에 그 아티스트명을
+    // 채워두는데(openArtistAlbums), 그 상태로 탭 버튼을 눌러 수동으로 다른 탭으로
+    // 옮기면 그 필터가 계속 남아있어 다른 항목이 안 보이는 문제가 있었다. 탭
+    // 버튼을 직접 눌렀을 때는 항상 검색을 초기화해 전체 목록부터 다시 보여준다.
+    searchInput.value = "";
+    searchFieldSelect.value = "all";
     switchMode(btn.dataset.mode);
   });
 
@@ -800,7 +863,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // <a download>를 잠깐 만들어 클릭한 뒤 치운다 — 실제 zip 파일명은 서버의
     // Content-Disposition 헤더가 정해주므로 download 속성은 비워둔다.
     const a = document.createElement("a");
-    a.href = api.albumDownloadUrl(currentAlbumGroup.album, currentAlbumGroup.artist);
+    a.href = api.albumDownloadUrl(currentAlbumGroup.id);
     a.download = "";
     document.body.appendChild(a);
     a.click();
@@ -861,6 +924,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         recalcSongsPageSize();
       } else if (albumsPanel.classList.contains("active")) {
         applyMarquee(albumsList);
+      } else if (artistsPanel.classList.contains("active")) {
+        applyMarquee(artistsList);
       }
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
@@ -881,9 +946,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   async function resyncFromServer() {
-    const library = await api.getLibrary();
-    tracks = library.tracks;
-    libraryName = library.name;
+    await loadLibraryAndAlbums();
   }
 
   // 성공 시엔 SortableJS가 이미 화면의 행/카드를 드래그한 자리로 옮겨둔
@@ -939,10 +1002,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       try {
         const result = await api.reorderPlaylistFull(libraryName, newTracks.map((t) => t.track_id));
         tracks = result.tracks;
-        const groups = groupAlbums(tracks);
-        const match = groups.find(
-          (g) => g.album === currentAlbumGroup.album && g.artist === currentAlbumGroup.artist
-        );
+        const groups = groupAlbums(tracks, albums);
+        const match = groups.find((g) => g.id === currentAlbumGroup.id);
         currentAlbumGroup = match || currentAlbumGroup;
       } catch (err) {
         await alertDialog(err.message);
@@ -956,29 +1017,31 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   searchInput.addEventListener("input", () => {
     const disabled = isSongSearchActive();
     songsSortable.option("disabled", disabled);
-    albumSectionSortables.forEach((s) => s.option("disabled", disabled));
+    if (albumsSortable) albumsSortable.option("disabled", disabled);
   });
 
   return {
-    // focus를 넘기면 앨범 탭으로 들어간 뒤 그 앨범의 상세 화면을 곧바로 연다
-    // (재생바 앨범명 클릭, 재생 통계 TOP3 앨범 클릭 등 외부 진입점용). 라우터의
-    // onBrowse가 이 인자와 함께 호출하므로, show() 안에서 한 번의 흐름으로
-    // 처리해야 라이브러리 로딩/모드 전환과 상세 열기 사이에 경쟁 상태가 생기지
-    // 않는다. track_id를 우선 매칭하되, 재생 기록처럼 그 트랙이 더 이상
-    // 라이브러리에 없을 수 있는 경우를 대비해 album+artist로도 매칭한다.
+    // focus 없이 들어오면 기본으로 아티스트 탭을 보여준다. focus를 넘기면(재생바
+    // 앨범명 클릭, 재생 통계 TOP3 앨범 클릭 등 외부 진입점용) 대신 앨범 탭으로
+    // 들어간 뒤 그 앨범의 상세 화면을 곧바로 연다 — 상세 화면을 닫으면
+    // closeAlbumDetail이 항상 앨범 탭으로 돌아가므로, 그와 짝이 맞게 앨범 탭에서
+    // 시작해야 한다. 라우터의 onBrowse가 이 인자와 함께 호출하므로, show() 안에서
+    // 한 번의 흐름으로 처리해야 라이브러리 로딩/모드 전환과 상세 열기 사이에
+    // 경쟁 상태가 생기지 않는다. track_id를 우선 매칭하되, 재생 기록처럼 그
+    // 트랙이 더 이상 라이브러리에 없을 수 있는 경우를 대비해 album+artist로도
+    // 매칭한다.
     async show(focus) {
       panelEl.classList.add("active");
       searchInput.value = "";
       searchFieldSelect.value = "all";
       renderLoading(songsList);
       renderLoading(albumsList);
-      const library = await api.getLibrary();
-      tracks = library.tracks;
-      libraryName = library.name;
-      switchMode("album");
+      renderLoading(artistsList);
+      await loadLibraryAndAlbums();
+      switchMode(focus ? "album" : "artist");
       loadTodaySongs();
       if (focus) {
-        const group = groupAlbums(tracks).find(
+        const group = groupAlbums(tracks, albums).find(
           (g) =>
             g.tracks.some((t) => t.track_id === focus.track_id) ||
             (focus.album && g.album === focus.album && g.artist === focus.artist)
@@ -990,14 +1053,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       panelEl.classList.remove("active");
     },
     async refreshAfterAlbumUpdate() {
-      const library = await api.getLibrary();
-      tracks = library.tracks;
-      libraryName = library.name;
+      await loadLibraryAndAlbums();
       if (currentAlbumGroup) {
-        const groups = groupAlbums(tracks);
-        const match = groups.find(
-          (g) => g.album === currentAlbumGroup.album && g.artist === currentAlbumGroup.artist
-        );
+        const groups = groupAlbums(tracks, albums);
+        const match = groups.find((g) => g.id === currentAlbumGroup.id);
         if (match) {
           currentAlbumGroup = match;
           fillAlbumDetailHeader(match);

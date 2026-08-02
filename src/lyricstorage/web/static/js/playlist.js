@@ -437,8 +437,8 @@ export function setupPlaylist(
       await alertDialog("먼저 플레이리스트를 만들거나 선택하세요.");
       return;
     }
-    const library = await api.getLibrary();
-    pickerAlbumGroups = groupAlbums(library.tracks);
+    const [library, albumsResult] = await Promise.all([api.getLibrary(), api.getAlbums()]);
+    pickerAlbumGroups = groupAlbums(library.tracks, albumsResult.albums);
     pickerChecked = new Set();
     pickerCurrentAlbum = null;
     if (!pickerAlbumGroups.length) {
@@ -477,7 +477,7 @@ export function setupPlaylist(
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
-      img.src = api.artUrl(group.track_id);
+      img.src = api.albumArtUrl(group.id);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();

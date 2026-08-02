@@ -1,11 +1,20 @@
-// 곡 목록을 앨범(앨범명+아티스트명) 단위로 묶는다. 브라우즈 "앨범" 탭과
+// 곡 목록을 앨범(album_id) 단위로 묶는다. 브라우즈 "앨범" 탭과
 // 재생목록의 "라이브러리에서 추가" 앨범 선택 화면이 공용으로 사용한다.
-export function groupAlbums(tracks) {
+// albums는 api.getAlbums()가 반환한 앨범 목록({id, name, artist, year})이다.
+export function groupAlbums(tracks, albums = []) {
+  const albumById = new Map(albums.map((a) => [a.id, a]));
   const map = new Map();
   for (const track of tracks) {
-    const key = `${track.album} ${track.artist}`;
+    const key = track.album_id || `${track.album} ${track.artist}`;
     if (!map.has(key)) {
-      map.set(key, { album: track.album, artist: track.artist, track_id: track.track_id, tracks: [] });
+      const album = albumById.get(track.album_id);
+      map.set(key, {
+        id: track.album_id,
+        album: album ? album.name : track.album,
+        artist: album ? album.artist : track.artist,
+        year: album ? album.year : null,
+        tracks: [],
+      });
     }
     map.get(key).tracks.push(track);
   }
