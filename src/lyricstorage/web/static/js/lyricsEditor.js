@@ -62,6 +62,7 @@ export function setupLyricsEditor(player) {
     titleEl.textContent = label ? `가사 상세 편집 - ${label}` : "가사 상세 편집";
     draftTextarea.value = (initialLines || []).map((l) => l.text).join("\n");
     switchPhase("draft");
+    player.autoAdvance = false;
     dialog.showModal();
     requestAnimationFrame(() => draftTextarea.focus());
   }
@@ -70,6 +71,14 @@ export function setupLyricsEditor(player) {
     if (dialog.open) dialog.close();
   }
   closeBtn.addEventListener("click", close);
+
+  // 곡이 끝났을 때 자동으로 다음 곡으로 넘어가면 저장하지 않은 태깅 진행
+  // 상황이 날아가므로, 다이얼로그가 열려 있는 동안은 자동 전환을 막는다.
+  // 네이티브 dialog가 ESC 등으로 우리 close() 호출 없이 닫히는 경로까지
+  // 커버하기 위해 dialog 자체의 close 이벤트에서 복원한다.
+  dialog.addEventListener("close", () => {
+    player.autoAdvance = true;
+  });
 
   // 편집 도중 트랜스포트 바 등에서 다른 곡으로 넘어가면 태깅 대상이 바뀌어
   // 버려야 하는 상태가 되므로 그냥 닫는다.
@@ -157,6 +166,15 @@ export function setupLyricsEditor(player) {
     updateProgress();
   }
 
+  // 상세 편집에서는 화살표(전역 10초 이동)와 별개로 대괄호/중괄호로 더
+  // 촘촘하게 탐색할 수 있게 한다: [ ] = 5초, { } = 1초.
+  function seekBy(deltaMs) {
+    const target = player.position() + deltaMs;
+    const dur = player.duration();
+    const clamped = dur > 0 ? Math.min(target, dur) : target;
+    player.seek(Math.max(0, clamped));
+  }
+
   dialog.addEventListener("keydown", (e) => {
     if (!phaseTagging.classList.contains("active")) return;
     if (isTypingTarget(e.target)) return;
@@ -166,6 +184,18 @@ export function setupLyricsEditor(player) {
     } else if (e.key === "Backspace") {
       e.preventDefault();
       untagPrevious();
+    } else if (e.key === "[") {
+      e.preventDefault();
+      seekBy(-5000);
+    } else if (e.key === "]") {
+      e.preventDefault();
+      seekBy(5000);
+    } else if (e.key === "{") {
+      e.preventDefault();
+      seekBy(-1000);
+    } else if (e.key === "}") {
+      e.preventDefault();
+      seekBy(1000);
     }
   });
 

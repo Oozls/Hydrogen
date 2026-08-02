@@ -111,7 +111,18 @@ export function setupNowPlaying(player, onOpenAlbum) {
       artEl.style.display = "";
       artPlaceholder.style.display = "none";
     };
-    artEl.src = api.artUrl(track.track_id) + (bustArtCache ? `?t=${Date.now()}` : "");
+    const nextSrc = api.artUrl(track.track_id) + (bustArtCache ? `?t=${Date.now()}` : "");
+    // 반복 재생 등으로 같은 트랙이 다시 설정되면 artEl.src가 이미 같은 값이라
+    // 브라우저가 새 요청을 보내지 않고, 그러면 load/error 이벤트도 다시 발생하지
+    // 않아 방금 띄운 스피너가 영영 사라지지 않는다(특히 이전에 로딩이 실패했던
+    // 트랙에서 두드러짐). 이 경우 이벤트를 기다리지 않고 이미 알고 있는 현재
+    // 상태로 즉시 처리한다.
+    if (artEl.src === new URL(nextSrc, window.location.href).href) {
+      if (artEl.complete && artEl.naturalWidth > 0) artEl.onload();
+      else artEl.onerror();
+    } else {
+      artEl.src = nextSrc;
+    }
     requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
     updateMediaSessionMetadata(track);
   }

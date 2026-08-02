@@ -32,6 +32,10 @@ export class PlayerEngine extends EventTarget {
     // 발생하는 pause 이벤트는 자동으로 재생을 재개해 "화면 꺼짐/다른 앱 사용 중
     // 재생이 멈추는" 문제를 완화한다.
     this._intentionalPause = true;
+    // 가사 상세 편집(타이밍 태깅) 중에는 곡이 끝나도 다음 곡으로 자동
+    // 전환되면 저장하지 않은 태깅 진행 상황이 날아가므로, 그 화면이 열려
+    // 있는 동안은 이 플래그를 false로 두어 트랙 전환을 막는다.
+    this.autoAdvance = true;
 
     // 다음 곡 미리 불러오기용 숨겨진 <audio>. { audio, index } 형태이며,
     // index는 그 엘리먼트에 로드해 둔 트랙이 playlist 상 몇 번째인지를 뜻한다.
@@ -251,6 +255,7 @@ export class PlayerEngine extends EventTarget {
 
   _onEnded() {
     this._emit("ended", {});
+    if (!this.autoAdvance) return;
     if (this.repeatMode === "one") {
       this._resetPreload();
       this.playIndex(this.currentIndex);
