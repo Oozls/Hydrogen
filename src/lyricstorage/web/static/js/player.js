@@ -32,6 +32,11 @@ export class PlayerEngine extends EventTarget {
     // 발생하는 pause 이벤트는 자동으로 재생을 재개해 "화면 꺼짐/다른 앱 사용 중
     // 재생이 멈추는" 문제를 완화한다.
     this._intentionalPause = true;
+    // 일부 오디오 파일(특히 정확한 탐색 인덱스가 없는 VBR mp3)은 브라우저가
+    // currentTime을 근사치로만 추적해, 정지 후 재생을 반복하면 실제 소리와
+    // 표시되는 위치가 조금씩 어긋날 수 있다. 재생이 실제로 재개되는 시점마다
+    // 같은 위치로 한 번 더 seek해 브라우저가 스스로를 다시 맞추도록 유도한다.
+    this._needsResyncOnPlay = false;
     // 가사 상세 편집(타이밍 태깅) 중에는 곡이 끝나도 다음 곡으로 자동
     // 전환되면 저장하지 않은 태깅 진행 상황이 날아가므로, 그 화면이 열려
     // 있는 동안은 이 플래그를 false로 두어 트랙 전환을 막는다.
@@ -67,6 +72,7 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("pause", () => {
       if (audio !== this.audio) return;
       this._emit("playstate", { playing: false });
+      this._needsResyncOnPlay = true;
       if (!this._intentionalPause && !audio.ended && this.currentIndex >= 0) {
         audio.play().catch(() => {});
       }
@@ -84,6 +90,10 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("playing", () => {
       if (audio !== this.audio) return;
       this._emit("buffering", { buffering: false });
+      if (this._needsResyncOnPlay) {
+        this._needsResyncOnPlay = false;
+        this.seek(this.position());
+      }
     });
     audio.addEventListener("canplay", () => {
       if (audio !== this.audio) return;
