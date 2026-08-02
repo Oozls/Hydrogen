@@ -45,6 +45,7 @@ export function setupAlbumArtPrompt() {
 
     const useTrackBtn = document.createElement("button");
     useTrackBtn.type = "button";
+    useTrackBtn.className = "primary";
     useTrackBtn.textContent = "곡 표지 사용";
     useTrackBtn.disabled = !album.has_embedded_art;
     useTrackBtn.title = album.has_embedded_art ? "" : "이 앨범엔 표지가 있는 곡이 없습니다";

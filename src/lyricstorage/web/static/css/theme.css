@@ -1224,6 +1224,54 @@ input[type="range"]:hover::-moz-range-thumb {
   color: var(--text-secondary);
   font-size: 13px;
 }
+.album-artist-prompt-dialog {
+  width: 460px;
+}
+.album-artist-prompt-list {
+  max-height: 50vh;
+  max-height: 50dvh;
+}
+.album-artist-prompt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 1px 2px;
+}
+.album-artist-prompt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-artist-prompt-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.album-artist-prompt-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.album-artist-prompt-input-wrap input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.album-artist-prompt-input-wrap input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.album-artist-prompt-done {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
 .file-content-dialog {
   width: 80vw;
   max-width: 900px;
@@ -1420,7 +1468,9 @@ textarea.file-content-body:disabled {
   gap: 8px;
   margin-top: 12px;
 }
-.dialog-actions button {
+.dialog-actions button,
+.album-art-prompt-actions button,
+.album-artist-prompt-controls button {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1428,8 +1478,21 @@ textarea.file-content-body:disabled {
   cursor: pointer;
   color: var(--text-primary);
 }
-.dialog-actions button:hover {
+.dialog-actions button:hover,
+.album-art-prompt-actions button:hover,
+.album-artist-prompt-controls button:hover {
   background: var(--bg-elevated);
+}
+.dialog-actions button:disabled,
+.album-art-prompt-actions button:disabled,
+.album-artist-prompt-controls button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dialog-actions button:disabled:hover,
+.album-art-prompt-actions button:disabled:hover,
+.album-artist-prompt-controls button:disabled:hover {
+  background: transparent;
 }
 .dialog-actions button.danger {
   color: #e5484d;
@@ -1438,7 +1501,9 @@ textarea.file-content-body:disabled {
 .dialog-actions button.danger:hover {
   background: rgba(229, 72, 77, 0.12);
 }
-.dialog-actions button.primary {
+.dialog-actions button.primary,
+.album-art-prompt-actions button.primary,
+.album-artist-prompt-controls button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--icon-on-accent);

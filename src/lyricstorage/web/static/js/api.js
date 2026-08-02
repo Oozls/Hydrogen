@@ -80,6 +80,38 @@ export const api = {
       xhr.send(formData);
     });
   },
+  // 라이브러리에 곡을 새로 추가하지 않고, 넘긴 파일들의 태그만 읽어 (제목, 앨범)이
+  // 일치하는 기존 곡의 아티스트를 되돌리는 일회성 복구 도구.
+  reimportArtists: (fileList, onProgress) => {
+    const formData = new FormData();
+    for (const file of fileList) formData.append("files[]", file);
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/library/reimport-artists");
+      if (onProgress) {
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) onProgress(e.loaded / e.total);
+        });
+      }
+      xhr.onload = () => {
+        let data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch (_err) {
+          /* 응답이 JSON이 아님 */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          reject(
+            new Error((data && data.error) || `POST /api/library/reimport-artists 실패 (${xhr.status})`)
+          );
+        }
+      };
+      xhr.onerror = () => reject(new Error("업로드 중 네트워크 오류가 발생했습니다."));
+      xhr.send(formData);
+    });
+  },
   getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
   getDataSize: () => request("GET", "/api/settings/data-size"),

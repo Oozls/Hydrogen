@@ -8,6 +8,7 @@ import { openImageLightbox } from "./imageLightbox.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
 import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
+import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { fillArtistArt } from "./artistArt.js";
 
 function fmtDuration(ms) {
@@ -92,8 +93,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const clearSelectionBtn = document.getElementById("btn-browse-clear-selection");
   const addFileBtn = document.getElementById("btn-browse-add-file");
   const addFolderBtn = document.getElementById("btn-browse-add-folder");
+  const reimportArtistsBtn = document.getElementById("btn-browse-reimport-artists");
   const fileInput = document.getElementById("browse-file-input");
   const folderInput = document.getElementById("browse-folder-input");
+  const reimportArtistsInput = document.getElementById("browse-reimport-artists-input");
 
   let tracks = [];
   let albums = [];
@@ -111,6 +114,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let lyricsActive = false;
 
   const albumArtPromptApi = setupAlbumArtPrompt();
+  const albumArtistPromptApi = setupAlbumArtistPrompt();
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -174,9 +178,51 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       }
       await loadLibraryAndAlbums();
       render();
-      if (result.albums_missing_art && result.albums_missing_art.length) {
-        albumArtPromptApi.open(result.albums_missing_art, () => loadLibraryAndAlbums().then(render));
+      const openArtPromptIfNeeded = () => {
+        if (result.albums_missing_art && result.albums_missing_art.length) {
+          albumArtPromptApi.open(result.albums_missing_art, () => loadLibraryAndAlbums().then(render));
+        }
+      };
+      // 새 앨범 아티스트 확인부터 먼저 물어보고(정체성이 우선), 그 다이얼로그를
+      // 닫으면 이어서 표지 선택을 묻는다 — 둘 다 해당되면 순서대로 한 번씩만.
+      if (result.new_albums && result.new_albums.length) {
+        albumArtistPromptApi.open(
+          result.new_albums,
+          () => loadLibraryAndAlbums().then(render),
+          openArtPromptIfNeeded
+        );
+      } else {
+        openArtPromptIfNeeded();
       }
+    } catch (err) {
+      await alertDialog(err.message);
+    } finally {
+      hideProgress();
+    }
+  }
+
+  // 앨범 아티스트 도입 전, 곡 아티스트를 전부 앨범 아티스트로 덮어써 통일했던
+  // 라이브러리를 위한 일회성 복구 도구. 원본 태그가 살아있는 원본 파일들이 있는
+  // 폴더를 고르면(라이브러리에 새로 추가하지 않고) 제목+앨범이 일치하는 기존
+  // 곡을 찾아 그 곡의 아티스트만 원본 태그로 되돌린다.
+  async function handleReimportArtists(fileList) {
+    if (!fileList || !fileList.length) return;
+    showProgress(`곡 아티스트 다시 가져오는 중 (${fileList.length}개 파일)`);
+    try {
+      const result = await api.reimportArtists(fileList, (fraction) => {
+        if (fraction >= 1) {
+          showProgress("일치하는 곡을 찾는 중...");
+          setProgress(null);
+        } else {
+          setProgress(fraction);
+        }
+      });
+      await loadLibraryAndAlbums();
+      render();
+      const lines = [`${result.updated.length}곡의 아티스트를 되돌렸습니다.`];
+      if (result.ambiguous.length) lines.push(`같은 제목+앨범의 곡이 여럿이라 건너뛴 파일: ${result.ambiguous.length}개`);
+      if (result.unmatched.length) lines.push(`일치하는 곡을 찾지 못한 파일: ${result.unmatched.length}개`);
+      await alertDialog(lines.join("\n"));
     } catch (err) {
       await alertDialog(err.message);
     } finally {
@@ -882,6 +928,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   folderInput.addEventListener("change", async () => {
     await handleUpload(folderInput.files);
     folderInput.value = "";
+  });
+  reimportArtistsBtn.addEventListener("click", () => reimportArtistsInput.click());
+  reimportArtistsInput.addEventListener("change", async () => {
+    await handleReimportArtists(reimportArtistsInput.files);
+    reimportArtistsInput.value = "";
   });
 
   // 재생 곡이 바뀔 때마다 현재 보이는 목록(곡 목록 또는 앨범 상세)을 다시 그려

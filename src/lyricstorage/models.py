@@ -35,7 +35,7 @@ def _wave_frame_text(tags, frame_id: str, default: str) -> str:
     return str(frame.text[0]) if frame is not None and frame.text else default
 
 
-def _read_tags(path: str) -> dict:
+def read_tags(path: str) -> dict:
     title = Path(path).stem
     artist = ""
     album = ""
@@ -147,7 +147,7 @@ class Track:
 
     @classmethod
     def from_file(cls, path: str) -> "Track":
-        tags = _read_tags(path)
+        tags = read_tags(path)
         track = cls(path=str(path), **tags)
         track.album_id = albums_repo.get_or_create_album(track.album, track.artist).id
         return track
