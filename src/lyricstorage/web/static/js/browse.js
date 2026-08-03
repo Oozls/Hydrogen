@@ -640,7 +640,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   function fillAlbumDetailHeader(group) {
     albumDetailTitle.textContent = group.album || "(앨범 없음)";
-    albumDetailArtist.textContent = group.artist || "";
+    albumDetailArtist.textContent = [group.artist, group.year].filter(Boolean).join(" · ");
     showAlbumDetailArt(`${api.albumArtUrl(group.id)}?t=${Date.now()}`);
     requestAnimationFrame(() => applyMarquee(albumDetailTitleClip));
   }
@@ -819,16 +819,33 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         albumsSortable.option("disabled", true);
         const moved = renderedAlbumGroups.splice(evt.oldIndex, 1)[0];
         renderedAlbumGroups.splice(evt.newIndex, 0, moved);
-        const newOrder = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
+        const reorderedTrackIds = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
+
+        // 아티스트/검색으로 필터링된 상태라면 이 그리드엔 라이브러리 트랙의 일부만
+        // 보인다. 그 부분집합의 새 순서를, 원래 그 트랙들이 전역 배열에서 차지하던
+        // 슬롯(오름차순)에 그대로 채워 넣어 나머지 트랙 위치는 그대로 둔다(앨범
+        // 상세 드래그와 동일한 방식) — 그래야 reorderPlaylistFull에 라이브러리
+        // 전체 트랙 집합과 정확히 같은 목록을 보낼 수 있다.
+        const idSet = new Set(reorderedTrackIds);
+        const slots = [];
+        tracks.forEach((t, i) => {
+          if (idSet.has(t.track_id)) slots.push(i);
+        });
+        const byId = new Map(tracks.map((t) => [t.track_id, t]));
+        const newTracks = tracks.slice();
+        slots.forEach((slotIndex, i) => {
+          newTracks[slotIndex] = byId.get(reorderedTrackIds[i]);
+        });
+
         try {
-          const result = await api.reorderPlaylistFull(libraryName, newOrder);
+          const result = await api.reorderPlaylistFull(libraryName, newTracks.map((t) => t.track_id));
           tracks = result.tracks;
         } catch (err) {
           await alertDialog(err.message);
           await resyncFromServer();
           render();
         } finally {
-          albumsSortable.option("disabled", isSongSearchActive());
+          albumsSortable.option("disabled", false);
         }
       },
     });
@@ -982,9 +999,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   });
 
   // -- 드래그로 순서 변경 (재생목록 화면과 동일한 SortableJS 인터페이스) ------
-  // 검색어가 있으면 화면에 보이는 목록이 전체 라이브러리의 일부일 뿐이라 드래그
-  // 인덱스가 실제 순서와 어긋나므로, 검색 중에는 곡/앨범 목록 드래그를 막는다.
-  // (앨범 상세는 검색으로 걸러지지 않는 목록이라 항상 켜둔다.)
+  // 곡 목록은 evt.oldIndex/newIndex를 그대로 전체 라이브러리 인덱스로 써서
+  // 서버에 보내므로(reorderPlaylist), 검색어가 있으면 화면에 보이는 목록이
+  // 전체의 일부일 뿐이라 인덱스가 어긋난다 — 검색 중엔 곡 목록 드래그를 막는다.
+  // 앨범 목록/앨범 상세는 옮겨진 트랙 id들을 원래 전역 배열에서 차지하던
+  // 슬롯에 다시 채워 넣는 방식(reorderPlaylistFull)이라 필터링 여부와
+  // 무관하게 항상 정확하므로 검색 중에도 막을 필요가 없다.
   //
   // 드래그는 전용 손잡이(그립 아이콘)를 잡을 때만 시작된다(SortableJS의
   // handle 옵션). 그래서 행/카드의 나머지 영역은 클릭·롱프레스 선택·모바일
@@ -1066,9 +1086,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   });
 
   searchInput.addEventListener("input", () => {
-    const disabled = isSongSearchActive();
-    songsSortable.option("disabled", disabled);
-    if (albumsSortable) albumsSortable.option("disabled", disabled);
+    songsSortable.option("disabled", isSongSearchActive());
   });
 
   return {
