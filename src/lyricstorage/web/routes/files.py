@@ -13,7 +13,7 @@ from lyricstorage.web import playlist_repo
 
 bp = Blueprint("files", __name__, url_prefix="/api/files")
 
-TEXT_EXTENSIONS = {".lrc", ".json", ".log"}
+TEXT_EXTENSIONS = {".lrc", ".json", ".jsonl", ".log"}
 
 
 def _track_titles_by_path() -> dict[str, str]:

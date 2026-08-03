@@ -26,7 +26,7 @@ uv run web.py
 
 - 플레이리스트: `./data/playlists/<이름>.json` (곡 정보 사본을 포함한 JSON, 라이브러리도 `글로벌 플레이리스트.json`으로 이 안에 저장됨)
 - 설정: `./data/settings.json` (마지막으로 연 플레이리스트, 볼륨 등)
-- 재생 이력: `./data/play_history.json` (통계 집계의 원본 데이터)
+- 재생 이력: `./data/play_history/<날짜>.jsonl` (통계 집계의 원본 데이터, 날짜별 파일에 재생마다 한 줄씩 추가됨. 구버전의 단일 `play_history.json`은 앱 시작 시 자동으로 이 형태로 이전됨)
 - 오늘의 곡 노출 이력: `./data/recommend_exposures.json` (하루에 한 번, 그날 추천된 곡과 당시 점수 요소를 기록 — 이후 실제 재생/평점과 대조해 추천 가중치를 학습하는 데 쓰임)
 - 로그: `./data/logs/<날짜>_<AM|PM>.log`
 - 음원 파일: `./data/songs/<내용 해시>.<확장자>` (라이브러리에 추가 시 원본을 복사)

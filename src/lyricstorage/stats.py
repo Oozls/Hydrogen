@@ -34,9 +34,7 @@ def log_play(
         "listened_ms": listened_ms,
         "played_at": (when or datetime.now()).isoformat(timespec="seconds"),
     }
-    history = storage.load_play_history()
-    history.append(entry)
-    storage.save_play_history(history)
+    storage.append_play_history(entry)
     return entry
 
 
@@ -61,27 +59,39 @@ def _period_bounds(period: str, offset: int, *, now: datetime | None = None) -> 
     return start, end
 
 
-def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dict[str, Any]:
+def top(
+    period: str,
+    group: str,
+    offset: int = 0,
+    limit: int | None = 20,
+    tracks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """tracks: track_to_json() 결과 리스트(현재 라이브러리). 넘겨주면 재생 기록의
+    title/artist/album을 그 당시 스냅샷 대신 track_id로 찾은 현재 값으로 보여준다
+    — 그래야 재생 후 곡/앨범/아티스트 이름을 바꿔도 과거 기록이 예전 이름 기준으로
+    따로 집계되지 않는다. 트랙이 나중에 삭제됐으면(track_id를 못 찾으면) 기록에
+    남은 스냅샷으로 대체한다."""
     if period not in PERIODS:
         raise ValueError(f"unknown period: {period}")
     if group not in GROUPS:
         raise ValueError(f"unknown group: {group}")
 
     start, end = _period_bounds(period, offset)
-    history = storage.load_play_history()
+    history = storage.load_play_history_range(start, end)
+    current_by_id = {t.get("track_id"): t for t in (tracks or [])}
 
     buckets: dict[Any, dict[str, Any]] = {}
     for entry in history:
         try:
-            played_at = datetime.fromisoformat(entry["played_at"])
+            datetime.fromisoformat(entry["played_at"])
         except (KeyError, TypeError, ValueError):
             continue
-        if not (start <= played_at < end):
-            continue
 
-        title = entry.get("title") or ""
-        artist = entry.get("artist") or ""
-        album = entry.get("album") or ""
+        live = current_by_id.get(entry.get("track_id"))
+        title = (live.get("title") if live else None) or entry.get("title") or ""
+        artist = (live.get("artist") if live else None) or entry.get("artist") or ""
+        album = (live.get("album") if live else None) or entry.get("album") or ""
+        album_id = live.get("album_id") if live else None
         listened_ms = entry.get("listened_ms") or 0
         played_at_str = entry["played_at"]
 
@@ -119,18 +129,24 @@ def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dic
                 bump(bucket)
         else:  # album
             album_label = album or "(앨범 없음)"
-            key = (album_label, artist)
+            # 아직 라이브러리에 있는 트랙이면 album_id(불변)로 묶어서, 앨범명을
+            # 바꿔도 예전 기록과 새 기록이 갈라지지 않게 한다. 트랙이 삭제됐으면
+            # (album_id를 모르면) 예전처럼 이름 조합으로만 묶는다.
+            key = album_id or (album_label, artist)
             bucket = buckets.setdefault(
                 key,
                 {
                     "album": album_label,
                     "artist": artist,
                     "track_id": entry.get("track_id"),
+                    "album_id": album_id,
                     "count": 0,
                     "listened_ms": 0,
                     "last_played_at": played_at_str,
                 },
             )
+            bucket["album"] = album_label
+            bucket["artist"] = artist
             bump(bucket)
 
     # "곡" 그룹은 재생 횟수가 많은 순으로 보여주되, 횟수가 같으면 최근에 들은 곡을 먼저 보여준다.
@@ -139,10 +155,11 @@ def top(period: str, group: str, offset: int = 0, limit: int | None = 20) -> dic
     if limit is not None:
         items = items[:limit]
     if group == "album":
-        # 재생 이력엔 재생 당시의 앨범명만 남아있으므로, 현재 앨범 객체를 이름으로
-        # 찾아 album_id를 붙여준다(프런트가 전용 표지를 가져오려면 필요) — 그
-        # 사이 앨범이 이름 변경/삭제됐으면 못 찾을 수 있고, 그때는 표지 없이 보여준다.
+        # 위에서 album_id를 이미 못 채운 항목만(=삭제된 트랙 기반) 이름으로 다시
+        # 찾아본다 — 앨범이 이름 변경/삭제됐으면 못 찾을 수 있고, 그때는 표지 없이 보여준다.
         for item in items:
+            if item.get("album_id"):
+                continue
             album = albums_repo.find_album_by_name(item["album"])
             item["album_id"] = album.id if album else None
     return {

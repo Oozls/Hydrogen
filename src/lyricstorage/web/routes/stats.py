@@ -5,6 +5,8 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from lyricstorage import stats
+from lyricstorage.web import playlist_repo
+from lyricstorage.web.serialize import track_to_json
 
 bp = Blueprint("stats", __name__, url_prefix="/api/stats")
 
@@ -48,4 +50,6 @@ def get_top():
     # "곡" 그룹은 최근 재생 목록으로 쓰이므로 개수 제한을 두지 않고, 화면에서
     # 페이지 단위로 나눠 보여준다. 아티스트/앨범은 여전히 상위 20개만 보여준다.
     limit = None if group == "track" else 20
-    return jsonify(stats.top(period, group, offset, limit=limit))
+    playlist = playlist_repo.load_or_create_global()
+    tracks = [track_to_json(t) for t in playlist.tracks]
+    return jsonify(stats.top(period, group, offset, limit=limit, tracks=tracks))

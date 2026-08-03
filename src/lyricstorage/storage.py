@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -77,25 +78,110 @@ def settings_path() -> Path:
     return app_data_dir() / "settings.json"
 
 
-def play_history_path() -> Path:
+def play_history_dir() -> Path:
+    path = app_data_dir() / "play_history"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _legacy_play_history_path() -> Path:
     return app_data_dir() / "play_history.json"
 
 
-def load_play_history() -> list[dict[str, Any]]:
-    path = play_history_path()
+def _play_history_file_for(day: date) -> Path:
+    return play_history_dir() / f"{day.isoformat()}.jsonl"
+
+
+def _entry_day(entry: dict[str, Any]) -> date:
+    try:
+        return datetime.fromisoformat(entry.get("played_at") or "").date()
+    except ValueError:
+        return date.today()
+
+
+def _append_jsonl(path: Path, entries: list[dict[str, Any]]) -> None:
+    with path.open("a", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry, ensure_ascii=False))
+            f.write("\n")
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
+    entries: list[dict[str, Any]] = []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
         return []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            entries.append(obj)
+    return entries
 
 
-def save_play_history(history: list[dict[str, Any]]) -> None:
-    play_history_path().write_text(
-        json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+def _migrate_legacy_play_history() -> None:
+    """예전엔 재생 기록 전체를 play_history.json 한 파일에 담았다. 재생마다 그
+    파일 전체를 읽고 다시 쓰는 게 기록이 쌓일수록 느려져서, 날짜별 파일(하루
+    한 개)로 나누고 기록은 그날 파일에 한 줄만 추가하는 방식으로 바꿨다.
+    이 함수는 기존 파일이 남아있으면 날짜별로 쪼개 옮기고 원본은 지운다."""
+    legacy_path = _legacy_play_history_path()
+    if not legacy_path.exists():
+        return
+    try:
+        data = json.loads(legacy_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        data = []
+    if isinstance(data, list):
+        by_day: dict[date, list[dict[str, Any]]] = {}
+        for entry in data:
+            if isinstance(entry, dict):
+                by_day.setdefault(_entry_day(entry), []).append(entry)
+        for day, entries in by_day.items():
+            _append_jsonl(_play_history_file_for(day), entries)
+    legacy_path.unlink(missing_ok=True)
+
+
+def append_play_history(entry: dict[str, Any]) -> None:
+    _migrate_legacy_play_history()
+    _append_jsonl(_play_history_file_for(_entry_day(entry)), [entry])
+
+
+def load_play_history() -> list[dict[str, Any]]:
+    _migrate_legacy_play_history()
+    entries: list[dict[str, Any]] = []
+    for path in sorted(play_history_dir().glob("*.jsonl")):
+        entries.extend(_read_jsonl(path))
+    return entries
+
+
+def load_play_history_range(start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """[start, end) 구간과 겹치는 날짜 파일만 읽어 그 구간에 속한 엔트리만 돌려준다
+    (day/week/month 통계처럼 전체 기록이 아니라 좁은 기간만 필요할 때, 몇 년치
+    기록 전체를 읽지 않아도 되게 한다)."""
+    _migrate_legacy_play_history()
+    entries: list[dict[str, Any]] = []
+    if end <= start:
+        return entries
+    day = start.date()
+    last_day = (end - timedelta(microseconds=1)).date()
+    while day <= last_day:
+        for raw in _read_jsonl(_play_history_file_for(day)):
+            try:
+                played_at = datetime.fromisoformat(raw.get("played_at") or "")
+            except ValueError:
+                continue
+            if start <= played_at < end:
+                entries.append(raw)
+        day += timedelta(days=1)
+    return entries
 
 
 def recommend_exposures_path() -> Path:
