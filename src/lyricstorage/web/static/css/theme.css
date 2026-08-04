@@ -199,7 +199,8 @@ textarea {
 .browse-panel,
 .lyrics-panel,
 .stats-panel,
-.today-panel {
+.today-panel,
+.home-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -207,6 +208,10 @@ textarea {
   min-width: 0;
   min-height: 0;
   gap: 8px;
+}
+.home-panel {
+  overflow-y: auto;
+  gap: 24px;
 }
 
 .page-panel {
@@ -267,6 +272,30 @@ textarea {
   z-index: 35;
   background: rgba(0, 0, 0, 0.5);
 }
+.sidebar-logo-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.sidebar-logo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.sidebar-logo-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .sidebar-home-btn,
 .sidebar-nav-btn {
   display: flex;
@@ -1929,6 +1958,318 @@ textarea.file-content-body:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* -- 홈 화면 ("다시 듣기" 가로 스크롤 카드 / "빠른 선곡" 3열 목록) ------------- */
+.pill-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.pill-btn:hover {
+  background: var(--border);
+}
+.home-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 12px 0;
+}
+.home-recent-row {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding-bottom: 4px;
+  /* 스크롤바는 평소엔 숨겨두고, .scrolling일 때만(홈.js가 스크롤 중 붙였다 뗀다) 보여준다. */
+  scrollbar-color: transparent transparent;
+}
+.home-recent-row.scrolling {
+  scrollbar-color: var(--border) transparent;
+}
+.home-recent-row::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.home-recent-row.scrolling::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: content-box;
+}
+.home-recent-card {
+  flex: 0 0 170px;
+  /* flex 아이템의 기본 min-width:auto는 nowrap 텍스트 자식의 콘텐츠 크기를 최소
+     폭으로 잡아버려서, 곡명이 긴 카드만 170px보다 넓어지는 원인이 된다. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 6px;
+  margin: -6px;
+}
+.home-recent-card:hover {
+  background: var(--bg-elevated);
+}
+.home-recent-card-art-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-recent-card-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.home-recent-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: none;
+  color: #fff;
+  opacity: 0;
+  cursor: pointer;
+}
+.home-recent-card:hover .home-recent-card-play {
+  opacity: 1;
+}
+.home-recent-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-recent-card-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-quickpicks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 16px;
+}
+.home-quickpick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.home-quickpick-row:hover {
+  background: var(--bg-elevated);
+}
+.home-quickpick-art-wrap {
+  position: relative;
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-quickpick-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.home-quickpick-text {
+  min-width: 0;
+}
+.home-quickpick-title {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-quickpick-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- 확장 재생 화면 (재생바 상단 이동 + 상세/대기 목록) ------------------------ */
+/* top:0/bottom:auto로 앵커 자체를 바꾸는 대신, 평소 위치(하단 고정)를 기준으로
+   transform만 움직인다 — GPU 가속되는 transform 전환이라 자연스럽게 미끄러지듯
+   올라가고, 배경색(--bg-elevated)과 그림자도 같이 전환해 확장 패널과 이어지는
+   하나의 면처럼 보이게 한다. */
+.transport-bar {
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease;
+}
+.transport-bar.expanded {
+  transform: translateY(calc(-100vh + var(--transport-bar-height)));
+  border-top: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.expanded-player-panel {
+  display: flex;
+  position: fixed;
+  /* 상단은 .expanded 상태의 재생바(z-index 10, 같은 높이)가 이미 차지하므로,
+     그 아래부터만 덮는다 — 그렇지 않으면 이 패널의 배경이 재생바 위에 그려져
+     가려버린다. */
+  top: var(--transport-bar-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  /* 재생바와 완전히 같은 배경색 — 위(재생바)와 아래(이 패널)가 하나로 이어져
+     보이게 한다. */
+  background: var(--bg-elevated);
+  /* 평소엔 화면 아래로 완전히 내려가 숨어 있다가, 재생바가 위로 미끄러질 때
+     같은 시간/이징으로 함께 밀려 올라온다 — 위아래가 한 덩어리로 움직이는
+     것처럼 보이게 한다(재생바는 .transport-bar.expanded 참고). */
+  transform: translateY(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s;
+}
+.expanded-player-panel.active {
+  transform: translateY(0);
+  visibility: visible;
+  pointer-events: auto;
+}
+.expanded-player-body {
+  flex: 1;
+  display: flex;
+  gap: 32px;
+  min-height: 0;
+  padding: 40px;
+}
+.expanded-player-detail {
+  flex: 1 1 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-width: 0;
+}
+.expanded-player-art {
+  width: min(440px, 70%);
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+.expanded-player-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.expanded-player-title {
+  /* .expanded-player-art가 position:relative라 그 box-shadow가 "포지션드
+     요소" 페인트 단계에서 뒤에 그려져, static인 텍스트를 DOM 순서와 무관하게
+     덮어버린다. 텍스트도 position:relative를 줘서 같은 단계에 넣어야
+     DOM 순서(아트 다음)대로 그 위에 그려진다. */
+  position: relative;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+}
+.expanded-player-subtitle {
+  position: relative;
+  font-size: 15px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.expanded-player-queue {
+  flex: 1 1 60%;
+  /* .expanded-player-body의 기본 align-items:stretch를 끄고, 곡 수만큼만
+     높이를 차지하게 한다 — 그렇지 않으면 대기 목록이 짧을 때도 패널 전체
+     높이만큼 늘어나 아래에 배경만 남은 빈 공간이 비대칭적으로 남는다.
+     max-height로 패널을 넘지 않게만 막고, 넘치면 그때만 스크롤한다. */
+  align-self: flex-start;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+.expanded-player-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.expanded-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+/* 패널 배경 자체가 --bg-elevated라, 행 강조도 같은 색이면 안 보인다 —
+   한 단계 밝은 --border를 대신 쓴다. */
+.expanded-queue-row:hover {
+  background: var(--border);
+}
+.expanded-queue-row.current {
+  background: var(--border);
+  cursor: default;
+}
+.expanded-queue-row-art-wrap {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expanded-queue-row-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.expanded-queue-row-text {
+  min-width: 0;
+}
+.expanded-queue-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expanded-queue-row-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 아티스트 탭(브라우즈/재생 통계 공용): 앨범 커버 최대 4개로 채운 콜라주.
    2개는 좌우 반반, 3개는 위 두 칸(좌/우) + 아래 한 칸(전체 폭), 4개는 2x2 사분면. */
 .artist-card-art-grid {
@@ -2459,5 +2800,11 @@ textarea.file-content-body:disabled {
   }
   .sidebar-backdrop.open {
     display: block;
+  }
+
+  /* 좁은 화면에서는 확장 재생 화면의 앨범아트까지 보여줄 여유가 없으므로
+     제목/아티스트만 남기고 생략한다. */
+  .expanded-player-art {
+    display: none;
   }
 }

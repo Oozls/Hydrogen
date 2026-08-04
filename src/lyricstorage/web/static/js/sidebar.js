@@ -12,10 +12,11 @@ function fmtBytes(bytes) {
   return `${gb.toFixed(2)} GB`;
 }
 
-export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStats, onGoToday }) {
+export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse, onGoStats, onGoToday }) {
   const sidebarEl = document.getElementById("sidebar");
   const toggleBtn = document.getElementById("btn-sidebar-toggle");
   const backdrop = document.getElementById("sidebar-backdrop");
+  const logoBtn = document.getElementById("btn-sidebar-logo");
   const homeBtn = document.getElementById("btn-sidebar-browse");
   const listEl = document.getElementById("sidebar-playlist-list");
   const statsBtn = document.getElementById("btn-sidebar-stats");
@@ -23,7 +24,7 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStat
   const dataSizeText = document.getElementById("sidebar-data-size-text");
 
   let names = bootstrap.playlist_names.slice();
-  let activeName = null;
+  let activeName = "__home__";
 
   // 화면이 좁아 사이드바가 왼쪽에서 슬라이드로 열리는 드로어일 때만 쓰인다
   // (넓은 화면에선 CSS가 토글 버튼/배경을 아예 숨기므로 무해하다). 메뉴에서
@@ -43,7 +44,7 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStat
   });
 
   function render() {
-    homeBtn.classList.toggle("active", activeName === null);
+    homeBtn.classList.toggle("active", activeName === "__browse__");
     statsBtn.classList.toggle("active", activeName === "__stats__");
     todayBtn.classList.toggle("active", activeName === "__today__");
     listEl.innerHTML = "";
@@ -69,6 +70,12 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoBrowse, onGoStat
     }
   }
 
+  if (onGoHome) {
+    logoBtn.addEventListener("click", () => {
+      onGoHome();
+      closeDrawer();
+    });
+  }
   homeBtn.addEventListener("click", () => {
     onGoBrowse();
     closeDrawer();

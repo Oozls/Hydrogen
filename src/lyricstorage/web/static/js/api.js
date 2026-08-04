@@ -163,12 +163,25 @@ export const api = {
     request("POST", "/api/stats/plays", {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },
     }),
-  getTopStats: (period, group, offset) =>
-    request("GET", `/api/stats/top?period=${period}&group=${group}&offset=${offset}`),
-  getTodaySongs: (limit, reroll) =>
+  getRecentPlays: (limit) => request("GET", `/api/stats/recent?limit=${limit || 12}`),
+  getTopStats: (period, group, offset, limit) =>
     request(
       "GET",
-      `/api/recommendations/today?limit=${limit || 8}${reroll ? `&reroll=${encodeURIComponent(reroll)}` : ""}`
+      `/api/stats/top?period=${period}&group=${group}&offset=${offset}` +
+        (limit == null ? "" : `&limit=${limit}`)
+    ),
+  getTodaySongs: (limit, reroll, record) =>
+    request(
+      "GET",
+      `/api/recommendations/today?limit=${limit || 8}${reroll ? `&reroll=${encodeURIComponent(reroll)}` : ""}` +
+        (record === false ? "&record=0" : "")
+    ),
+  getQueueSongs: ({ seedTrackId, count, familiarCount, excludeIds }) =>
+    request(
+      "GET",
+      `/api/recommendations/queue?seed_track_id=${encodeURIComponent(seedTrackId)}&count=${count || 1}` +
+        (familiarCount ? `&familiar_count=${familiarCount}` : "") +
+        (excludeIds && excludeIds.length ? `&exclude=${excludeIds.map(encodeURIComponent).join(",")}` : "")
     ),
   getTodayWeights: () => request("GET", "/api/recommendations/weights"),
   updateTodayWeights: (patch) => request("PUT", "/api/recommendations/weights", { json: patch }),

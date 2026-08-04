@@ -133,7 +133,18 @@ export function setupNowPlaying(player, onOpenAlbum) {
     marqueeResizeTimer = setTimeout(() => applyMarquee(nowPlayingTextEl), MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 
-  player.addEventListener("trackchange", (e) => setTrack(e.detail.track));
+  // 추천 큐(홈 화면에서 시작한 라디오 형태의 재생 대기 목록)는 계속 늘어나는
+  // 목록이라 셔플/반복 개념이 맞지 않으므로, 그 동안은 버튼을 비활성화한다.
+  function updateModeButtonsDisabled() {
+    const disabled = player.queueMode === "recommend";
+    shuffleBtn.disabled = disabled;
+    repeatBtn.disabled = disabled;
+  }
+
+  player.addEventListener("trackchange", (e) => {
+    setTrack(e.detail.track);
+    updateModeButtonsDisabled();
+  });
 
   // durationMs가 아직 0/NaN인 상태(트랙 전환 직후)에는 setPositionState가
   // 예외를 던지므로 유효할 때만 호출한다.

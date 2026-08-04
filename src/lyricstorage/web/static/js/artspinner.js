@@ -1,3 +1,6 @@
+import { api } from "./api.js";
+import { iconSpan } from "./icons.js";
+
 // 앨범 커버 <img>가 로딩되는 동안 아트 컨테이너 위에 스피너를 겹쳐 보여준다.
 // 컨테이너는 position:relative여야 하고(대부분 이미 그렇게 스타일돼 있음), 로드
 // 완료/실패 시 호출부가 반환된 함수를 불러 스피너를 제거해야 한다.
@@ -7,4 +10,24 @@ export function showArtSpinner(wrapEl) {
   spinner.className = "art-spinner";
   wrapEl.appendChild(spinner);
   return () => spinner.remove();
+}
+
+// 트랙 아트(로딩 스피너 + 실패 시 음표 아이콘 폴백)를 담은 wrapEl을 만든다.
+// home.js/expanded-player.js처럼 트랙 카드/행을 그리는 여러 화면에서 공유한다.
+export function buildArtEl(trackId, wrapClass) {
+  const wrap = document.createElement("div");
+  wrap.className = wrapClass;
+  const stopSpin = showArtSpinner(wrap);
+  const img = document.createElement("img");
+  img.alt = "";
+  img.loading = "lazy";
+  img.src = api.artUrl(trackId);
+  img.onload = () => stopSpin();
+  img.onerror = () => {
+    stopSpin();
+    img.remove();
+    wrap.appendChild(iconSpan("music", "icon-lg"));
+  };
+  wrap.appendChild(img);
+  return wrap;
 }

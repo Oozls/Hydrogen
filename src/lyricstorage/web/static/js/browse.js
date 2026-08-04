@@ -10,6 +10,7 @@ import { showArtSpinner } from "./artspinner.js";
 import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { fillArtistArt } from "./artistArt.js";
+import { splitArtists, buildArtistNameResolver } from "./songArtist.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -62,7 +63,7 @@ const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 // 못했을 때만 쓰는 임시값).
 const SONGS_PAGE_SIZE_FALLBACK = 50;
 
-export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit) {
+export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit, identityDialogApi) {
   const panelEl = document.getElementById("browse-panel");
   const searchInput = document.getElementById("browse-search");
   const searchFieldSelect = document.getElementById("browse-search-field");
@@ -71,6 +72,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const tabsEl = document.getElementById("browse-tabs");
   const artistsPanel = document.getElementById("browse-artists-panel");
   const artistsList = document.getElementById("browse-artists-list");
+  const songArtistsPanel = document.getElementById("browse-song-artists-panel");
+  const songArtistsList = document.getElementById("browse-song-artists-list");
+  const songArtistDetailPanel = document.getElementById("browse-song-artist-detail-panel");
+  const songArtistDetailTitleEl = document.getElementById("browse-song-artist-detail-title");
+  const songArtistDetailAliasesEl = document.getElementById("browse-song-artist-detail-aliases");
+  const songArtistDetailListEl = document.getElementById("browse-song-artist-detail-list");
+  const songArtistDetailBackBtn = document.getElementById("btn-browse-song-artist-detail-back");
+  const songArtistDetailEditBtn = document.getElementById("btn-browse-song-artist-detail-edit");
   const songsPanel = document.getElementById("browse-songs-panel");
   const albumsPanel = document.getElementById("browse-albums-panel");
   const albumDetailPanel = document.getElementById("browse-album-detail-panel");
@@ -100,6 +109,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   let tracks = [];
   let albums = [];
+  let artistsRegistry = [];
   let libraryName = null;
   let mode = "artist";
   let selectedTrackIds = new Set();
@@ -110,6 +120,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let songsPage = 0;
   let songsPageSize = SONGS_PAGE_SIZE_FALLBACK;
   let todaySongs = [];
+  // 곡 아티스트 상세 화면에 지금 열려 있는 정체성({id, name, aliases}).
+  let songArtistDetailIdentity = null;
   // 가사 패널이 열려 있으면 재생 통계 TOP 3 앨범과 마찬가지로 이 위젯도 숨긴다(공간 확보).
   let lyricsActive = false;
 
@@ -129,6 +141,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     const selecting = selectedTrackIds.size > 0;
     songsList.classList.toggle("selecting", selecting);
     albumDetailList.classList.toggle("selecting", selecting);
+    songArtistDetailListEl
+      .querySelectorAll(".playlist-list")
+      .forEach((ul) => ul.classList.toggle("selecting", selecting));
     clearSelectionBtn.hidden = !selecting;
   }
 
@@ -152,9 +167,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   async function loadLibraryAndAlbums() {
-    const [library, albumsResult] = await Promise.all([api.getLibrary(), api.getAlbums()]);
+    const [library, albumsResult, artistsResult] = await Promise.all([
+      api.getLibrary(),
+      api.getAlbums(),
+      api.getArtists(),
+    ]);
     tracks = library.tracks;
     albums = albumsResult.albums;
+    artistsRegistry = artistsResult.artists;
     libraryName = library.name;
   }
 
@@ -789,6 +809,123 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     requestAnimationFrame(() => applyMarquee(artistsList));
   }
 
+  // 곡 아티스트 카드의 커버는 그 아티스트가(쉼표 분리 기준) 참여한 곡들이
+  // 속한 앨범 중 무작위로 콜라주를 채운다 — 재생 통계 '곡 아티스트' 탭과 동일.
+  function buildSongArtistCard(entry) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+    card.title = "이 아티스트가 참여한 곡 보기";
+
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    fillArtistArt(artWrap, entry.albums);
+    card.appendChild(artWrap);
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "media-card-title-row";
+    titleRow.appendChild(createMarqueeClip("media-card-title", "", entry.name));
+    card.appendChild(titleRow);
+
+    const meta = document.createElement("div");
+    meta.className = "media-card-meta";
+    const countEl = document.createElement("span");
+    countEl.textContent = `곡 ${entry.count}개`;
+    meta.appendChild(countEl);
+    card.appendChild(meta);
+
+    card.addEventListener("click", () => openSongArtistDetail(entry.name));
+    return card;
+  }
+
+  // '곡 아티스트' 탭은 '아티스트' 탭(앨범 아티스트)과 달리 곡(Track.artist,
+  // 쉼표로 여럿 가능)을 기준으로 묶고, 이명 레지스트리로 같은 사람을 통합한다.
+  // 재생 순위와 무관한 카탈로그라 이름순으로만 나열한다.
+  function renderSongArtists() {
+    const q = searchInput.value.trim().toLowerCase();
+    songArtistsList.innerHTML = "";
+
+    const resolveName = buildArtistNameResolver(artistsRegistry);
+    const albumById = new Map(albums.map((a) => [a.id, a]));
+    const byName = new Map();
+    for (const track of tracks) {
+      for (const rawName of splitArtists(track.artist)) {
+        const name = resolveName(rawName);
+        if (!byName.has(name)) byName.set(name, { name, count: 0, albumIds: new Set() });
+        const entry = byName.get(name);
+        entry.count += 1;
+        if (track.album_id) entry.albumIds.add(track.album_id);
+      }
+    }
+    let entries = [...byName.values()].map((e) => ({
+      name: e.name,
+      count: e.count,
+      albums: [...e.albumIds].map((id) => albumById.get(id)).filter(Boolean),
+    }));
+    entries = entries.filter((e) => !q || e.name.toLowerCase().includes(q));
+    entries.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+
+    if (!entries.length) {
+      renderEmpty(songArtistsList);
+      return;
+    }
+    entries.forEach((entry) => songArtistsList.appendChild(buildSongArtistCard(entry)));
+    requestAnimationFrame(() => applyMarquee(songArtistsList));
+  }
+
+  // identity(대표 이름 + 이명)에 속한 모든 이름과 매칭되는 곡을 앨범별로 묶어
+  // 상세 화면을 그린다(재생 통계 곡 아티스트 상세와 동일한 구성). 곡 목록 행은
+  // 브라우즈의 renderSongRows를 그대로 써서 체크박스 선택/더보기 메뉴가 그대로 동작한다.
+  function renderSongArtistDetail(identity) {
+    const matchNames = new Set([identity.name, ...identity.aliases]);
+    const matched = tracks.filter((t) => splitArtists(t.artist).some((n) => matchNames.has(n)));
+
+    const byAlbum = new Map();
+    for (const track of matched) {
+      const key = track.album_id || "";
+      if (!byAlbum.has(key)) byAlbum.set(key, { album: track.album || "(앨범 없음)", tracks: [] });
+      byAlbum.get(key).tracks.push(track);
+    }
+    const sections = [...byAlbum.values()].sort((a, b) => (a.album || "").localeCompare(b.album || "", "ko"));
+    const allTracks = sections.flatMap((s) => s.tracks);
+
+    songArtistDetailTitleEl.textContent = identity.name || "(아티스트 없음)";
+    songArtistDetailAliasesEl.textContent = identity.aliases.length ? `이명: ${identity.aliases.join(", ")}` : "";
+    songArtistDetailListEl.innerHTML = "";
+    if (!sections.length) {
+      renderEmpty(songArtistDetailListEl);
+      return;
+    }
+    sections.forEach((section) => {
+      const sectionEl = document.createElement("div");
+      sectionEl.className = "album-section";
+      const header = document.createElement("div");
+      header.className = "album-section-header";
+      header.textContent = section.album;
+      sectionEl.appendChild(header);
+      const list = document.createElement("ul");
+      list.className = "playlist-list";
+      renderSongRows(list, section.tracks, (track) =>
+        playFromList(track, allTracks, identity.name || "아티스트")
+      );
+      sectionEl.appendChild(list);
+      songArtistDetailListEl.appendChild(sectionEl);
+    });
+  }
+
+  async function openSongArtistDetail(name) {
+    const identity = await api.resolveArtist(name);
+    songArtistDetailIdentity = identity;
+    renderSongArtistDetail(identity);
+    songArtistsPanel.classList.remove("active");
+    songArtistDetailPanel.classList.add("active");
+  }
+
+  function closeSongArtistDetail() {
+    songArtistDetailPanel.classList.remove("active");
+    songArtistsPanel.classList.add("active");
+    songArtistDetailIdentity = null;
+  }
+
   // 앨범 탭은 아티스트별 구획 없이 전체 앨범을 하나의 그리드로 보여준다(카드
   // 안에 아티스트명을 따로 표시). 드래그 정렬(SortableJS)도 구획 경계 없이 그리드
   // 전체에서 자유롭게 순서를 바꿀 수 있다.
@@ -857,6 +994,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   function render() {
     if (mode === "song") renderSongs();
     else if (mode === "album") renderAlbums();
+    else if (mode === "song-artist") renderSongArtists();
     else renderArtists();
   }
 
@@ -865,7 +1003,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 비활성화하고, 그 상태로 넘어왔으면 "전체"로 되돌린다.
   function syncSearchFieldOptions() {
     const isAlbumMode = mode === "album";
-    const isArtistMode = mode === "artist";
+    const isArtistMode = mode === "artist" || mode === "song-artist";
     searchFieldTitleOption.disabled = isAlbumMode || isArtistMode;
     searchFieldAlbumOption.disabled = isArtistMode;
     if ((isAlbumMode || isArtistMode) && searchFieldSelect.value === "title") searchFieldSelect.value = "all";
@@ -882,9 +1020,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     if (enteringSong) songsPage = 0; // 곡 탭에 새로 들어올 때마다 1페이지부터 보여준다.
     albumDetailPanel.classList.remove("active");
     currentAlbumGroup = null;
+    closeSongArtistDetail();
     songsPanel.classList.toggle("active", mode === "song");
     albumsPanel.classList.toggle("active", mode === "album");
     artistsPanel.classList.toggle("active", mode === "artist");
+    songArtistsPanel.classList.toggle("active", mode === "song-artist");
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
     syncSearchFieldOptions();
     render();
@@ -936,6 +1076,22 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     if (currentAlbumGroup) onEditAlbum(currentAlbumGroup);
   });
 
+  songArtistDetailBackBtn.addEventListener("click", closeSongArtistDetail);
+  songArtistDetailEditBtn.addEventListener("click", () => {
+    if (!songArtistDetailIdentity || !songArtistDetailIdentity.id) return;
+    identityDialogApi.open(songArtistDetailIdentity, {
+      getTracks: () => tracks,
+      onChange: (updated) => {
+        songArtistDetailIdentity = updated;
+      },
+      onClose: () => {
+        if (songArtistDetailIdentity && songArtistDetailPanel.classList.contains("active")) {
+          renderSongArtistDetail(songArtistDetailIdentity);
+        }
+      },
+    });
+  });
+
   addFileBtn.addEventListener("click", () => fileInput.click());
   addFolderBtn.addEventListener("click", () => folderInput.click());
   fileInput.addEventListener("change", async () => {
@@ -957,6 +1113,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   player.addEventListener("trackchange", () => {
     if (albumDetailPanel.classList.contains("active")) {
       renderAlbumDetailRows(currentAlbumGroup);
+    } else if (songArtistDetailPanel.classList.contains("active")) {
+      renderSongArtistDetail(songArtistDetailIdentity);
     } else {
       render();
     }
@@ -971,6 +1129,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     if (match) match.rating = e.detail.rating;
     if (albumDetailPanel.classList.contains("active")) {
       renderAlbumDetailRows(currentAlbumGroup);
+    } else if (songArtistDetailPanel.classList.contains("active")) {
+      renderSongArtistDetail(songArtistDetailIdentity);
     } else if (mode === "song") {
       renderSongs();
     }
@@ -986,6 +1146,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         applyColumnPriority(albumDetailList);
         applyMarquee(albumDetailList);
         applyMarquee(albumDetailTitleClip);
+      } else if (songArtistDetailPanel.classList.contains("active")) {
+        applyColumnPriority(songArtistDetailListEl);
+        applyMarquee(songArtistDetailListEl);
       } else if (songsPanel.classList.contains("active")) {
         applyColumnPriority(songsList);
         applyMarquee(songsList);
@@ -994,6 +1157,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         applyMarquee(albumsList);
       } else if (artistsPanel.classList.contains("active")) {
         applyMarquee(artistsList);
+      } else if (songArtistsPanel.classList.contains("active")) {
+        applyMarquee(songArtistsList);
       }
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
@@ -1099,7 +1264,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // 경쟁 상태가 생기지 않는다. track_id를 우선 매칭하되, 재생 기록처럼 그
     // 트랙이 더 이상 라이브러리에 없을 수 있는 경우를 대비해 album+artist로도
     // 매칭한다.
-    async show(focus) {
+    // artistFocus(아티스트 이름 문자열)를 넘기면(재생 통계 '아티스트' 탭 카드
+    // 클릭 등) 앨범 탭으로 들어가 그 아티스트명으로 검색해둔 상태를 보여준다 —
+    // openArtistAlbums과 동일한 진입점을 외부에도 열어주는 것뿐이다.
+    async show(focus, artistFocus) {
       panelEl.classList.add("active");
       searchInput.value = "";
       searchFieldSelect.value = "all";
@@ -1107,7 +1275,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       renderLoading(albumsList);
       renderLoading(artistsList);
       await loadLibraryAndAlbums();
-      switchMode(focus ? "album" : "artist");
+      if (artistFocus) {
+        openArtistAlbums(artistFocus);
+      } else {
+        switchMode(focus ? "album" : "artist");
+      }
       loadTodaySongs();
       if (focus) {
         const group = groupAlbums(tracks, albums).find(

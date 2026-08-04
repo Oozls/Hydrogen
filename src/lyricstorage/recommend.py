@@ -306,20 +306,10 @@ def _record_exposures(today: str, picked: list[dict[str, Any]], feats_by_id: dic
     storage.save_recommend_exposures(exposures)
 
 
-def pick_today_songs(
-    tracks: list[dict[str, Any]],
-    *,
-    limit: int = DEFAULT_LIMIT,
-    seed: str | None = None,
-    record_exposure: bool = True,
-) -> list[dict[str, Any]]:
-    """tracks: track_to_json() 결과 리스트. seed가 없으면 오늘 날짜로 고정되어
-    하루 동안은 같은 결과를 준다(이름 그대로 '오늘의 곡'). record_exposure가
-    참이면 이 추천 결과를 학습용 노출 로그에 남긴다(재뽑기 요청에는 꺼서, 임시로
-    다시 뽑아본 결과가 '공식' 추천으로 학습되지 않게 한다)."""
-    if not tracks:
-        return []
-
+def _prepare_scoring(tracks: list[dict[str, Any]]) -> dict[str, Any]:
+    """pick_today_songs와 pick_queue_songs가 공유하는 준비 단계: 재생 기록 기반
+    통계(재생 횟수, 아티스트/앨범 선호도, 피로도, 명시적 관심)와 학습된(또는 수동)
+    가중치를 계산하고, 곡 하나를 넣으면 피처/점수를 돌려주는 함수를 만들어 돌려준다."""
     history = storage.load_play_history()
     play_counts = _play_counts(history)
     artist_affinity = _affinity_by(history, "artist", split=True)
@@ -332,25 +322,9 @@ def pick_today_songs(
     fatigue_counts = _fatigue_counts(exposures, _last_played_at_by_track(history))
     explicit_ids = _explicit_track_ids()
 
-    today = date.today().isoformat()
     config = storage.load_recommend_config()
     manual_weights = config.get("manual_weights") if config.get("mode") == "manual" else None
     weights, source = resolve_weights(history, rating_by_track, duration_by_track, manual_weights, exposures)
-    # 자동 모드든 수동 모드든, 이번 추천에 실제로 쓰인 가중치를 매 호출(새로고침/
-    # 다시 뽑기 포함)마다 이력에 남겨 그래프로 추적할 수 있게 한다.
-    _record_weight_history(weights, source)
-
-    # 결정적 재현을 위해 track_id로 정렬한 뒤 진행한다.
-    ordered_tracks = sorted(tracks, key=lambda t: t.get("track_id") or "")
-
-    # 재생 기록이 라이브러리 평균에 비해 낮거나 없는 곡만 후보로 남긴다. 기준선은
-    # 전체 트랙의 재생 횟수 중앙값 — 서비스 초기(대부분 미청취)엔 자연히 0이 되어
-    # "한 번도 안 들은 곡" 위주로 좁혀지고, 청취 이력이 쌓일수록 같이 올라간다.
-    counts_all = [play_counts.get(t.get("track_id") or "", 0) for t in ordered_tracks]
-    threshold = max(_median(counts_all), 1)
-    candidates = [t for t in ordered_tracks if play_counts.get(t.get("track_id") or "", 0) <= threshold]
-    if not candidates:
-        candidates = ordered_tracks
 
     def artist_affinity_score(track_artist: str) -> float:
         # 아티스트가 여럿(쉼표 구분)이면 각자의 선호도 평균을 쓴다 — 공동 작업곡이
@@ -374,27 +348,39 @@ def pick_today_songs(
             "freshness": 1.0 - min(fatigue, FATIGUE_EXPOSURE_CAP) / FATIGUE_EXPOSURE_CAP,
         }
 
-    feats_by_id = {t["track_id"]: features(t) for t in candidates}
-
-    def score(track: dict[str, Any]) -> float:
-        feats = feats_by_id[track["track_id"]]
+    def score(feats: dict[str, float]) -> float:
         return BASE_SCORE + sum(weights[k] * feats.get(k, 0.0) for k in FEATURE_KEYS)
 
-    rng = random.Random(seed if seed is not None else today)
+    return {
+        "history": history,
+        "play_counts": play_counts,
+        "weights": weights,
+        "source": source,
+        "features": features,
+        "score": score,
+    }
 
-    pool = list(candidates)
-    score_by_id = {t["track_id"]: max(0.01, score(t)) for t in pool}
+
+def _weighted_pick_batch(
+    pool: list[dict[str, Any]],
+    score_by_id: dict[str, float],
+    n: int,
+    rng: random.Random,
+    picked_artist_counts: dict[str, int],
+    picked_album_counts: dict[str, int],
+) -> list[dict[str, Any]]:
+    """pool에서 score_by_id 가중치 기반으로 최대 n개를 가중 무작위로 뽑는다. 같은
+    배치(및 호출자가 이어서 넘긴 picked_*_counts) 안에서 이미 뽑힌 아티스트/앨범과
+    겹치면 다양성 페널티를 곱해 확률을 점점 낮춘다(완전히 배제하지는 않음).
+    picked_artist_counts/picked_album_counts는 그 자리에서 갱신되므로, 여러 단계에
+    걸쳐 같은 딕셔너리를 넘기면 단계를 넘나들며 다양성이 유지된다."""
+    pool = list(pool)
     picked: list[dict[str, Any]] = []
-    # 같은 배치 안에서 이미 뽑힌 아티스트/앨범이 다시 뽑힐 확률을 점점 낮춰서
-    # (완전히 배제하지는 않고) 하루 추천이 한두 아티스트로 쏠리는 것을 완화한다.
-    picked_artist_counts: dict[str, int] = {}
-    picked_album_counts: dict[str, int] = {}
-    n = min(limit, len(pool))
+    n = min(n, len(pool))
     for _ in range(n):
         current_weights = []
         for t in pool:
             w = score_by_id[t["track_id"]]
-            # 아티스트가 여럿이면 이미 뽑힌 곡과 하나라도 겹칠 때마다 페널티를 곱한다.
             for name in split_artists(t.get("artist") or ""):
                 w *= DIVERSITY_ARTIST_PENALTY ** picked_artist_counts.get(name, 0)
             w *= DIVERSITY_ALBUM_PENALTY ** picked_album_counts.get(t.get("album") or "", 0)
@@ -407,9 +393,171 @@ def pick_today_songs(
         album = chosen.get("album") or ""
         if album:
             picked_album_counts[album] = picked_album_counts.get(album, 0) + 1
+    return picked
+
+
+def pick_today_songs(
+    tracks: list[dict[str, Any]],
+    *,
+    limit: int = DEFAULT_LIMIT,
+    seed: str | None = None,
+    record_exposure: bool = True,
+    record_weights: bool = True,
+) -> list[dict[str, Any]]:
+    """tracks: track_to_json() 결과 리스트. seed가 없으면 오늘 날짜로 고정되어
+    하루 동안은 같은 결과를 준다(이름 그대로 '오늘의 곡'). record_exposure가
+    참이면 이 추천 결과를 학습용 노출 로그에 남긴다(재뽑기 요청에는 꺼서, 임시로
+    다시 뽑아본 결과가 '공식' 추천으로 학습되지 않게 한다). record_weights도 거짓이면
+    가중치 변화 그래프에도 이번 호출을 남기지 않는다 — 홈 화면 "빠른 선곡"처럼
+    화면을 열 때마다 조용히 미리보기만 가져오는 호출이 그래프를 도배하지 않게 한다."""
+    if not tracks:
+        return []
+
+    ctx = _prepare_scoring(tracks)
+    play_counts = ctx["play_counts"]
+    weights, source = ctx["weights"], ctx["source"]
+    # 자동 모드든 수동 모드든, 이번 추천에 실제로 쓰인 가중치를 매 호출(새로고침/
+    # 다시 뽑기 포함)마다 이력에 남겨 그래프로 추적할 수 있게 한다.
+    if record_weights:
+        _record_weight_history(weights, source)
+
+    today = date.today().isoformat()
+    # 결정적 재현을 위해 track_id로 정렬한 뒤 진행한다.
+    ordered_tracks = sorted(tracks, key=lambda t: t.get("track_id") or "")
+
+    # 재생 기록이 라이브러리 평균에 비해 낮거나 없는 곡만 후보로 남긴다. 기준선은
+    # 전체 트랙의 재생 횟수 중앙값 — 서비스 초기(대부분 미청취)엔 자연히 0이 되어
+    # "한 번도 안 들은 곡" 위주로 좁혀지고, 청취 이력이 쌓일수록 같이 올라간다.
+    counts_all = [play_counts.get(t.get("track_id") or "", 0) for t in ordered_tracks]
+    threshold = max(_median(counts_all), 1)
+    candidates = [t for t in ordered_tracks if play_counts.get(t.get("track_id") or "", 0) <= threshold]
+    if not candidates:
+        candidates = ordered_tracks
+
+    feats_by_id = {t["track_id"]: ctx["features"](t) for t in candidates}
+    score_by_id = {tid: max(0.01, ctx["score"](feats)) for tid, feats in feats_by_id.items()}
+
+    rng = random.Random(seed if seed is not None else today)
+    picked = _weighted_pick_batch(candidates, score_by_id, limit, rng, {}, {})
 
     if record_exposure and picked:
         _record_exposures(today, picked, feats_by_id)
+
+    result = []
+    for i, track in enumerate(picked):
+        result.append(
+            {
+                **track,
+                "rank": i + 1,
+                "play_count": play_counts.get(track.get("track_id") or "", 0),
+            }
+        )
+    return result
+
+
+# -- 재생 대기 목록(큐) -------------------------------------------------------
+# 홈 화면 "다시 듣기"/"빠른 선곡"에서 재생을 시작하면, 클릭한 곡을 시드로 삼아
+# 라디오처럼 계속 이어지는 재생 대기 목록을 만든다. "오늘의 곡"과 알고리즘 기반은
+# 같지만(취향 신호 + 가중 무작위 + 다양성 페널티), 시드 곡과의 관련성(같은
+# 아티스트/앨범, 시드 곡 바로 다음에 자주 이어 들은 곡)을 추가로 반영하고, 노출/
+# 가중치 학습 이력은 전혀 남기지 않는다 — 하루짜리 '공식' 추천이 아니라 재생
+# 흐름을 따라 계속 늘어나는 큐일 뿐이기 때문이다.
+
+SESSION_GAP_SECONDS = 20 * 60
+
+QUEUE_SEED_ARTIST_BONUS = 0.25
+QUEUE_SEED_ALBUM_BONUS = 0.2
+QUEUE_FOLLOWUP_BONUS = 0.5
+
+
+def _next_track_counts(history: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+    """각 곡 바로 다음에 실제로 이어 재생된 곡의 횟수. 재생 기록을 시간순으로
+    정렬한 뒤, 인접한 두 기록의 간격이 SESSION_GAP_SECONDS 이내면 '이어 들었다'고
+    보고 센다 — 며칠 뒤 우연히 같은 순서로 재생된 것까지 이어듣기로 잡히지 않게."""
+    ordered = sorted(
+        (e for e in history if e.get("track_id") and e.get("played_at")),
+        key=lambda e: e["played_at"],
+    )
+    counts: dict[str, dict[str, float]] = {}
+    for prev, curr in zip(ordered, ordered[1:]):
+        prev_id, curr_id = prev["track_id"], curr["track_id"]
+        if prev_id == curr_id:
+            continue
+        try:
+            gap = (
+                datetime.fromisoformat(curr["played_at"]) - datetime.fromisoformat(prev["played_at"])
+            ).total_seconds()
+        except ValueError:
+            continue
+        if not (0 <= gap <= SESSION_GAP_SECONDS):
+            continue
+        bucket = counts.setdefault(prev_id, {})
+        bucket[curr_id] = bucket.get(curr_id, 0.0) + 1.0
+    return counts
+
+
+def pick_queue_songs(
+    tracks: list[dict[str, Any]],
+    *,
+    seed_track_id: str,
+    exclude_ids: set[str] | None = None,
+    count: int,
+    familiar_count: int = 0,
+) -> list[dict[str, Any]]:
+    """재생 대기 목록을 채울 곡을 고른다. 앞쪽 familiar_count개는 이미 들어본 곡 중
+    시드 곡과 아티스트/앨범이 겹치거나 시드 곡 바로 다음에 자주 이어 들은 곡을
+    우대하고, 나머지(count - familiar_count)개는 안 들어본 곡 위주로 고른다.
+    count=1, familiar_count=0으로 부르면 그대로 '다음 한 곡 추가'(큐 확장) 요청이
+    된다 — 초기 배치와 확장 호출이 이 함수 하나를 공유한다."""
+    exclude = set(exclude_ids or ())
+    exclude.add(seed_track_id)
+    pool = [t for t in tracks if (t.get("track_id") or "") not in exclude]
+    if not pool:
+        return []
+
+    ctx = _prepare_scoring(tracks)
+    play_counts = ctx["play_counts"]
+    feats_by_id = {t["track_id"]: ctx["features"](t) for t in pool}
+    score_by_id = {tid: max(0.01, ctx["score"](feats)) for tid, feats in feats_by_id.items()}
+
+    seed_track = next((t for t in tracks if t.get("track_id") == seed_track_id), None)
+    rng = random.Random()
+    picked_artist_counts: dict[str, int] = {}
+    picked_album_counts: dict[str, int] = {}
+    picked: list[dict[str, Any]] = []
+
+    if familiar_count > 0 and seed_track is not None:
+        followup = _next_track_counts(ctx["history"]).get(seed_track_id, {})
+        followup_total = sum(followup.values()) or 1
+        seed_artists = set(split_artists(seed_track.get("artist") or ""))
+        seed_album = seed_track.get("album") or ""
+
+        familiar_pool = [t for t in pool if play_counts.get(t.get("track_id") or "", 0) > 0] or pool
+        familiar_score_by_id = dict(score_by_id)
+        for t in familiar_pool:
+            tid = t.get("track_id") or ""
+            bonus = 0.0
+            if seed_artists & set(split_artists(t.get("artist") or "")):
+                bonus += QUEUE_SEED_ARTIST_BONUS
+            if seed_album and t.get("album") == seed_album:
+                bonus += QUEUE_SEED_ALBUM_BONUS
+            bonus += QUEUE_FOLLOWUP_BONUS * (followup.get(tid, 0.0) / followup_total)
+            familiar_score_by_id[tid] = familiar_score_by_id.get(tid, 0.01) + bonus
+
+        picked.extend(
+            _weighted_pick_batch(
+                familiar_pool, familiar_score_by_id, familiar_count, rng, picked_artist_counts, picked_album_counts
+            )
+        )
+
+    picked_ids = {t.get("track_id") for t in picked}
+    remaining = [t for t in pool if t.get("track_id") not in picked_ids]
+    unheard_pool = [t for t in remaining if play_counts.get(t.get("track_id") or "", 0) == 0] or remaining
+    picked.extend(
+        _weighted_pick_batch(
+            unheard_pool, score_by_id, count - len(picked), rng, picked_artist_counts, picked_album_counts
+        )
+    )
 
     result = []
     for i, track in enumerate(picked):

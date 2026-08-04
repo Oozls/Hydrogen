@@ -33,6 +33,17 @@ def log_play_event():
     return jsonify(entry), 201
 
 
+@bp.get("/recent")
+def get_recent():
+    try:
+        limit = max(1, int(request.args.get("limit", 12)))
+    except ValueError:
+        limit = 12
+    playlist = playlist_repo.load_or_create_global()
+    tracks = [track_to_json(t) for t in playlist.tracks]
+    return jsonify({"items": stats.recent_tracks(limit, tracks=tracks)})
+
+
 @bp.get("/top")
 def get_top():
     period = request.args.get("period", "day")
@@ -48,8 +59,17 @@ def get_top():
         offset = 0
 
     # "곡" 그룹은 최근 재생 목록으로 쓰이므로 개수 제한을 두지 않고, 화면에서
-    # 페이지 단위로 나눠 보여준다. 아티스트/앨범은 여전히 상위 20개만 보여준다.
+    # 페이지 단위로 나눠 보여준다. 아티스트/앨범은 기본은 상위 20개만 보여주되,
+    # (통계 "아티스트" 탭 카탈로그처럼) 기간 내 전체가 필요하면 limit=0으로 무제한 요청한다.
     limit = None if group == "track" else 20
+    limit_param = request.args.get("limit")
+    if limit_param is not None:
+        try:
+            parsed_limit = int(limit_param)
+        except ValueError:
+            parsed_limit = None
+        if parsed_limit is not None:
+            limit = None if parsed_limit <= 0 else parsed_limit
     playlist = playlist_repo.load_or_create_global()
     tracks = [track_to_json(t) for t in playlist.tracks]
     return jsonify(stats.top(period, group, offset, limit=limit, tracks=tracks))

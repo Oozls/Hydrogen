@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -164,6 +164,16 @@ def load_play_history() -> list[dict[str, Any]]:
     for path in sorted(play_history_dir().glob("*.jsonl")):
         entries.extend(_read_jsonl(path))
     return entries
+
+
+def iter_play_history_desc() -> Iterator[dict[str, Any]]:
+    """재생 기록을 최신순으로 하나씩 내어준다(제너레이터) — 홈 화면 "다시 듣기"처럼
+    최근 몇 개만 필요할 때, 오래된 기록 파일까지 전부 읽지 않고 필요한 만큼만
+    소비하고 멈출 수 있게 한다."""
+    _migrate_legacy_play_history()
+    for path in sorted(play_history_dir().glob("*.jsonl"), reverse=True):
+        for entry in reversed(_read_jsonl(path)):
+            yield entry
 
 
 def load_play_history_range(start: datetime, end: datetime) -> list[dict[str, Any]]:

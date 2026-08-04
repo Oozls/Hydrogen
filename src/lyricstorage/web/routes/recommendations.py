@@ -24,11 +24,39 @@ def get_today():
     today = date.today().isoformat()
     reroll = request.args.get("reroll")
     seed = f"{today}:{reroll}" if reroll else today
+    # 홈 화면 "빠른 선곡"처럼 화면을 열 때마다 조용히 미리보기만 가져오는 호출은
+    # record=0으로 넘겨, 노출 로그/가중치 그래프에 남기지 않는다.
+    record = request.args.get("record", "1") != "0"
 
     playlist = playlist_repo.load_or_create_global()
     tracks = [track_to_json(t) for t in playlist.tracks]
-    items = recommend.pick_today_songs(tracks, limit=limit, seed=seed, record_exposure=not reroll)
+    items = recommend.pick_today_songs(
+        tracks, limit=limit, seed=seed, record_exposure=record and not reroll, record_weights=record
+    )
     return jsonify({"date": today, "items": items})
+
+
+@bp.get("/queue")
+def get_queue():
+    seed_track_id = request.args.get("seed_track_id")
+    if not seed_track_id:
+        return jsonify({"error": "seed_track_id is required"}), 400
+    try:
+        count = max(1, min(20, int(request.args.get("count", 1))))
+    except ValueError:
+        count = 1
+    try:
+        familiar_count = max(0, min(count, int(request.args.get("familiar_count", 0))))
+    except ValueError:
+        familiar_count = 0
+    exclude_ids = {tid for tid in request.args.get("exclude", "").split(",") if tid}
+
+    playlist = playlist_repo.load_or_create_global()
+    tracks = [track_to_json(t) for t in playlist.tracks]
+    items = recommend.pick_queue_songs(
+        tracks, seed_track_id=seed_track_id, exclude_ids=exclude_ids, count=count, familiar_count=familiar_count
+    )
+    return jsonify({"items": items})
 
 
 @bp.get("/weights")

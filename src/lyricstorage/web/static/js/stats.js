@@ -3,29 +3,7 @@ import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 import { fillArtistArt } from "./artistArt.js";
-import { alertDialog } from "./dialog.js";
-
-// 곡 아티스트 문자열을 쉼표로 나눠 여러 아티스트로 분리한다(예: "A, B" -> ["A", "B"]).
-// stats.py의 split_artists와 동일한 규칙 — 재생 순위 집계와 아티스트 상세 화면이
-// 같은 기준으로 아티스트를 나눠야 하기 때문.
-function splitArtists(artist) {
-  return (artist || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-// 등록된 이명(별칭)을 대표 이름으로 바꿔주는 조회 함수를 만든다. 곡 파일의
-// artist 문자열이나 재생 기록에는 옛 이름이 그대로 남아있을 수 있으므로,
-// 콜라주/집계 화면에서 같은 사람으로 묶어 보여줄 때 이 함수를 거친다.
-function buildArtistNameResolver(artists) {
-  const lookup = new Map();
-  for (const artist of artists) {
-    lookup.set(artist.name, artist.name);
-    for (const alias of artist.aliases) lookup.set(alias, artist.name);
-  }
-  return (name) => lookup.get(name) || name;
-}
+import { splitArtists, buildArtistNameResolver } from "./songArtist.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 const TRACK_PAGE_SIZE_FALLBACK = 50;
@@ -79,7 +57,7 @@ function createRatingBadge(rating) {
   return badge;
 }
 
-export function setupStats(player, onOpenAlbum) {
+export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums) {
   const panelEl = document.getElementById("stats-panel");
   const periodTabs = document.getElementById("stats-period-tabs");
   const groupTabs = document.getElementById("stats-group-tabs");
@@ -100,13 +78,6 @@ export function setupStats(player, onOpenAlbum) {
   const artistDetailListEl = document.getElementById("stats-artist-detail-list");
   const artistDetailBackBtn = document.getElementById("btn-stats-artist-detail-back");
   const artistDetailEditBtn = document.getElementById("btn-stats-artist-detail-edit");
-  const artistInfoDialog = document.getElementById("artist-info-dialog");
-  const artistInfoNameInput = document.getElementById("artist-info-name");
-  const artistInfoAliasesEl = document.getElementById("artist-info-aliases");
-  const artistInfoAliasInput = document.getElementById("artist-info-alias-input");
-  const artistInfoAliasAddBtn = document.getElementById("artist-info-alias-add");
-  const artistInfoCancelBtn = document.getElementById("artist-info-cancel");
-  const artistInfoSaveBtn = document.getElementById("artist-info-save");
 
   let period = "day";
   let group = "track";
@@ -157,6 +128,14 @@ export function setupStats(player, onOpenAlbum) {
 
   async function refresh() {
     closeArtistDetail();
+    const isCatalog = group === "album-artist";
+    if (isCatalog) {
+      trackBodyEl.hidden = true;
+      trackPagination.hidden = true;
+      listEl.style.display = "";
+      await renderAlbumArtists();
+      return;
+    }
     if (group === "track") {
       // 곡 목록과 오른쪽 TOP 3 앨범은 같은 기간을 대상으로 하는 별개의 집계라
       // 병렬로 받아온다(둘 다 이미 있는 /api/stats/top 엔드포인트 재사용).
@@ -508,6 +487,71 @@ export function setupStats(player, onOpenAlbum) {
     requestAnimationFrame(() => applyMarquee(listEl));
   }
 
+  // '아티스트' 탭(앨범 아티스트) 카드 — 브라우즈 아티스트 탭과 똑같은 디자인
+  // (콜라주 아트 + 앨범 개수)이지만, 클릭하면 재생 순위가 아니라 브라우즈의
+  // 앨범 탭으로 건너가 그 아티스트로 필터링된 앨범 목록을 보여준다.
+  function buildAlbumArtistCard(entry) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+    card.title = "이 아티스트의 앨범 보기";
+
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    fillArtistArt(artWrap, entry.albums);
+    card.appendChild(artWrap);
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "media-card-title-row";
+    titleRow.appendChild(createMarqueeClip("media-card-title", "", entry.name || "(아티스트 없음)"));
+    card.appendChild(titleRow);
+
+    const meta = document.createElement("div");
+    meta.className = "media-card-meta";
+    const albumCount = document.createElement("span");
+    albumCount.textContent = `앨범 ${entry.albums.length}개`;
+    meta.appendChild(albumCount);
+    card.appendChild(meta);
+
+    card.addEventListener("click", () => onOpenArtistAlbums && onOpenArtistAlbums(entry.name));
+    return card;
+  }
+
+  async function renderAlbumArtists() {
+    // 이 기간에 재생된 앨범만 모은다(순위는 안 매기지만 목록 자체는 기간 필터를
+    // 따라야 하므로 group="album" 집계를 limit=0(무제한)으로 재사용한다).
+    const [albumsResult, periodAlbums] = await Promise.all([
+      api.getAlbums(),
+      api.getTopStats(period, "album", offset, 0),
+    ]);
+    periodLabel.textContent = formatRange(periodAlbums.range_start, periodAlbums.range_end, period);
+    nextBtn.disabled = offset <= 0;
+
+    const albumById = new Map(albumsResult.albums.map((a) => [a.id, a]));
+    const byArtist = new Map();
+    for (const item of periodAlbums.items) {
+      const album = item.album_id ? albumById.get(item.album_id) : null;
+      // 곡 아티스트(item.artist)가 아니라 앨범의 대표 아티스트(album.artist)로
+      // 묶는다 — 여러 곡 아티스트가 섞인 컴필레이션 앨범도 앨범 아티스트 기준
+      // 하나로만 잡혀야 브라우즈의 앨범 아티스트 탭과 일관된다.
+      const name = (album ? album.artist : item.artist) || "";
+      if (!byArtist.has(name)) byArtist.set(name, []);
+      if (album) byArtist.get(name).push(album);
+    }
+    let entries = [...byArtist.entries()].map(([name, albumsForArtist]) => ({ name, albums: albumsForArtist }));
+    entries.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+
+    listEl.innerHTML = "";
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.className = "stats-empty";
+      empty.textContent = "이 기간에 재생 기록이 없습니다.";
+      listEl.appendChild(empty);
+      return;
+    }
+    entries.forEach((entry) => listEl.appendChild(buildAlbumArtistCard(entry)));
+    requestAnimationFrame(() => applyMarquee(listEl));
+  }
+
   function buildArtistDetailRow(track) {
     const li = document.createElement("li");
     li.className = "playlist-row";
@@ -644,72 +688,17 @@ export function setupStats(player, onOpenAlbum) {
     }
   }
 
-  function renderArtistAliasChips() {
-    artistInfoAliasesEl.innerHTML = "";
-    artistDetailIdentity.aliases.forEach((alias) => {
-      const chip = document.createElement("span");
-      chip.className = "artist-alias-chip";
-      chip.appendChild(document.createTextNode(alias));
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "artist-alias-chip-remove";
-      removeBtn.title = "이명 삭제";
-      removeBtn.textContent = "×";
-      removeBtn.addEventListener("click", async () => {
-        try {
-          artistDetailIdentity = await api.removeArtistAlias(artistDetailIdentity.id, alias);
-          artistIdentityDirty = true;
-          renderArtistAliasChips();
-        } catch (err) {
-          await alertDialog(err.message);
-        }
-      });
-      chip.appendChild(removeBtn);
-      artistInfoAliasesEl.appendChild(chip);
-    });
-  }
-
   artistDetailEditBtn.addEventListener("click", () => {
     if (!artistDetailIdentity || !artistDetailIdentity.id) return;
-    artistInfoNameInput.value = artistDetailIdentity.name;
-    artistInfoAliasInput.value = "";
-    renderArtistAliasChips();
-    artistInfoDialog.showModal();
-  });
-
-  artistInfoAliasAddBtn.addEventListener("click", async () => {
-    const alias = artistInfoAliasInput.value.trim();
-    if (!alias) return;
-    try {
-      artistDetailIdentity = await api.addArtistAlias(artistDetailIdentity.id, alias);
-      artistIdentityDirty = true;
-      artistInfoAliasInput.value = "";
-      renderArtistAliasChips();
-    } catch (err) {
-      await alertDialog(err.message);
-    }
-  });
-
-  artistInfoCancelBtn.addEventListener("click", () => artistInfoDialog.close());
-
-  artistInfoSaveBtn.addEventListener("click", async () => {
-    const newName = artistInfoNameInput.value.trim();
-    if (!newName) {
-      await alertDialog("아티스트 이름을 입력하세요.");
-      return;
-    }
-    try {
-      if (newName !== artistDetailIdentity.name) {
-        artistDetailIdentity = await api.renameArtist(artistDetailIdentity.id, newName);
+    identityDialogApi.open(artistDetailIdentity, {
+      getTracks: () => api.getLibrary().then((l) => l.tracks),
+      onChange: (updated) => {
+        artistDetailIdentity = updated;
         artistIdentityDirty = true;
-      }
-      artistInfoDialog.close();
-    } catch (err) {
-      await alertDialog(err.message);
-    }
+      },
+      onClose: refreshArtistDetailAfterEdit,
+    });
   });
-
-  artistInfoDialog.addEventListener("close", refreshArtistDetailAfterEdit);
 
   artistDetailBackBtn.addEventListener("click", closeArtistDetail);
 

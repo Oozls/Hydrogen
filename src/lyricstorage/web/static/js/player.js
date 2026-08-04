@@ -25,6 +25,9 @@ export class PlayerEngine extends EventTarget {
     this.currentIndex = -1;
     this.repeatMode = "off"; // off | all | one
     this.shuffle = false;
+    // "list": 재생목록/앨범처럼 고정된 목록을 그대로 이어 재생. "recommend": 홈
+    // 화면에서 시작한, queue.js가 계속 곡을 채워 넣는 라디오 형태의 대기 목록.
+    this.queueMode = "list";
     this.shuffleOrder = [];
     this._seeking = false;
     // 우리 코드가 의도적으로 pause()를 호출한 경우에만 true로 두고, 그 밖의
@@ -107,11 +110,36 @@ export class PlayerEngine extends EventTarget {
 
   // 완전히 다른 플레이리스트로 전환할 때 사용 (원본의 PlayerEngine.set_playlist와 동일하게
   // 재생 인덱스를 초기화한다).
-  setPlaylist(playlist) {
+  setPlaylist(playlist, { mode = "list" } = {}) {
     this.playlist = playlist;
+    this.queueMode = mode;
     this.currentIndex = -1;
     this._resetPreload();
     this._rebuildShuffleOrder();
+  }
+
+  // 재생 대기 목록(큐) 끝에 추천 곡을 이어 붙인다 — queueMode가 "recommend"일 때
+  // queue.js가 곡이 끝나거나 건너뛸 때마다 호출한다.
+  appendTracks(tracks) {
+    if (!this.playlist || !tracks || !tracks.length) return;
+    this.playlist.tracks.push(...tracks);
+    if (this.shuffle) this._rebuildShuffleOrder();
+    this._maybePreloadNext();
+    this._emit("queuechange", {});
+  }
+
+  // 추천 큐(라디오)로 들어갈 때 셔플/반복을 강제로 끈다 — 계속 늘어나는 목록에는
+  // 두 개념이 맞지 않는다(무엇을 "반복"할지, 아직 없는 곡을 어떻게 "셔플"할지가
+  // 불명확해진다).
+  resetPlaybackModes() {
+    if (this.shuffle) {
+      this.shuffle = false;
+      this._emit("shufflechange", { shuffle: false });
+    }
+    if (this.repeatMode !== "off") {
+      this.repeatMode = "off";
+      this._emit("repeatchange", { repeatMode: "off" });
+    }
   }
 
   // 같은 플레이리스트가 업로드/삭제/추가/순서변경 등으로 갱신됐을 때 사용.
@@ -127,9 +155,16 @@ export class PlayerEngine extends EventTarget {
     }
   }
 
-  _rebuildShuffleOrder() {
+  // avoidFirstIndex를 주면, 새로 섞은 순서의 첫 곡이 그 인덱스와 겹칠 때 0번과
+  // 1번을 맞바꿔 피한다 — 셔플+전곡반복으로 목록 끝에서 처음으로 되돌아갈 때,
+  // 방금 끝난 마지막 곡이 곧바로 다시 나오지 않게 하는 용도.
+  _rebuildShuffleOrder(avoidFirstIndex = null) {
     const count = this.playlist ? this.playlist.tracks.length : 0;
-    this.shuffleOrder = shuffledIndices(count);
+    const order = shuffledIndices(count);
+    if (avoidFirstIndex !== null && count > 1 && order[0] === avoidFirstIndex) {
+      [order[0], order[1]] = [order[1], order[0]];
+    }
+    this.shuffleOrder = order;
   }
 
   setShuffle(enabled) {
@@ -268,7 +303,7 @@ export class PlayerEngine extends EventTarget {
       let nextPos = pos + 1;
       if (nextPos >= count) {
         if (this.repeatMode !== "all") return null;
-        this._rebuildShuffleOrder();
+        this._rebuildShuffleOrder(this.currentIndex);
         nextPos = 0;
       }
       return this.shuffleOrder[nextPos];

@@ -15,6 +15,10 @@
     <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
     <main class="main-columns">
       <nav id="sidebar" class="panel sidebar">
+        <button id="btn-sidebar-logo" class="sidebar-logo-btn" type="button" title="홈으로">
+          <img class="sidebar-logo-icon" src="{{ url_for('static', filename='img/favicon.jpg') }}" alt="" />
+          <span class="sidebar-logo-text">Lyric Storage</span>
+        </button>
         <button id="btn-sidebar-browse" class="sidebar-home-btn" type="button">
           <span class="icon" style="--icon: url(/static/icons/disc.svg)"></span>
           <span>브라우즈</span>
@@ -49,6 +53,30 @@
           </a>
         </div>
       </nav>
+
+      <div id="home-panel" class="panel home-panel page-panel">
+        <section class="home-section">
+          <div class="panel-header-row">
+            <span class="section-title">다시 듣기</span>
+            <div class="spacer"></div>
+            <button id="btn-home-recent-prev" class="icon-btn" type="button" title="이전">
+              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+            </button>
+            <button id="btn-home-recent-next" class="icon-btn" type="button" title="다음">
+              <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+            </button>
+          </div>
+          <div id="home-recent-row" class="home-recent-row"></div>
+        </section>
+        <section class="home-section">
+          <div class="panel-header-row">
+            <span class="section-title">빠른 선곡</span>
+            <div class="spacer"></div>
+            <button id="btn-home-quickpicks-play" class="pill-btn" type="button">모두 재생</button>
+          </div>
+          <div id="home-quickpicks-grid" class="home-quickpicks-grid"></div>
+        </section>
+      </div>
 
       <section id="playlist-panel" class="panel playlist-panel page-panel">
         <div class="panel-header-row">
@@ -94,6 +122,7 @@
         <div class="stats-controls-row">
           <div class="tabs" id="browse-tabs">
             <button class="tab-btn active" data-mode="artist" type="button">아티스트</button>
+            <button class="tab-btn" data-mode="song-artist" type="button">곡 아티스트</button>
             <button class="tab-btn" data-mode="album" type="button">앨범</button>
             <button class="tab-btn" data-mode="song" type="button">곡</button>
           </div>
@@ -123,6 +152,25 @@
         <input type="file" id="browse-reimport-artists-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
         <div id="browse-artists-panel" class="tab-panel active">
           <div id="browse-artists-list" class="card-grid"></div>
+        </div>
+        <div id="browse-song-artists-panel" class="tab-panel">
+          <div id="browse-song-artists-list" class="card-grid"></div>
+        </div>
+        <div id="browse-song-artist-detail-panel" class="tab-panel">
+          <div class="album-detail-header">
+            <button id="btn-browse-song-artist-detail-back" class="icon-btn" title="뒤로">
+              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+            </button>
+            <div class="album-detail-text">
+              <div id="browse-song-artist-detail-title" class="track-title"></div>
+              <div id="browse-song-artist-detail-aliases" class="track-artist"></div>
+            </div>
+            <div class="spacer"></div>
+            <button id="btn-browse-song-artist-detail-edit" class="icon-btn" title="아티스트 이름/이명 수정">
+              <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
+            </button>
+          </div>
+          <div id="browse-song-artist-detail-list" class="album-sections"></div>
         </div>
         <div id="browse-songs-panel" class="tab-panel">
           <div class="stats-track-body">
@@ -243,7 +291,8 @@
           </div>
           <div class="tabs" id="stats-group-tabs">
             <button class="tab-btn active" data-group="track" type="button">곡</button>
-            <button class="tab-btn" data-group="artist" type="button">아티스트</button>
+            <button class="tab-btn" data-group="album-artist" type="button">아티스트</button>
+            <button class="tab-btn" data-group="artist" type="button">곡 아티스트</button>
             <button class="tab-btn" data-group="album" type="button">앨범</button>
           </div>
         </div>
@@ -382,6 +431,9 @@
           <button id="btn-lyrics-toggle" class="icon-btn toggle-btn" title="가사 표시">
             <span class="icon" style="--icon: url(/static/icons/mic.svg)"></span>
           </button>
+          <button id="btn-expand-player" class="icon-btn" title="전체 화면으로 보기">
+            <span class="icon" style="--icon: url(/static/icons/chevron-up.svg)"></span>
+          </button>
           <button id="btn-mute" class="icon-btn" title="음소거">
             <span class="icon" style="--icon: url(/static/icons/volume-2.svg)"></span>
           </button>
@@ -391,6 +443,20 @@
     </footer>
 
     <audio id="audio-element" preload="metadata"></audio>
+
+    <section id="expanded-player-panel" class="expanded-player-panel">
+      <div class="expanded-player-body">
+        <div class="expanded-player-detail">
+          <div id="expanded-player-art" class="expanded-player-art"></div>
+          <div id="expanded-player-title" class="expanded-player-title"></div>
+          <div id="expanded-player-subtitle" class="expanded-player-subtitle"></div>
+        </div>
+        <div class="expanded-player-queue">
+          <span class="section-title">재생 대기 목록</span>
+          <div id="expanded-player-queue-list" class="expanded-player-queue-list"></div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <dialog id="library-picker-dialog" class="library-picker-dialog library-picker-dialog-wide">
@@ -567,7 +633,8 @@
       이명(다른 이름)
       <div id="artist-info-aliases" class="artist-alias-list"></div>
       <div class="artist-alias-add-row">
-        <input type="text" id="artist-info-alias-input" autocomplete="off" placeholder="다른 이름 추가" />
+        <input type="text" id="artist-info-alias-input" autocomplete="off" placeholder="다른 이름 추가" list="artist-alias-suggestions" />
+        <datalist id="artist-alias-suggestions"></datalist>
         <button id="artist-info-alias-add" type="button">추가</button>
       </div>
     </div>

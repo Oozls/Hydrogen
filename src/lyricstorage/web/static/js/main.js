@@ -7,11 +7,15 @@ import { setupBulkEdit } from "./bulkedit.js";
 import { setupPlayTracking } from "./playtracking.js";
 import { setupStats } from "./stats.js";
 import { setupTodaySongs } from "./todaysongs.js";
+import { setupHome } from "./home.js";
+import { setupQueueEngine } from "./queue.js";
+import { setupExpandedPlayer } from "./expanded-player.js";
 import { setupBrowse } from "./browse.js";
 import { setupAlbumInfo } from "./albuminfo.js";
 import { setupSidebar } from "./sidebar.js";
 import { setupRouter } from "./router.js";
 import { setupRating } from "./rating.js";
+import { setupArtistIdentityDialog } from "./artistIdentityDialog.js";
 
 function readBootstrap() {
   const el = document.getElementById("bootstrap-data");
@@ -23,7 +27,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 
-  const refs = { router: null, pendingAlbumFocus: null };
+  const refs = { router: null, pendingAlbumFocus: null, pendingArtistFocus: null };
+  const identityDialogApi = setupArtistIdentityDialog();
 
   // 재생바/재생 통계에서 앨범명을 클릭하면 브라우즈 > 앨범 탭으로 이동해 그
   // 앨범의 상세 화면을 바로 연다. browseApi가 아직 만들어지기 전이라(순서상
@@ -38,9 +43,17 @@ document.addEventListener("DOMContentLoaded", () => {
     refs.router.goBrowse();
   }
 
+  // 재생 통계 '아티스트'(앨범 아티스트) 탭 카드를 클릭하면 브라우즈 > 앨범
+  // 탭으로 건너가 그 아티스트명으로 검색해둔 상태를 보여준다.
+  function openArtistAlbumsFromStats(artistName) {
+    refs.pendingArtistFocus = artistName;
+    refs.router.goBrowse();
+  }
+
   const nowPlayingApi = setupNowPlaying(player, openAlbumFromTrack);
   const sidebarApi = setupSidebar(bootstrap, {
     onSelectPlaylist: (name) => refs.router.goPlaylist(name),
+    onGoHome: () => refs.router.goHome(),
     onGoBrowse: () => refs.router.goBrowse(),
     onGoStats: () => refs.router.goStats(),
     onGoToday: () => refs.router.goToday(),
@@ -79,7 +92,10 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
   setupRating(player);
-  const statsApi = setupStats(player, openAlbumFromTrack);
+  setupQueueEngine(player);
+  setupExpandedPlayer(player);
+  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistAlbumsFromStats);
+  const homeApi = setupHome(player);
   const todaySongsApi = setupTodaySongs(
     bootstrap,
     player,
@@ -116,7 +132,8 @@ document.addEventListener("DOMContentLoaded", () => {
     playlistApi,
     (track) => trackInfoApi.open(track),
     (group) => albumInfoApi.open(group),
-    (ids) => bulkEditApi.open(ids)
+    (ids) => bulkEditApi.open(ids),
+    identityDialogApi
   );
   const albumInfoApi = setupAlbumInfo((updatedTracks) => {
     playlistApi.refreshTracksInfo(updatedTracks);
@@ -145,17 +162,30 @@ document.addEventListener("DOMContentLoaded", () => {
   );
 
   refs.router = setupRouter({
+    onHome: () => {
+      playlistApi.hide();
+      browseApi.hide();
+      statsApi.hide();
+      todaySongsApi.hide();
+      homeApi.show();
+      sidebarApi.setActive("__home__");
+      sidebarApi.refreshDataSize();
+    },
     onBrowse: () => {
+      homeApi.hide();
       playlistApi.hide();
       statsApi.hide();
       todaySongsApi.hide();
       const focus = refs.pendingAlbumFocus;
       refs.pendingAlbumFocus = null;
-      browseApi.show(focus);
-      sidebarApi.setActive(null);
+      const artistFocus = refs.pendingArtistFocus;
+      refs.pendingArtistFocus = null;
+      browseApi.show(focus, artistFocus);
+      sidebarApi.setActive("__browse__");
       sidebarApi.refreshDataSize();
     },
     onPlaylist: (name) => {
+      homeApi.hide();
       browseApi.hide();
       statsApi.hide();
       todaySongsApi.hide();
@@ -165,6 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sidebarApi.refreshDataSize();
     },
     onStats: () => {
+      homeApi.hide();
       playlistApi.hide();
       browseApi.hide();
       todaySongsApi.hide();
@@ -173,6 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sidebarApi.refreshDataSize();
     },
     onToday: () => {
+      homeApi.hide();
       playlistApi.hide();
       browseApi.hide();
       statsApi.hide();

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -58,6 +59,44 @@ def _period_bounds(period: str, offset: int, *, now: datetime | None = None) -> 
     else:
         raise ValueError(f"unknown period: {period}")
     return start, end
+
+
+# recent_tracks()가 무작위로 뽑을 "최근 재생" 후보 풀의 크기 기준.
+POOL_MULTIPLIER = 3
+MIN_RECENT_POOL = 24
+
+
+def recent_tracks(limit: int = 12, tracks: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """최근에 재생한 곡 중 곡별로 한 번씩만 중복 없이 골라 돌려준다(홈 화면
+    "다시 듣기" 카드용). 최신순 상위 limit개를 그대로 고정해서 보여주는 대신,
+    조금 더 넓은 최근 재생 풀(POOL_MULTIPLIER배)에서 무작위로 뽑아 매번 볼
+    때마다(새로고침 등) 구성이 조금씩 바뀌게 한다. 라이브러리에서 이미 지워진
+    곡은 다시 재생할 수 없으니 건너뛴다."""
+    pool_size = max(limit * POOL_MULTIPLIER, MIN_RECENT_POOL)
+    current_by_id = {t.get("track_id"): t for t in (tracks or [])}
+    seen: set[str] = set()
+    pool: list[dict[str, Any]] = []
+    for entry in storage.iter_play_history_desc():
+        track_id = entry.get("track_id")
+        if not track_id or track_id in seen:
+            continue
+        seen.add(track_id)
+        live = current_by_id.get(track_id)
+        if not live:
+            continue
+        pool.append(
+            {
+                "track_id": track_id,
+                "title": live.get("title") or entry.get("title") or "",
+                "artist": live.get("artist") or entry.get("artist") or "",
+                "album": live.get("album") or entry.get("album") or "",
+                "album_id": live.get("album_id"),
+                "played_at": entry.get("played_at"),
+            }
+        )
+        if len(pool) >= pool_size:
+            break
+    return random.sample(pool, min(limit, len(pool)))
 
 
 def top(
