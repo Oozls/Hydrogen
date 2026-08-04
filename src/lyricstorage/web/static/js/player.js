@@ -40,6 +40,11 @@ export class PlayerEngine extends EventTarget {
     // 표시되는 위치가 조금씩 어긋날 수 있다. 재생이 실제로 재개되는 시점마다
     // 같은 위치로 한 번 더 seek해 브라우저가 스스로를 다시 맞추도록 유도한다.
     this._needsResyncOnPlay = false;
+    // 새로 시작한 트랙이 실제로 소리가 나기 시작하는 시점(playing 이벤트)에
+    // 0으로 한 번 더 seek해, 버퍼가 덜 찬 상태로 재생을 걸었을 때 브라우저가
+    // 초반을 건너뛰는 경우를 바로잡는다. playIndex()/_swapToPreloaded()에서
+    // 세팅한다.
+    this._resetPositionOnPlay = false;
     // 가사 상세 편집(타이밍 태깅) 중에는 곡이 끝나도 다음 곡으로 자동
     // 전환되면 저장하지 않은 태깅 진행 상황이 날아가므로, 그 화면이 열려
     // 있는 동안은 이 플래그를 false로 두어 트랙 전환을 막는다.
@@ -93,7 +98,10 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("playing", () => {
       if (audio !== this.audio) return;
       this._emit("buffering", { buffering: false });
-      if (this._needsResyncOnPlay) {
+      if (this._resetPositionOnPlay) {
+        this._resetPositionOnPlay = false;
+        this.seek(0);
+      } else if (this._needsResyncOnPlay) {
         this._needsResyncOnPlay = false;
         this.seek(this.position());
       }
@@ -196,25 +204,19 @@ export class PlayerEngine extends EventTarget {
     const track = this.playlist.tracks[index];
     this._intentionalPause = false;
     this.audio.src = `/api/tracks/${track.track_id}/audio`;
+    this._resetPositionOnPlay = true;
     this._playWhenReady(this.audio);
     this._emit("trackchange", { track, index });
   }
 
-  // 소스를 막 바꾼 <audio>에 곧바로 play()를 걸면, 아직 첫 청크도 못 받은
-  // 상태에서 브라우저가 재생을 "시작"만 해두고 실제 소리는 버퍼가 어느 정도
-  // 찰 때까지 건너뛰어(초반 몇 초가 씹혀) 나오는 경우가 있다. 최소한의 재생
-  // 가능 상태(HAVE_FUTURE_DATA)가 될 때까지 기다렸다가 play()를 호출해 이를
-  // 막는다. 이미 그 상태라면(캐시 등으로 즉시 충족되는 경우) 기다리지 않는다.
+  // 재생 버튼을 다시 누를 필요 없이 클릭 즉시 소리가 나도록, 버퍼 상태와
+  // 무관하게 지금 바로 play()를 호출한다 — canplay를 기다렸다가 나중에
+  // 호출하면, 그 사이 클릭(사용자 제스처) 컨텍스트가 만료돼 일부 환경
+  // (느린 네트워크 등)에서는 자동재생 자체가 막혀버린다. 아직 버퍼가
+  // 부족한 상태로 재생을 걸어 초반이 건너뛰어지는 문제는 _resetPositionOnPlay로
+  // 실제로 소리가 나기 시작하는 시점에 0으로 재보정해서 막는다.
   _playWhenReady(audio) {
-    audio.oncanplay = null;
-    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      audio.play().catch(() => {});
-      return;
-    }
-    audio.oncanplay = () => {
-      audio.oncanplay = null;
-      audio.play().catch(() => {});
-    };
+    audio.play().catch(() => {});
   }
 
   togglePlayPause() {
@@ -386,6 +388,7 @@ export class PlayerEngine extends EventTarget {
     const track = this.playlist.tracks[index];
 
     this._intentionalPause = false;
+    this._resetPositionOnPlay = true;
     this._playWhenReady(promoted);
     this._emit("trackchange", { track, index });
     // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는

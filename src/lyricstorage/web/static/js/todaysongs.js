@@ -3,6 +3,7 @@ import { iconSpan } from "./icons.js";
 import { alertDialog } from "./dialog.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
+import { buildArtistCell } from "./songArtist.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -44,7 +45,7 @@ const WEIGHT_CHART_W = 400;
 const WEIGHT_CHART_H = 120;
 const WEIGHT_CHART_PAD_Y = 10;
 
-export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onBulkEdit) {
+export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onBulkEdit, onOpenAlbum, onOpenArtist) {
   const panelEl = document.getElementById("today-panel");
   const listEl = document.getElementById("today-songs-list");
   const rerollBtn = document.getElementById("btn-today-reroll");
@@ -127,10 +128,17 @@ export function setupTodaySongs(bootstrap, player, playlistApi, onEditTrack, onB
     label.appendChild(titleClip);
 
     const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
+    if (track.album && onOpenAlbum) {
+      albumSpan.classList.add("playlist-row-album-link");
+      albumSpan.title = "앨범 보기";
+      albumSpan.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onOpenAlbum(track);
+      });
+    }
     label.appendChild(albumSpan);
 
-    const artistSpan = createMarqueeClip("playlist-row-artist", "", track.artist || "");
-    label.appendChild(artistSpan);
+    label.appendChild(buildArtistCell("playlist-row-artist", track.artist, onOpenArtist));
 
     li.appendChild(label);
 

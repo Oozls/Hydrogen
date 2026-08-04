@@ -3,7 +3,7 @@ import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 import { fillArtistArt } from "./artistArt.js";
-import { splitArtists, buildArtistNameResolver } from "./songArtist.js";
+import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 const TRACK_PAGE_SIZE_FALLBACK = 50;
@@ -57,7 +57,7 @@ function createRatingBadge(rating) {
   return badge;
 }
 
-export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums) {
+export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums, onOpenArtist) {
   const panelEl = document.getElementById("stats-panel");
   const periodTabs = document.getElementById("stats-period-tabs");
   const groupTabs = document.getElementById("stats-group-tabs");
@@ -294,7 +294,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       });
     }
     label.appendChild(albumClip);
-    label.appendChild(createMarqueeClip("playlist-row-artist", "", track.artist || ""));
+    label.appendChild(buildArtistCell("playlist-row-artist", track.artist, onOpenArtist));
     li.appendChild(label);
 
     const lyricsFlag = iconSpan("mic", "icon-sm accent");
@@ -580,7 +580,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       });
     }
     label.appendChild(albumClip);
-    label.appendChild(createMarqueeClip("playlist-row-artist", "", track.artist || ""));
+    label.appendChild(buildArtistCell("playlist-row-artist", track.artist, onOpenArtist));
     li.appendChild(label);
 
     const lyricsFlag = iconSpan("mic", "icon-sm accent");

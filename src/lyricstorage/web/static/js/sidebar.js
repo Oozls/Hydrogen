@@ -108,5 +108,6 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse
     },
     getNames: () => names,
     refreshDataSize,
+    closeDrawer,
   };
 }

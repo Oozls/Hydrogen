@@ -6,6 +6,7 @@ import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
+import { buildArtistCell } from "./songArtist.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -34,7 +35,7 @@ export function setupPlaylist(
   bootstrap,
   onTrackActivated,
   onEditTrack,
-  { sidebarApi, refs, onBulkEdit }
+  { sidebarApi, refs, onBulkEdit, onOpenAlbum, onOpenArtist }
 ) {
   const panelEl = document.getElementById("playlist-panel");
   const pageTitleEl = document.getElementById("playlist-page-title");
@@ -178,10 +179,19 @@ export function setupPlaylist(
 
       // 브라우즈 곡 목록과 동일한 컬럼 구성(제목/앨범/아티스트)을 재사용한다.
       const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
+      if (track.album && onOpenAlbum) {
+        albumSpan.classList.add("playlist-row-album-link");
+        albumSpan.title = "앨범 보기";
+        // 행 자체의 클릭은 선택 토글이라, 앨범명 클릭이 행까지 버블링돼 선택이
+        // 같이 토글되지 않도록 막는다.
+        albumSpan.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onOpenAlbum(track);
+        });
+      }
       label.appendChild(albumSpan);
 
-      const artistSpan = createMarqueeClip("playlist-row-artist", "", track.artist || "");
-      label.appendChild(artistSpan);
+      label.appendChild(buildArtistCell("playlist-row-artist", track.artist, onOpenArtist));
 
       li.appendChild(label);
 

@@ -54,25 +54,16 @@
         </div>
       </nav>
 
-      <div id="home-panel" class="panel home-panel page-panel">
+      <div id="home-panel" class="panel home-panel page-panel scroll-autohide">
         <section class="home-section">
           <div class="panel-header-row">
             <span class="section-title">다시 듣기</span>
-            <div class="spacer"></div>
-            <button id="btn-home-recent-prev" class="icon-btn" type="button" title="이전">
-              <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
-            </button>
-            <button id="btn-home-recent-next" class="icon-btn" type="button" title="다음">
-              <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
-            </button>
           </div>
-          <div id="home-recent-row" class="home-recent-row"></div>
+          <div id="home-recent-row" class="home-recent-row scroll-autohide"></div>
         </section>
         <section class="home-section">
           <div class="panel-header-row">
             <span class="section-title">빠른 선곡</span>
-            <div class="spacer"></div>
-            <button id="btn-home-quickpicks-play" class="pill-btn" type="button">모두 재생</button>
           </div>
           <div id="home-quickpicks-grid" class="home-quickpicks-grid"></div>
         </section>
@@ -382,9 +373,7 @@
             <div class="playlist-row-title-clip marquee-clip">
               <span id="now-playing-title" class="track-title marquee-inner"></span>
             </div>
-            <div class="now-playing-subline marquee-clip">
-              <span id="now-playing-subline-text" class="track-artist marquee-inner"></span>
-            </div>
+            <div id="now-playing-subline" class="now-playing-subline subline-row"></div>
           </div>
         </div>
         <div class="controls-center">
@@ -451,7 +440,7 @@
           <div id="expanded-player-title" class="expanded-player-title"></div>
           <div id="expanded-player-subtitle" class="expanded-player-subtitle"></div>
         </div>
-        <div class="expanded-player-queue">
+        <div id="expanded-player-queue" class="expanded-player-queue scroll-autohide">
           <span class="section-title">재생 대기 목록</span>
           <div id="expanded-player-queue-list" class="expanded-player-queue-list"></div>
         </div>

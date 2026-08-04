@@ -50,7 +50,17 @@ document.addEventListener("DOMContentLoaded", () => {
     refs.router.goBrowse();
   }
 
-  const nowPlayingApi = setupNowPlaying(player, openAlbumFromTrack);
+  // 곡 목록 행의 아티스트명(곡 아티스트)을 클릭하면 브라우즈 > 곡 아티스트 탭의
+  // 그 아티스트 상세 페이지로 바로 이동한다. 쉼표로 여럿 표기된 경우 각 이름이
+  // 개별적으로 클릭되므로(buildArtistCell) 여기엔 이미 나뉜 이름 하나만 들어온다.
+  // 앨범 id와 달리 이름만으로도 URL이 성립하므로, openAlbumFromTrack과 달리
+  // pendingFocus 없이 라우터로 곧장 이동한다.
+  function openArtistFromTrack(name) {
+    if (!name) return;
+    refs.router.goSongArtistDetail(name);
+  }
+
+  const nowPlayingApi = setupNowPlaying(player, openAlbumFromTrack, openArtistFromTrack);
   const sidebarApi = setupSidebar(bootstrap, {
     onSelectPlaylist: (name) => refs.router.goPlaylist(name),
     onGoHome: () => refs.router.goHome(),
@@ -68,7 +78,13 @@ document.addEventListener("DOMContentLoaded", () => {
       player.playIndex(index);
     },
     (track) => trackInfoApi.open(track),
-    { sidebarApi, refs, onBulkEdit: (ids) => bulkEditApi.open(ids) }
+    {
+      sidebarApi,
+      refs,
+      onBulkEdit: (ids) => bulkEditApi.open(ids),
+      onOpenAlbum: openAlbumFromTrack,
+      onOpenArtist: openArtistFromTrack,
+    }
   );
   const trackInfoApi = setupTrackInfo(
     async (trackId, updated) => {
@@ -93,15 +109,17 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPlayTracking(player);
   setupRating(player);
   setupQueueEngine(player);
-  setupExpandedPlayer(player);
-  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistAlbumsFromStats);
-  const homeApi = setupHome(player);
+  setupExpandedPlayer(player, { onOpen: () => sidebarApi.closeDrawer() });
+  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistAlbumsFromStats, openArtistFromTrack);
+  const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack);
   const todaySongsApi = setupTodaySongs(
     bootstrap,
     player,
     playlistApi,
     (track) => trackInfoApi.open(track),
-    (ids) => bulkEditApi.open(ids)
+    (ids) => bulkEditApi.open(ids),
+    openAlbumFromTrack,
+    openArtistFromTrack
   );
   const lyricsPanelEl = document.getElementById("lyrics-panel");
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
@@ -133,7 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
     (track) => trackInfoApi.open(track),
     (group) => albumInfoApi.open(group),
     (ids) => bulkEditApi.open(ids),
-    identityDialogApi
+    identityDialogApi,
+    refs
   );
   const albumInfoApi = setupAlbumInfo((updatedTracks) => {
     playlistApi.refreshTracksInfo(updatedTracks);
@@ -171,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sidebarApi.setActive("__home__");
       sidebarApi.refreshDataSize();
     },
-    onBrowse: () => {
+    onBrowse: (route) => {
       homeApi.hide();
       playlistApi.hide();
       statsApi.hide();
@@ -180,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
       refs.pendingAlbumFocus = null;
       const artistFocus = refs.pendingArtistFocus;
       refs.pendingArtistFocus = null;
-      browseApi.show(focus, artistFocus);
+      browseApi.show(route, focus, artistFocus);
       sidebarApi.setActive("__browse__");
       sidebarApi.refreshDataSize();
     },

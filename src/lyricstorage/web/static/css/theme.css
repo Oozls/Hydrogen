@@ -179,13 +179,38 @@ textarea {
 
 .now-playing-subline {
   min-width: 0;
+  font-size: 14px;
 }
-.now-playing-subline.clickable {
-  cursor: pointer;
+
+/* 아티스트(들)+앨범명을 한 줄에 이어 붙이되, 각각 개별적으로 클릭 가능한
+   조각으로 나눠 보여주는 공용 레이아웃(재생바 부제, 홈 카드 부제 공용). */
+.subline-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
 }
-.now-playing-subline.clickable:hover .track-artist {
-  color: var(--accent);
-  text-decoration: underline;
+.subline-part {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.subline-sep {
+  flex: none;
+  color: var(--text-muted);
+}
+
+/* 재생바의 아티스트명/앨범명은 기본적으로 텍스트 내용 폭 그대로 보여준다
+   (줄어들지 않음). 폭이 부족해 다른 버튼 쪽과 겹칠 상황에만 앨범명 칸이
+   대신 줄어들고, 그때는 이미 줄어든 칸 폭 덕분에 applyMarquee가 자동으로
+   스크롤을 태운다(marquee.js는 칸 폭보다 텍스트가 길면 항상 스크롤한다). */
+.now-playing-subline .subline-part {
+  flex-shrink: 0;
+}
+.now-playing-subline .subline-part-album {
+  flex-shrink: 1;
 }
 
 .main-columns {
@@ -267,9 +292,11 @@ textarea {
   right: 0;
   /* 재생바(트랜스포트 바) 영역은 어둡게 가리지 않도록 그 높이만큼 제외한다
      — 사이드바 드로어 자체도 같은 높이만큼만 차지한다(top:0 ~
-     bottom:var(--transport-bar-height)). */
+     bottom:var(--transport-bar-height)). z-index는 재생바(10)보다 낮게 둬서,
+     재생바가 위로 확장돼 이 배경과 같은 자리를 차지하는 순간에도 배경이
+     재생바를 가리지 않게 한다. */
   bottom: var(--transport-bar-height);
-  z-index: 35;
+  z-index: 8;
   background: rgba(0, 0, 0, 0.5);
 }
 .sidebar-logo-btn {
@@ -601,12 +628,19 @@ select#today-limit-select {
   color: var(--text-secondary);
   font-size: 13px;
 }
+.playlist-row-artist-link {
+  cursor: pointer;
+}
+.playlist-row-artist-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .playlist-row-duration {
   flex: 0 0 40px;
   min-width: 0;
   color: var(--text-secondary);
   font-size: 13px;
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
 }
 .playlist-row-lastplayed {
@@ -1942,6 +1976,10 @@ textarea.file-content-body:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.media-card-year {
+  color: var(--text-muted);
+  font-size: 12px;
+}
 .media-card-meta {
   display: flex;
   align-items: center;
@@ -1977,24 +2015,35 @@ textarea.file-content-body:disabled {
   font-size: 13px;
   padding: 12px 0;
 }
+/* 스크롤바를 평소엔 숨겨두고, JS(scrollAutoHide.js)가 스크롤 중에 붙이는
+   .scrolling 상태일 때만 잠깐 보여준다. 다시 듣기 행/홈 패널/재생 대기 목록 등
+   여러 스크롤 영역에서 공용으로 쓴다. */
+.scroll-autohide {
+  scrollbar-color: transparent transparent;
+}
+.scroll-autohide.scrolling {
+  scrollbar-color: var(--border) transparent;
+}
+.scroll-autohide::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.scroll-autohide.scrolling::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: content-box;
+}
 .home-recent-row {
   display: flex;
   gap: 14px;
   overflow-x: auto;
+  /* 좌우로만 스크롤되게 하고, 세로 스크롤(휠/트랙패드 상하 입력이 카드 줄로
+     새는 것)은 막는다 — 세로 스크롤은 상위 .home-panel이 담당한다. */
+  overflow-y: hidden;
   scroll-behavior: smooth;
   padding-bottom: 4px;
-  /* 스크롤바는 평소엔 숨겨두고, .scrolling일 때만(홈.js가 스크롤 중 붙였다 뗀다) 보여준다. */
-  scrollbar-color: transparent transparent;
-}
-.home-recent-row.scrolling {
-  scrollbar-color: var(--border) transparent;
-}
-.home-recent-row::-webkit-scrollbar-thumb {
-  background: transparent;
-}
-.home-recent-row.scrolling::-webkit-scrollbar-thumb {
-  background: var(--border);
-  background-clip: content-box;
+  /* 카드(.home-recent-card)가 호버 배경을 위해 margin:-6px 트릭을 쓰는데, 그
+     음수 마진이 위쪽 제목과의 시각적 간격을 6px만큼 줄여버린다 — 빠른 선곡
+     행(같은 트릭을 쓰지 않음)과 간격을 맞추기 위해 그만큼 보정한다. */
+  margin-top: 6px;
 }
 .home-recent-card {
   flex: 0 0 170px;
@@ -2043,6 +2092,7 @@ textarea.file-content-body:disabled {
   opacity: 1;
 }
 .home-recent-card-title {
+  display: block;
   font-size: 14px;
   font-weight: 600;
   overflow: hidden;
@@ -2052,9 +2102,10 @@ textarea.file-content-body:disabled {
 .home-recent-card-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.home-recent-card-album {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .home-quickpicks-grid {
   display: grid;
@@ -2094,6 +2145,7 @@ textarea.file-content-body:disabled {
   min-width: 0;
 }
 .home-quickpick-title {
+  display: block;
   font-size: 15px;
   font-weight: 600;
   overflow: hidden;
@@ -2102,22 +2154,28 @@ textarea.file-content-body:disabled {
 }
 .home-quickpick-subtitle {
   font-size: 13px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* -- 확장 재생 화면 (재생바 상단 이동 + 상세/대기 목록) ------------------------ */
-/* top:0/bottom:auto로 앵커 자체를 바꾸는 대신, 평소 위치(하단 고정)를 기준으로
-   transform만 움직인다 — GPU 가속되는 transform 전환이라 자연스럽게 미끄러지듯
-   올라가고, 배경색(--bg-elevated)과 그림자도 같이 전환해 확장 패널과 이어지는
-   하나의 면처럼 보이게 한다. */
+/* bottom:0 대신 top:100% + translateY(자기 높이만큼)로 "하단 고정"을 표현한다.
+   전에는 top:0/transform: translateY(calc(-100vh + height))로 이동시켰는데,
+   100vh는 모바일 브라우저의 동적 주소창/툴바 등 환경에 따라 실제로 보이는
+   화면 높이와 어긋나는 경우가 있어(visualViewport와 100vh 불일치), 그 값을
+   기준으로 큰 폭을 이동시키면 일부 환경에서 재생바가 화면 위로 넘어가 버리고
+   버튼도 함께 화면 밖으로 나가 다시 내릴 수 없는 문제가 있었다. top:100%는
+   percentage 기준이라 브라우저가 항상 실제 현재 뷰포트 높이로 다시 계산해
+   주므로 이 문제가 없고, transform은 --transport-bar-height라는 고정값만
+   옮기면 되니 훨씬 안전하다. */
 .transport-bar {
-  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease;
+  top: 100%;
+  bottom: auto;
+  transform: translateY(calc(-1 * var(--transport-bar-height)));
+  transition: top 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.32s ease;
 }
 .transport-bar.expanded {
-  transform: translateY(calc(-100vh + var(--transport-bar-height)));
+  top: 0;
+  transform: translateY(0);
   border-top: none;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
@@ -2256,6 +2314,7 @@ textarea.file-content-body:disabled {
   min-width: 0;
 }
 .expanded-queue-row-title {
+  display: block;
   font-size: 14px;
   font-weight: 600;
   overflow: hidden;
@@ -2263,6 +2322,7 @@ textarea.file-content-body:disabled {
   white-space: nowrap;
 }
 .expanded-queue-row-subtitle {
+  display: block;
   font-size: 12px;
   color: var(--text-secondary);
   overflow: hidden;
@@ -2777,7 +2837,9 @@ textarea.file-content-body:disabled {
     top: 0;
     left: 0;
     bottom: var(--transport-bar-height);
-    z-index: 36;
+    /* 재생바(z-index 10)보다 낮게 둬서, 재생바가 위로 확장된 상태에서 드로어를
+       열어도 사이드바(배경+내용 전부)가 재생바 뒤로 가게 한다. */
+    z-index: 9;
     width: min(80vw, 280px);
     border-radius: 0;
     border-top: none;
@@ -2802,9 +2864,17 @@ textarea.file-content-body:disabled {
     display: block;
   }
 
-  /* 좁은 화면에서는 확장 재생 화면의 앨범아트까지 보여줄 여유가 없으므로
-     제목/아티스트만 남기고 생략한다. */
-  .expanded-player-art {
+  /* 좁은 화면에서는 확장 재생 화면의 앨범아트/제목/아티스트까지 보여줄 여유가
+     없으므로 상세 영역 전체를 생략하고, 그만큼 대기 목록이 폭을 꽉 채운다. */
+  .expanded-player-detail {
     display: none;
+  }
+  .expanded-player-queue {
+    flex: 1 1 100%;
+  }
+
+  /* 좁은 화면에서는 빠른 선곡 카드도 한 줄에 하나씩 세로로 쌓는다. */
+  .home-quickpicks-grid {
+    grid-template-columns: 1fr;
   }
 }

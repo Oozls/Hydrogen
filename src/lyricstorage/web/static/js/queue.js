@@ -80,28 +80,43 @@ export function setupQueueEngine(player) {
   });
 }
 
-// 확장 화면에서 "앞으로 재생될 곡" 목록을 그리기 위한 순수 함수. queueMode에
-// 따라 계산 방식이 다르다 — recommend는 이미 평평한 배열이라 그대로 자르면 되고,
-// list는 셔플/전곡반복 상태를 반영해 재구성해야 한다.
-export function getDisplayQueue(player) {
-  if (!player.playlist || player.currentIndex < 0) return [];
+// 확장 화면에서 "재생 대기 목록"에 보여줄 곡 목록을 그리기 위한 순수 함수.
+// queueMode에 따라 계산 방식이 다르다 — recommend는 이미 평평한 배열이라 그대로
+// 자르면 되고, list는 셔플/전곡반복 상태를 반영해 재구성해야 한다.
+//
+// 목록은 재생이 시작된 지점("앵커")부터 보여주고, 곡이 끝나거나 건너뛰어도
+// currentIndex를 따라 슬라이딩 윈도우처럼 줄어들지 않는다 — 앵커는 이 playlist
+// 객체에 한 번만 기록해두고 계속 재사용한다(끝난 곡도 목록에 남아있어야
+// 한다는 요구사항). 셔플+전곡반복 재섞임처럼 옛 앵커로는 지금 재생 중인 곡을
+// 더 이상 포함할 수 없게 되는 경우에만(예: 새로 섞인 순서에서 앵커의 위치가
+// 지금 위치보다 뒤로 밀림) 지금 곡을 새 앵커로 다시 잡아 "새 바퀴"를 시작한다.
+function buildQueueFrom(player, anchor) {
   const tracks = player.playlist.tracks;
-  const n = tracks.length;
-  if (!n) return [];
-
   if (player.queueMode === "recommend") {
-    return tracks.slice(player.currentIndex);
+    return tracks.slice(anchor);
   }
-
   if (player.shuffle && player.shuffleOrder.length) {
-    const pos = player.shuffleOrder.indexOf(player.currentIndex);
-    const order = pos >= 0 ? player.shuffleOrder.slice(pos) : [player.currentIndex];
+    const pos = player.shuffleOrder.indexOf(anchor);
+    const order = pos >= 0 ? player.shuffleOrder.slice(pos) : [anchor];
     return order.map((i) => tracks[i]);
   }
-
-  const forward = tracks.slice(player.currentIndex);
+  const forward = tracks.slice(anchor);
   if (player.repeatMode === "all") {
-    return forward.concat(tracks.slice(0, player.currentIndex));
+    return forward.concat(tracks.slice(0, anchor));
   }
   return forward;
+}
+
+export function getDisplayQueue(player) {
+  if (!player.playlist || player.currentIndex < 0) return [];
+  const playlist = player.playlist;
+  if (!playlist.tracks.length) return [];
+
+  if (playlist._queueAnchor == null) playlist._queueAnchor = player.currentIndex;
+  let queue = buildQueueFrom(player, playlist._queueAnchor);
+  if (!queue.includes(player.currentTrack)) {
+    playlist._queueAnchor = player.currentIndex;
+    queue = buildQueueFrom(player, playlist._queueAnchor);
+  }
+  return queue;
 }

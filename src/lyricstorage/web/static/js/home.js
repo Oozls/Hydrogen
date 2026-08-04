@@ -2,17 +2,17 @@ import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { buildArtEl } from "./artspinner.js";
 import { startRecommendQueue } from "./queue.js";
+import { attachScrollAutoHide } from "./scrollAutoHide.js";
+import { createMarqueeClip, applyMarquee } from "./marquee.js";
+import { fillSublineRow, buildArtistCell } from "./songArtist.js";
 
 const RECENT_LIMIT = 12;
-const QUICKPICK_LIMIT = 9;
+const QUICKPICK_LIMIT = 18;
 
-export function setupHome(player) {
+export function setupHome(player, onOpenAlbum, onOpenArtist) {
   const panelEl = document.getElementById("home-panel");
   const recentRowEl = document.getElementById("home-recent-row");
-  const recentPrevBtn = document.getElementById("btn-home-recent-prev");
-  const recentNextBtn = document.getElementById("btn-home-recent-next");
   const quickpicksGridEl = document.getElementById("home-quickpicks-grid");
-  const quickpicksPlayBtn = document.getElementById("btn-home-quickpicks-play");
 
   let recentItems = [];
   let quickpickItems = [];
@@ -30,18 +30,34 @@ export function setupHome(player) {
     artWrap.appendChild(playBtn);
     card.appendChild(artWrap);
 
-    const title = document.createElement("div");
-    title.className = "home-recent-card-title";
-    title.textContent = item.title || item.track_id;
-    card.appendChild(title);
+    card.appendChild(createMarqueeClip("home-recent-card-title", "", item.title || item.track_id));
 
-    const subtitle = document.createElement("div");
-    subtitle.className = "home-recent-card-subtitle";
-    subtitle.textContent = ["노래", item.artist || item.album].filter(Boolean).join(" · ");
-    card.appendChild(subtitle);
+    // 아티스트명과 앨범명을 한 줄에 이어 붙이지 않고 각각 따로 줄을 차지하게 한다
+    // (아티스트명 아래에 앨범명).
+    if (item.artist) card.appendChild(buildArtistCell("home-recent-card-subtitle", item.artist, onOpenArtist));
+    if (item.album) {
+      const albumClip = createMarqueeClip("home-recent-card-album", "", item.album);
+      if (onOpenAlbum) {
+        albumClip.classList.add("playlist-row-album-link");
+        albumClip.title = "앨범 보기";
+        albumClip.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onOpenAlbum(item);
+        });
+      }
+      card.appendChild(albumClip);
+    }
 
     card.addEventListener("click", () => startRecommendQueue(player, item));
     return card;
+  }
+
+  function renderLoading(container) {
+    container.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "list-loading";
+    loading.textContent = "불러오는 중...";
+    container.appendChild(loading);
   }
 
   function renderRecent() {
@@ -54,6 +70,7 @@ export function setupHome(player) {
       return;
     }
     recentItems.forEach((item) => recentRowEl.appendChild(buildRecentCard(item)));
+    requestAnimationFrame(() => applyMarquee(recentRowEl));
   }
 
   function buildQuickpickRow(item) {
@@ -64,14 +81,15 @@ export function setupHome(player) {
 
     const text = document.createElement("div");
     text.className = "home-quickpick-text";
-    const title = document.createElement("div");
-    title.className = "home-quickpick-title";
-    title.textContent = item.title || item.track_id;
+    text.appendChild(createMarqueeClip("home-quickpick-title", "", item.title || item.track_id));
     const subtitle = document.createElement("div");
-    subtitle.className = "home-quickpick-subtitle";
-    const playCountLabel = item.play_count > 0 ? `${item.play_count}회 재생` : "안 들어봄";
-    subtitle.textContent = [item.artist, playCountLabel].filter(Boolean).join(" · ");
-    text.appendChild(title);
+    subtitle.className = "home-quickpick-subtitle subline-row";
+    fillSublineRow(subtitle, {
+      artist: item.artist,
+      album: item.album,
+      onOpenArtist,
+      onOpenAlbum: item.album && onOpenAlbum ? () => onOpenAlbum(item) : null,
+    });
     text.appendChild(subtitle);
     row.appendChild(text);
 
@@ -89,26 +107,20 @@ export function setupHome(player) {
       return;
     }
     quickpickItems.forEach((item) => quickpicksGridEl.appendChild(buildQuickpickRow(item)));
+    requestAnimationFrame(() => applyMarquee(quickpicksGridEl));
   }
 
-  // 스크롤바는 평소엔 숨겨두고, 실제로 스크롤하는 동안만(휠/드래그/화살표 버튼)
-  // 잠깐 보여준다 — 마지막 스크롤 후 일정 시간 지나면 다시 숨긴다.
-  let recentScrollHideTimer = null;
-  recentRowEl.addEventListener("scroll", () => {
-    recentRowEl.classList.add("scrolling");
-    clearTimeout(recentScrollHideTimer);
-    recentScrollHideTimer = setTimeout(() => recentRowEl.classList.remove("scrolling"), 700);
-  });
+  attachScrollAutoHide(recentRowEl);
+  attachScrollAutoHide(panelEl);
 
-  recentPrevBtn.addEventListener("click", () => {
-    recentRowEl.scrollBy({ left: -recentRowEl.clientWidth, behavior: "smooth" });
-  });
-  recentNextBtn.addEventListener("click", () => {
-    recentRowEl.scrollBy({ left: recentRowEl.clientWidth, behavior: "smooth" });
-  });
-  quickpicksPlayBtn.addEventListener("click", () => {
-    if (!quickpickItems.length) return;
-    startRecommendQueue(player, quickpickItems[0]);
+  // 패널 폭이 바뀌면(사이드바 토글, 창 크기 조절 등) 마퀴가 필요한지 다시 재야 한다.
+  let marqueeResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(marqueeResizeTimer);
+    marqueeResizeTimer = setTimeout(() => {
+      applyMarquee(recentRowEl);
+      applyMarquee(quickpicksGridEl);
+    }, 150);
   });
 
   async function load() {
@@ -128,6 +140,10 @@ export function setupHome(player) {
   return {
     show() {
       panelEl.classList.add("active");
+      // 새로 불러오는 동안 이전 화면(다른 새로고침 시점)의 목록이 잠깐 그대로
+      // 보이다 교체되는 대신, 곧바로 로딩 중 표시로 바꾼다.
+      renderLoading(recentRowEl);
+      renderLoading(quickpicksGridEl);
       load();
     },
     hide() {

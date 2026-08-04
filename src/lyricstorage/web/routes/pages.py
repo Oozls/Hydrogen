@@ -51,3 +51,13 @@ def logs_page():
 @bp.get("/files")
 def files_page():
     return render_template("files.html")
+
+
+# 프런트엔드 라우터(router.js)가 해시 없이 History API로 /browse/albums/<id> 같은
+# 가상 경로를 직접 다루므로, 그런 경로를 새로고침하거나 직접 열어도 같은 SPA
+# 셸(index.html)이 떠서 라우터가 그 경로를 스스로 해석하게 해줘야 한다. 더
+# 구체적인 규칙(/logs, /files, /api/..., /static/...)이 항상 먼저 매칭되므로
+# 이 catch-all은 그 나머지 경로에만 걸린다.
+@bp.get("/<path:_subpath>")
+def spa_fallback(_subpath: str):
+    return index()

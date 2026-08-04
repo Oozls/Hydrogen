@@ -74,35 +74,77 @@ function stopMarqueeFade(clip) {
 const LABEL_GAP_PX = 10;
 const ALBUM_COLUMN_WIDTH = 170; // .playlist-row-album의 CSS flex-basis와 반드시 같아야 함
 const ARTIST_COLUMN_WIDTH = 150; // .playlist-row-artist의 CSS flex-basis와 반드시 같아야 함
+const TITLE_MIN_WIDTH = 70; // .playlist-row-title-clip의 CSS min-width와 반드시 같아야 함
+
+function naturalTextWidth(clipEl) {
+  const inner = clipEl && clipEl.querySelector(".marquee-inner");
+  return inner ? inner.scrollWidth : 0;
+}
 
 // 앨범/아티스트 칸은 표처럼 목록 전체에서 보임/숨김과 폭이 맞아야 하므로, 행마다
 // 따로 판단하지 않고 목록 단위로 한 번에 계산해 모든 행에 동일하게 적용한다.
+// 자리가 없으면 앨범/아티스트를 통째로 숨기고, 자리가 있으면 기본 폭(CSS
+// flex-basis)을 쓰되 제목이 자기 실제 폭보다 넓은 칸을 받아 남는 여유가 있으면
+// 그 여유를 앨범/아티스트 칸에 나눠줘서(각자 실제 내용 폭까지) 마퀴 스크롤 없이도
+// 다 보이게 한다 — 그래야 곡명은 짧은데 앨범명이 긴 행에서 앨범명이 굳이 흐르지
+// 않아도 된다. 이때도 제목이 필요한 최소 폭은 항상 지켜지므로 겹치지 않는다.
 export function applyColumnPriority(rootEl) {
   if (!rootEl) return;
   const rows = rootEl.querySelectorAll(".playlist-row");
   const entries = [];
   rows.forEach((row) => {
     const label = row.querySelector(".playlist-row-label");
+    const titleClip = row.querySelector(".playlist-row-title-clip");
     const album = row.querySelector(".playlist-row-album");
     const artist = row.querySelector(".playlist-row-artist");
     if (!label || (!album && !artist)) return;
-    if (album) album.hidden = false;
-    if (artist) artist.hidden = false;
-    entries.push({ label, album, artist });
+    if (album) {
+      album.hidden = false;
+      album.style.removeProperty("flex-basis");
+    }
+    if (artist) {
+      artist.hidden = false;
+      artist.style.removeProperty("flex-basis");
+    }
+    entries.push({ label, titleClip, album, artist });
   });
   if (!entries.length) return;
 
   const gapCount = (entries[0].album ? 1 : 0) + (entries[0].artist ? 1 : 0);
-  const columnWidth = (entries[0].album ? ALBUM_COLUMN_WIDTH : 0) + (entries[0].artist ? ARTIST_COLUMN_WIDTH : 0);
+  const baseColumnWidth = (entries[0].album ? ALBUM_COLUMN_WIDTH : 0) + (entries[0].artist ? ARTIST_COLUMN_WIDTH : 0);
   // 행 구조(체크박스/가사 아이콘/재생시간/레이팅 등)는 모든 행이 동일해서 라벨
   // 폭도 원래 같아야 하지만, 혹시 모를 오차에 대비해 가장 좁은 값을 기준으로 삼는다.
   const labelWidth = Math.min(...entries.map((e) => e.label.clientWidth));
   const safeCombinedWidth = Math.max(0, (labelWidth - LABEL_GAP_PX * gapCount) / 2);
 
-  const shouldHide = columnWidth > safeCombinedWidth;
+  const shouldHide = baseColumnWidth > safeCombinedWidth;
+  if (shouldHide) {
+    entries.forEach((e) => {
+      if (e.album) e.album.hidden = true;
+      if (e.artist) e.artist.hidden = true;
+    });
+    return;
+  }
+
+  const titleNaturalMax = Math.max(0, ...entries.map((e) => naturalTextWidth(e.titleClip)));
+  const albumNaturalMax = entries[0].album ? Math.max(0, ...entries.map((e) => naturalTextWidth(e.album))) : 0;
+  const artistNaturalMax = entries[0].artist ? Math.max(0, ...entries.map((e) => naturalTextWidth(e.artist))) : 0;
+
+  const availableWidth = labelWidth - LABEL_GAP_PX * gapCount;
+  const titleWant = Math.max(TITLE_MIN_WIDTH, titleNaturalMax);
+  const slack = availableWidth - titleWant - baseColumnWidth;
+  if (slack <= 0) return;
+
+  const albumExtraWant = Math.max(0, albumNaturalMax - ALBUM_COLUMN_WIDTH);
+  const artistExtraWant = Math.max(0, artistNaturalMax - ARTIST_COLUMN_WIDTH);
+  const totalExtraWant = albumExtraWant + artistExtraWant;
+  if (totalExtraWant <= 0) return;
+
+  const albumExtra = Math.min(albumExtraWant, slack * (albumExtraWant / totalExtraWant));
+  const artistExtra = Math.min(artistExtraWant, slack * (artistExtraWant / totalExtraWant));
   entries.forEach((e) => {
-    if (e.album) e.album.hidden = shouldHide;
-    if (e.artist) e.artist.hidden = shouldHide;
+    if (e.album && albumExtra > 0) e.album.style.flexBasis = `${ALBUM_COLUMN_WIDTH + albumExtra}px`;
+    if (e.artist && artistExtra > 0) e.artist.style.flexBasis = `${ARTIST_COLUMN_WIDTH + artistExtra}px`;
   });
 }
 

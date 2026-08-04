@@ -3,6 +3,7 @@ import { setIcon } from "./icons.js";
 import { applyMarquee } from "./marquee.js";
 import { showArtSpinner } from "./artspinner.js";
 import { openImageLightbox } from "./imageLightbox.js";
+import { fillSublineRow } from "./songArtist.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
@@ -24,12 +25,11 @@ function updateRangeFill(el) {
   el.style.setProperty("--range-progress", `${pct}%`);
 }
 
-export function setupNowPlaying(player, onOpenAlbum) {
+export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   const artEl = document.getElementById("now-playing-art");
   const artPlaceholder = document.getElementById("now-playing-art-placeholder");
   const titleEl = document.getElementById("now-playing-title");
-  const sublineEl = document.querySelector(".now-playing-subline");
-  const sublineTextEl = document.getElementById("now-playing-subline-text");
+  const sublineEl = document.getElementById("now-playing-subline");
   const nowPlayingTextEl = document.querySelector(".now-playing-text");
 
   const seekSlider = document.getElementById("seek-slider");
@@ -79,13 +79,16 @@ export function setupNowPlaying(player, onOpenAlbum) {
     });
   }
 
-  // 아티스트명/앨범명을 한 줄("아티스트 · 앨범")로 합쳐 보여준다. 앨범이 있으면
-  // 클릭해서 브라우즈의 해당 앨범 상세로 이동할 수 있다(클릭 대상을 아티스트/
-  // 앨범 부분으로 나누지 않고 줄 전체로 단순화).
+  // 아티스트명(들)/앨범명을 한 줄("아티스트 · 앨범")로 보여준다. 아티스트가
+  // 쉼표로 여럿이면 각각, 앨범명은 통째로 개별적으로 클릭해서 그 아티스트/앨범
+  // 상세로 이동할 수 있다.
   function updateSubline(track) {
-    const parts = [track && track.artist, track && track.album].filter(Boolean);
-    sublineTextEl.textContent = parts.join(" · ");
-    sublineEl.classList.toggle("clickable", Boolean(track && track.album && onOpenAlbum));
+    fillSublineRow(sublineEl, {
+      artist: track && track.artist,
+      album: track && track.album,
+      onOpenArtist,
+      onOpenAlbum: track && track.album && onOpenAlbum ? () => onOpenAlbum(track) : null,
+    });
   }
 
   function setTrack(track, { bustArtCache = false } = {}) {
@@ -212,11 +215,6 @@ export function setupNowPlaying(player, onOpenAlbum) {
   nextBtn.addEventListener("click", () => player.nextTrack());
   shuffleBtn.addEventListener("click", () => player.setShuffle(!player.shuffle));
   repeatBtn.addEventListener("click", () => player.cycleRepeat());
-  if (onOpenAlbum) {
-    sublineEl.addEventListener("click", () => {
-      if (player.currentTrack && player.currentTrack.album) onOpenAlbum(player.currentTrack);
-    });
-  }
 
   // 드래그 중에는 재생 위치 갱신이 슬라이더와 다투지 않도록 무시하고,
   // 놓는 순간에만 실제 seek를 커밋한다.
