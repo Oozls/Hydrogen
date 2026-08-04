@@ -161,8 +161,25 @@ export class PlayerEngine extends EventTarget {
     const track = this.playlist.tracks[index];
     this._intentionalPause = false;
     this.audio.src = `/api/tracks/${track.track_id}/audio`;
-    this.audio.play().catch(() => {});
+    this._playWhenReady(this.audio);
     this._emit("trackchange", { track, index });
+  }
+
+  // 소스를 막 바꾼 <audio>에 곧바로 play()를 걸면, 아직 첫 청크도 못 받은
+  // 상태에서 브라우저가 재생을 "시작"만 해두고 실제 소리는 버퍼가 어느 정도
+  // 찰 때까지 건너뛰어(초반 몇 초가 씹혀) 나오는 경우가 있다. 최소한의 재생
+  // 가능 상태(HAVE_FUTURE_DATA)가 될 때까지 기다렸다가 play()를 호출해 이를
+  // 막는다. 이미 그 상태라면(캐시 등으로 즉시 충족되는 경우) 기다리지 않는다.
+  _playWhenReady(audio) {
+    audio.oncanplay = null;
+    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      audio.play().catch(() => {});
+      return;
+    }
+    audio.oncanplay = () => {
+      audio.oncanplay = null;
+      audio.play().catch(() => {});
+    };
   }
 
   togglePlayPause() {
@@ -334,7 +351,7 @@ export class PlayerEngine extends EventTarget {
     const track = this.playlist.tracks[index];
 
     this._intentionalPause = false;
-    promoted.play().catch(() => {});
+    this._playWhenReady(promoted);
     this._emit("trackchange", { track, index });
     // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는
     // this.audio가 아니어서 무시됐다. 지금 this.audio로 승격됐다는 사실만으로는

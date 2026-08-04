@@ -489,6 +489,14 @@ select#today-limit-select {
   flex: 1;
   min-width: 0;
 }
+/* --marquee-fade-left를 WAAPI로 부드럽게 애니메이션하려면 브라우저가 이걸
+   숫자 길이 값으로 인식해야 한다(등록하지 않은 커스텀 프로퍼티는 중간값을
+   보간하지 못하고 순간적으로 툭 튄다). */
+@property --marquee-fade-left {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
 /* 제목/앨범명/아티스트명 공용 마퀴 스크롤 컨테이너. flex-basis(폭)와 색상은
    각 열의 고유 클래스(.playlist-row-title-clip/.playlist-row-album/.playlist-row-artist)가
    따로 맡고, 여기서는 넘친 텍스트를 잘라내고 스크롤 애니메이션을 태우는 역할만 한다. */
@@ -497,6 +505,34 @@ select#today-limit-select {
   text-overflow: ellipsis;
   white-space: nowrap;
   position: relative;
+  --marquee-fade-edge: 14px;
+  --marquee-fade-left: 0px;
+}
+/* 스크롤 중일 때만 양 끝을 그라데이션으로 흐리게 해, 텍스트가 칼같이
+   잘린 것처럼 보이지 않고 이어지는 느낌을 준다. 스크롤하지 않는(다
+   들어가는) 텍스트는 그대로 또렷하게 보여야 하므로 marquee 클래스가
+   붙어 있을 때만 마스크를 적용한다.
+   왼쪽 끝(--marquee-fade-left)은 고정값이 아니라 JS(marquee.js)가 스크롤
+   애니메이션과 동일한 타이밍으로 0px <-> var(--marquee-fade-edge) 사이를
+   서서히 전환한다 — 정지 구간(맨 처음 글자가 그대로 왼쪽 끝에 있는 상태)
+   에서는 0px로 두어 첫 글자가 흐려 보이지 않게 하고, 스크롤이 시작/종료
+   되는 순간에는 부드럽게 크로스페이드해 흐림이 갑자기 생겼다 사라지는
+   느낌이 들지 않게 한다. */
+.marquee-clip:has(.marquee-inner.marquee) {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--marquee-fade-left),
+    black calc(100% - var(--marquee-fade-edge)),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--marquee-fade-left),
+    black calc(100% - var(--marquee-fade-edge)),
+    transparent
+  );
 }
 .playlist-row-title-clip {
   flex: 1 1 0;
@@ -538,6 +574,7 @@ select#today-limit-select {
 }
 .playlist-row-duration {
   flex: 0 0 40px;
+  min-width: 0;
   color: var(--text-secondary);
   font-size: 13px;
   text-align: right;
@@ -545,6 +582,7 @@ select#today-limit-select {
 }
 .playlist-row-lastplayed {
   flex: 0 0 64px;
+  min-width: 0;
   color: var(--text-muted);
   font-size: 12px;
   text-align: right;
@@ -552,6 +590,7 @@ select#today-limit-select {
 }
 .playlist-row-playcount {
   flex: 0 0 84px;
+  min-width: 0;
   color: var(--text-secondary);
   font-size: 13px;
   text-align: right;
@@ -560,8 +599,12 @@ select#today-limit-select {
 .playlist-row-rating {
   /* 가사 유무 아이콘과 동일한 이유로 폭을 고정해 항상 자리를 차지하게 한다
      (레이팅이 없는 곡은 visibility로만 숨김) — 그래야 행마다 남는 라벨 폭이
-     달라지지 않아 앨범/아티스트 컬럼이 어긋나지 않는다. */
-  flex: 0 0 28px;
+     달라지지 않아 앨범/아티스트 컬럼이 어긋나지 않는다. min-width:0이 없으면
+     flex 아이템의 기본 자동 최소폭이 내용(예: "4.5" 같은 소수점 평점) 크기로
+     보정돼 flex-basis(32px)보다 넓어지고, 정수 평점 행과 소수점 평점 행의 폭이
+     서로 달라져 이 칸과 뒤따르는 더보기/드래그 버튼이 행마다 어긋난다. */
+  flex: 0 0 32px;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 2px;

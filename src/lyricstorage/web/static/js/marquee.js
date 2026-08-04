@@ -16,6 +16,8 @@
 const PIXELS_PER_SECOND = 40;
 const LOOP_GAP_PX = 48;
 const PAUSE_MS = 3000;
+const EDGE_FADE_PX = 14; // .marquee-clip의 CSS --marquee-fade-edge 값과 반드시 같아야 함
+const EDGE_FADE_TRANSITION_MS = 400;
 
 // 곡 행 텍스트에 쓰는 커스텀 웹폰트(Apple SD Gothic Neo, Noto Sans JP)는
 // font-display: swap이라, 최초 렌더 시점엔 아직 폭이 다른 대체 폰트로 표시되다가
@@ -51,18 +53,30 @@ function stopMarquee(inner) {
   inner.classList.remove("marquee");
 }
 
-// 곡 행의 앨범명/아티스트명은 공간이 부족할 때 제목보다 먼저 희생된다. 앨범+아티스트를
-// 원래 폭 그대로 보여준다고 가정했을 때 제목에게 남는 공간이 앨범+아티스트의 원래 폭
-// 합보다 좁아지면, 제목을 지키기 위해 앨범/아티스트를 통째로 숨긴다. 그렇지 않고 여유가
-// 있으면(제목을 침범하지 않는 한도 안에서) 칸이 넘치는 만큼 폭을 넓혀 스크롤 없이 보여
-// 준다 — 표처럼 정렬을 유지해야 하므로 이 폭은 행마다 따로가 아니라 목록 전체에서 한
-// 번에 계산해 모든 행에 동일하게 적용한다. 고정 픽셀 기준(미디어 쿼리)이 아니라 실측
-// 텍스트 폭으로 판단한다. applyMarquee와 마찬가지로 레이아웃이 확정된 뒤(다음 프레임)에
-// 호출해야 하고, 제목 폭 측정에 영향을 주므로 applyMarquee보다 먼저 호출해야 한다.
-const LABEL_GAP_PX = 10;
+function stopMarqueeFade(clip) {
+  if (clip._marqueeFadeAnim) {
+    clip._marqueeFadeAnim.cancel();
+    clip._marqueeFadeAnim = null;
+  }
+  clip.style.removeProperty("--marquee-fade-left");
+}
 
-// 앨범/아티스트 칸은 표처럼 목록 전체에서 폭이 맞아야 하므로, 행마다 따로
-// 넓히지 않고 목록 단위로 한 번에 계산해 모든 행에 같은 폭을 적용한다.
+// 곡 행의 앨범명/아티스트명은 공간이 부족할 때 제목보다 먼저 희생된다. 앨범+아티스트를
+// 각자의 고정 폭(CSS flex-basis) 그대로 보여준다고 가정했을 때 제목에게 남는 공간이
+// 그 고정 폭 합보다 좁아지면, 제목을 지키기 위해 앨범/아티스트를 통째로 숨긴다. 칸 폭
+// 자체는 항상 CSS 기본값을 그대로 쓰고 절대 늘리지 않는다 — 칸 안 텍스트가 폭보다 길어도
+// 칸을 넓히는 대신 이미 같은 컨테이너를 쓰는 마퀴 스크롤(applyMarquee)이 알아서 흡수하므로,
+// 텍스트 길이는 숨김 여부와 무관하다. 표처럼 정렬을 유지해야 하므로 이 판단은 행마다
+// 따로 내리지 않고 목록 전체에서 한 번만 내려 모든 행에 동일하게 적용한다 — 그래야 유독
+// 이름이 긴 곡 한두 개 때문에 그 행만 앨범/아티스트가 사라지거나 칸 폭이 어긋나는 일이
+// 없다. applyMarquee와 마찬가지로 레이아웃이 확정된 뒤(다음 프레임)에 호출해야 하고,
+// 제목 폭 측정에 영향을 주므로 applyMarquee보다 먼저 호출해야 한다.
+const LABEL_GAP_PX = 10;
+const ALBUM_COLUMN_WIDTH = 170; // .playlist-row-album의 CSS flex-basis와 반드시 같아야 함
+const ARTIST_COLUMN_WIDTH = 150; // .playlist-row-artist의 CSS flex-basis와 반드시 같아야 함
+
+// 앨범/아티스트 칸은 표처럼 목록 전체에서 보임/숨김과 폭이 맞아야 하므로, 행마다
+// 따로 판단하지 않고 목록 단위로 한 번에 계산해 모든 행에 동일하게 적용한다.
 export function applyColumnPriority(rootEl) {
   if (!rootEl) return;
   const rows = rootEl.querySelectorAll(".playlist-row");
@@ -72,55 +86,23 @@ export function applyColumnPriority(rootEl) {
     const album = row.querySelector(".playlist-row-album");
     const artist = row.querySelector(".playlist-row-artist");
     if (!label || (!album && !artist)) return;
-
-    // 실제 텍스트 폭을 다시 재려면 우선 숨김/이전 렌더의 폭 조정을 풀어야 한다
-    // (숨겨진 요소는 scrollWidth가 0이고, 리사이즈로 재계산할 때는 지난번에
-    // 넓혀둔 폭이 그대로 남아있어 측정을 왜곡한다).
-    if (album) { album.hidden = false; album.style.flexBasis = ""; }
-    if (artist) { artist.hidden = false; artist.style.flexBasis = ""; }
+    if (album) album.hidden = false;
+    if (artist) artist.hidden = false;
     entries.push({ label, album, artist });
   });
   if (!entries.length) return;
 
   const gapCount = (entries[0].album ? 1 : 0) + (entries[0].artist ? 1 : 0);
+  const columnWidth = (entries[0].album ? ALBUM_COLUMN_WIDTH : 0) + (entries[0].artist ? ARTIST_COLUMN_WIDTH : 0);
   // 행 구조(체크박스/가사 아이콘/재생시간/레이팅 등)는 모든 행이 동일해서 라벨
   // 폭도 원래 같아야 하지만, 혹시 모를 오차에 대비해 가장 좁은 값을 기준으로 삼는다.
   const labelWidth = Math.min(...entries.map((e) => e.label.clientWidth));
   const safeCombinedWidth = Math.max(0, (labelWidth - LABEL_GAP_PX * gapCount) / 2);
 
-  // 1차: 행마다 "자기 폭 그대로" 보여줬을 때 제목 몫을 침범하는지로 숨김 여부를
-  // 정하고, 숨기지 않는 행들 중 각 칸이 필요로 하는 최대 폭을 구한다.
-  let maxAlbumWidth = 0;
-  let maxArtistWidth = 0;
+  const shouldHide = columnWidth > safeCombinedWidth;
   entries.forEach((e) => {
-    const naturalWidth = (e.album ? e.album.scrollWidth : 0) + (e.artist ? e.artist.scrollWidth : 0);
-    if (naturalWidth === 0) return;
-    const shouldHide = naturalWidth > safeCombinedWidth;
     if (e.album) e.album.hidden = shouldHide;
     if (e.artist) e.artist.hidden = shouldHide;
-    if (shouldHide) return;
-    if (e.album) maxAlbumWidth = Math.max(maxAlbumWidth, e.album.scrollWidth);
-    if (e.artist) maxArtistWidth = Math.max(maxArtistWidth, e.artist.scrollWidth);
-  });
-  if (maxAlbumWidth === 0 && maxArtistWidth === 0) return;
-
-  // 2차: 서로 다른 행에서 뽑힌 최대 폭끼리 더하면 안전 한도를 넘을 수 있으니
-  // (예: 앨범명이 긴 행과 아티스트명이 긴 행이 서로 다름), 넘칠 경우 두 칸을
-  // 같은 비율로 줄여 제목 몫을 지킨다.
-  const desiredCombined = maxAlbumWidth + maxArtistWidth;
-  const scale = desiredCombined > safeCombinedWidth ? safeCombinedWidth / desiredCombined : 1;
-  const albumWidth = Math.floor(maxAlbumWidth * scale);
-  const artistWidth = Math.floor(maxArtistWidth * scale);
-
-  // 이미 기본 폭(CSS의 flex-basis)에 다 들어가는 칸은 그대로 두고, 목록 전체에서
-  // 실제로 더 넓혀야 하는 칸에만 같은 폭을 적용해 모든 행에서 정렬을 맞춘다.
-  entries.forEach((e) => {
-    if (e.album && !e.album.hidden && albumWidth > e.album.clientWidth) {
-      e.album.style.flexBasis = `${albumWidth}px`;
-    }
-    if (e.artist && !e.artist.hidden && artistWidth > e.artist.clientWidth) {
-      e.artist.style.flexBasis = `${artistWidth}px`;
-    }
   });
 }
 
@@ -132,6 +114,7 @@ export function applyMarquee(rootEl) {
     if (!inner) return;
 
     stopMarquee(inner);
+    stopMarqueeFade(clip);
 
     // 우선 일반 텍스트로 되돌려서 실제(줄바꿈 없는) 폭을 측정한다.
     // 이미 marquee 복사본 2벌이 남아있다면 textContent를 그대로 읽으면 이어붙여져
@@ -167,6 +150,25 @@ export function applyMarquee(rootEl) {
         { transform: "translateX(0)", offset: 0 },
         { transform: "translateX(0)", offset: pauseOffset },
         { transform: `translateX(-${loopWidth}px)`, offset: 1 },
+      ],
+      { duration: totalMs, iterations: Infinity, easing: "linear" }
+    );
+
+    // 왼쪽 끝 그라데이션은 정지 구간(offset 0~pauseOffset, 텍스트의 진짜
+    // 시작 부분이 왼쪽 끝에 그대로 있는 상태)에서는 꺼두고, 실제로 스크롤이
+    // 시작되는 시점(pauseOffset)부터 서서히 켠 뒤, 다시 정지 위치로 돌아오기
+    // 직전에 서서히 끈다. 순간적으로 켜졌다 꺼지면 눈에 확 띄므로 짧게
+    // 크로스페이드한다. transform 애니메이션과 duration/iterations가 완전히
+    // 같으므로 두 애니메이션은 항상 같은 위상으로 돈다.
+    const rampMs = Math.min(EDGE_FADE_TRANSITION_MS, scrollMs / 2);
+    const rampOffset = rampMs / totalMs;
+    clip._marqueeFadeAnim = clip.animate(
+      [
+        { offset: 0, "--marquee-fade-left": "0px" },
+        { offset: pauseOffset, "--marquee-fade-left": "0px" },
+        { offset: pauseOffset + rampOffset, "--marquee-fade-left": `${EDGE_FADE_PX}px` },
+        { offset: 1 - rampOffset, "--marquee-fade-left": `${EDGE_FADE_PX}px` },
+        { offset: 1, "--marquee-fade-left": "0px" },
       ],
       { duration: totalMs, iterations: Infinity, easing: "linear" }
     );
