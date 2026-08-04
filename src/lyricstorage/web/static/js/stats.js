@@ -3,6 +3,7 @@ import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 import { fillArtistArt } from "./artistArt.js";
+import { alertDialog } from "./dialog.js";
 
 // 곡 아티스트 문자열을 쉼표로 나눠 여러 아티스트로 분리한다(예: "A, B" -> ["A", "B"]).
 // stats.py의 split_artists와 동일한 규칙 — 재생 순위 집계와 아티스트 상세 화면이
@@ -12,6 +13,18 @@ function splitArtists(artist) {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+// 등록된 이명(별칭)을 대표 이름으로 바꿔주는 조회 함수를 만든다. 곡 파일의
+// artist 문자열이나 재생 기록에는 옛 이름이 그대로 남아있을 수 있으므로,
+// 콜라주/집계 화면에서 같은 사람으로 묶어 보여줄 때 이 함수를 거친다.
+function buildArtistNameResolver(artists) {
+  const lookup = new Map();
+  for (const artist of artists) {
+    lookup.set(artist.name, artist.name);
+    for (const alias of artist.aliases) lookup.set(alias, artist.name);
+  }
+  return (name) => lookup.get(name) || name;
 }
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
@@ -83,8 +96,17 @@ export function setupStats(player, onOpenAlbum) {
   const trackPageLabel = document.getElementById("stats-track-page-label");
   const artistDetailPanel = document.getElementById("stats-artist-detail-panel");
   const artistDetailTitleEl = document.getElementById("stats-artist-detail-title");
+  const artistDetailAliasesEl = document.getElementById("stats-artist-detail-aliases");
   const artistDetailListEl = document.getElementById("stats-artist-detail-list");
   const artistDetailBackBtn = document.getElementById("btn-stats-artist-detail-back");
+  const artistDetailEditBtn = document.getElementById("btn-stats-artist-detail-edit");
+  const artistInfoDialog = document.getElementById("artist-info-dialog");
+  const artistInfoNameInput = document.getElementById("artist-info-name");
+  const artistInfoAliasesEl = document.getElementById("artist-info-aliases");
+  const artistInfoAliasInput = document.getElementById("artist-info-alias-input");
+  const artistInfoAliasAddBtn = document.getElementById("artist-info-alias-add");
+  const artistInfoCancelBtn = document.getElementById("artist-info-cancel");
+  const artistInfoSaveBtn = document.getElementById("artist-info-save");
 
   let period = "day";
   let group = "track";
@@ -103,15 +125,27 @@ export function setupStats(player, onOpenAlbum) {
   let artistAlbumsMap = new Map();
   let artistDetailArtist = null;
   let artistDetailTracks = [];
+  // 곡 아티스트 상세 화면에 지금 열려 있는 정체성({id, name, aliases}).
+  // 이명 추가/삭제·대표 이름 변경 후 목록을 다시 매칭하는 데 쓴다.
+  let artistDetailIdentity = null;
+  // 이명/대표 이름을 바꾼 채로 상세 화면에서 뒤로 가면, 아티스트 순위 목록도
+  // 옛 이름 기준으로 남아있지 않도록 한 번 더 새로고침한다.
+  let artistIdentityDirty = false;
 
   // 곡 아티스트별 소속 앨범 맵을 새로 계산한다(아티스트 카드 콜라주/상세 화면
   // 공용). 라이브러리 스냅샷 전체가 필요하므로 아티스트 그룹을 볼 때만 부른다.
   async function loadArtistAlbumsMap() {
-    const [library, albumsResult] = await Promise.all([api.getLibrary(), api.getAlbums()]);
+    const [library, albumsResult, artistsResult] = await Promise.all([
+      api.getLibrary(),
+      api.getAlbums(),
+      api.getArtists(),
+    ]);
     const albumById = new Map(albumsResult.albums.map((a) => [a.id, a]));
+    const resolveName = buildArtistNameResolver(artistsResult.artists);
     const map = new Map();
     for (const track of library.tracks) {
-      for (const name of splitArtists(track.artist)) {
+      for (const rawName of splitArtists(track.artist)) {
+        const name = resolveName(rawName);
         if (!map.has(name)) map.set(name, new Map());
         if (track.album_id && albumById.has(track.album_id)) {
           map.get(name).set(track.album_id, albumById.get(track.album_id));
@@ -525,11 +559,12 @@ export function setupStats(player, onOpenAlbum) {
     return li;
   }
 
-  // 곡 아티스트 카드를 클릭하면, 그 아티스트가 참여한(쉼표로 나열된 공동 작업곡
-  // 포함) 모든 곡을 앨범별로 묶어 곡 목록으로 보여준다.
-  async function openArtistDetail(artistName) {
-    const library = await api.getLibrary();
-    const matched = library.tracks.filter((t) => splitArtists(t.artist).includes(artistName));
+  // identity(대표 이름 + 이명)에 속한 모든 이름과 매칭되는 곡을 앨범별로 묶어
+  // 곡 목록 영역을 다시 그린다. 이명 추가/삭제나 대표 이름 변경 후에도 이걸로
+  // 목록만 새로 매칭해서 다시 그린다(패널을 새로 열 필요 없음).
+  function renderArtistDetailFromLibrary(library, identity) {
+    const matchNames = new Set([identity.name, ...identity.aliases]);
+    const matched = library.tracks.filter((t) => splitArtists(t.artist).some((n) => matchNames.has(n)));
 
     const byAlbum = new Map();
     for (const track of matched) {
@@ -539,10 +574,12 @@ export function setupStats(player, onOpenAlbum) {
     }
     const sections = [...byAlbum.values()].sort((a, b) => (a.album || "").localeCompare(b.album || "", "ko"));
 
-    artistDetailArtist = artistName;
+    artistDetailArtist = identity.name;
     artistDetailTracks = sections.flatMap((s) => s.tracks);
 
-    artistDetailTitleEl.textContent = artistName || "(아티스트 없음)";
+    artistDetailTitleEl.textContent = identity.name || "(아티스트 없음)";
+    artistDetailAliasesEl.textContent = identity.aliases.length ? `이명: ${identity.aliases.join(", ")}` : "";
+    artistDetailEditBtn.hidden = !identity.id;
     artistDetailListEl.innerHTML = "";
     if (!sections.length) {
       const empty = document.createElement("div");
@@ -564,9 +601,33 @@ export function setupStats(player, onOpenAlbum) {
         artistDetailListEl.appendChild(sectionEl);
       });
     }
+  }
+
+  // 곡 아티스트 카드를 클릭하면, 그 아티스트가 참여한(쉼표로 나열된 공동 작업곡
+  // 포함) 모든 곡을 앨범별로 묶어 곡 목록으로 보여준다. 이명이 등록돼 있으면
+  // 그 이름들로 활동한 곡도 같이 묶인다.
+  async function openArtistDetail(artistName) {
+    // "(아티스트 없음)" 자리표시자는 실제 아티스트가 아니라 이명 레지스트리에
+    // 저장할 대상이 아니므로, 이때만 아이디 없는 임시 정체성을 만들어 쓴다.
+    const isPlaceholder = !artistName || artistName === "(아티스트 없음)";
+    const [identity, library] = await Promise.all([
+      isPlaceholder ? Promise.resolve({ id: null, name: artistName || "", aliases: [] }) : api.resolveArtist(artistName),
+      api.getLibrary(),
+    ]);
+    artistDetailIdentity = identity;
+    renderArtistDetailFromLibrary(library, identity);
 
     listEl.style.display = "none";
     artistDetailPanel.hidden = false;
+    requestAnimationFrame(() => applyMarquee(artistDetailListEl));
+  }
+
+  // 이명 편집 다이얼로그를 닫은 뒤(이름/이명이 바뀌었을 수 있음) 곡 목록을
+  // 최신 정체성 기준으로 다시 매칭해서 보여준다.
+  async function refreshArtistDetailAfterEdit() {
+    if (!artistDetailIdentity || artistDetailPanel.hidden) return;
+    const library = await api.getLibrary();
+    renderArtistDetailFromLibrary(library, artistDetailIdentity);
     requestAnimationFrame(() => applyMarquee(artistDetailListEl));
   }
 
@@ -575,8 +636,80 @@ export function setupStats(player, onOpenAlbum) {
     artistDetailPanel.hidden = true;
     artistDetailArtist = null;
     artistDetailTracks = [];
+    artistDetailIdentity = null;
     if (group !== "track") listEl.style.display = "";
+    if (artistIdentityDirty) {
+      artistIdentityDirty = false;
+      refresh();
+    }
   }
+
+  function renderArtistAliasChips() {
+    artistInfoAliasesEl.innerHTML = "";
+    artistDetailIdentity.aliases.forEach((alias) => {
+      const chip = document.createElement("span");
+      chip.className = "artist-alias-chip";
+      chip.appendChild(document.createTextNode(alias));
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "artist-alias-chip-remove";
+      removeBtn.title = "이명 삭제";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", async () => {
+        try {
+          artistDetailIdentity = await api.removeArtistAlias(artistDetailIdentity.id, alias);
+          artistIdentityDirty = true;
+          renderArtistAliasChips();
+        } catch (err) {
+          await alertDialog(err.message);
+        }
+      });
+      chip.appendChild(removeBtn);
+      artistInfoAliasesEl.appendChild(chip);
+    });
+  }
+
+  artistDetailEditBtn.addEventListener("click", () => {
+    if (!artistDetailIdentity || !artistDetailIdentity.id) return;
+    artistInfoNameInput.value = artistDetailIdentity.name;
+    artistInfoAliasInput.value = "";
+    renderArtistAliasChips();
+    artistInfoDialog.showModal();
+  });
+
+  artistInfoAliasAddBtn.addEventListener("click", async () => {
+    const alias = artistInfoAliasInput.value.trim();
+    if (!alias) return;
+    try {
+      artistDetailIdentity = await api.addArtistAlias(artistDetailIdentity.id, alias);
+      artistIdentityDirty = true;
+      artistInfoAliasInput.value = "";
+      renderArtistAliasChips();
+    } catch (err) {
+      await alertDialog(err.message);
+    }
+  });
+
+  artistInfoCancelBtn.addEventListener("click", () => artistInfoDialog.close());
+
+  artistInfoSaveBtn.addEventListener("click", async () => {
+    const newName = artistInfoNameInput.value.trim();
+    if (!newName) {
+      await alertDialog("아티스트 이름을 입력하세요.");
+      return;
+    }
+    try {
+      if (newName !== artistDetailIdentity.name) {
+        artistDetailIdentity = await api.renameArtist(artistDetailIdentity.id, newName);
+        artistIdentityDirty = true;
+      }
+      artistInfoDialog.close();
+    } catch (err) {
+      await alertDialog(err.message);
+    }
+  });
+
+  artistInfoDialog.addEventListener("close", refreshArtistDetailAfterEdit);
 
   artistDetailBackBtn.addEventListener("click", closeArtistDetail);
 

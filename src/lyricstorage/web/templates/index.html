@@ -270,7 +270,12 @@
             </button>
             <div class="album-detail-text">
               <div id="stats-artist-detail-title" class="track-title"></div>
+              <div id="stats-artist-detail-aliases" class="track-artist"></div>
             </div>
+            <div class="spacer"></div>
+            <button id="btn-stats-artist-detail-edit" class="icon-btn" title="아티스트 이름/이명 수정">
+              <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
+            </button>
           </div>
           <div id="stats-artist-detail-list" class="album-sections"></div>
         </div>
@@ -550,6 +555,25 @@
     <div class="dialog-actions">
       <button id="album-info-cancel" type="button">취소</button>
       <button id="album-info-save" class="primary" type="button">저장</button>
+    </div>
+  </dialog>
+
+  <dialog id="artist-info-dialog" class="library-picker-dialog track-info-dialog">
+    <h3>아티스트 정보 수정</h3>
+    <label class="track-info-field">대표 이름
+      <input type="text" id="artist-info-name" autocomplete="off" />
+    </label>
+    <div class="track-info-field">
+      이명(다른 이름)
+      <div id="artist-info-aliases" class="artist-alias-list"></div>
+      <div class="artist-alias-add-row">
+        <input type="text" id="artist-info-alias-input" autocomplete="off" placeholder="다른 이름 추가" />
+        <button id="artist-info-alias-add" type="button">추가</button>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button id="artist-info-cancel" type="button">취소</button>
+      <button id="artist-info-save" class="primary" type="button">저장</button>
     </div>
   </dialog>
 

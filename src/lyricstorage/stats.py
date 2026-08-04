@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from lyricstorage import albums as albums_repo
+from lyricstorage import artists as artists_repo
 from lyricstorage import storage
 
 PERIODS = {"day", "week", "month"}
@@ -79,6 +80,8 @@ def top(
     start, end = _period_bounds(period, offset)
     history = storage.load_play_history_range(start, end)
     current_by_id = {t.get("track_id"): t for t in (tracks or [])}
+    # 이명(별칭)으로 등록된 아티스트는 대표 이름으로 묶어서 집계한다.
+    artist_resolver = artists_repo.name_resolver() if group == "artist" else {}
 
     buckets: dict[Any, dict[str, Any]] = {}
     for entry in history:
@@ -120,8 +123,10 @@ def top(
             bucket["album"] = album
             bump(bucket)
         elif group == "artist":
-            # 한 곡에 아티스트가 여럿(쉼표 구분)이면 각 아티스트에게 개별로 집계한다.
-            names = list(dict.fromkeys(split_artists(artist))) or ["(아티스트 없음)"]
+            # 한 곡에 아티스트가 여럿(쉼표 구분)이면 각 아티스트에게 개별로 집계하되,
+            # 이명이 등록된 이름은 대표 이름으로 바꿔서 같은 사람으로 묶는다.
+            raw_names = list(dict.fromkeys(split_artists(artist))) or ["(아티스트 없음)"]
+            names = list(dict.fromkeys(artist_resolver.get(n, n) for n in raw_names))
             for name in names:
                 bucket = buckets.setdefault(
                     name, {"artist": name, "count": 0, "listened_ms": 0, "last_played_at": played_at_str}

@@ -74,6 +74,10 @@ def albums_path() -> Path:
     return app_data_dir() / "albums.json"
 
 
+def artists_path() -> Path:
+    return app_data_dir() / "artists.json"
+
+
 def settings_path() -> Path:
     return app_data_dir() / "settings.json"
 

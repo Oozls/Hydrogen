@@ -27,6 +27,7 @@ uv run web.py
 - 플레이리스트: `./data/playlists/<이름>.json` (곡 정보 사본을 포함한 JSON, 라이브러리도 `글로벌 플레이리스트.json`으로 이 안에 저장됨)
 - 설정: `./data/settings.json` (마지막으로 연 플레이리스트, 볼륨 등)
 - 재생 이력: `./data/play_history/<날짜>.jsonl` (통계 집계의 원본 데이터, 날짜별 파일에 재생마다 한 줄씩 추가됨. 구버전의 단일 `play_history.json`은 앱 시작 시 자동으로 이 형태로 이전됨)
+- 곡 아티스트 이명: `./data/artists.json` (대표 이름 + 이명 목록. 곡 파일의 artist 태그나 재생 기록은 그대로 두고, 통계/아티스트 상세 화면에서만 여기 등록된 이름들을 같은 사람으로 묶어 보여줌)
 - 오늘의 곡 노출 이력: `./data/recommend_exposures.json` (하루에 한 번, 그날 추천된 곡과 당시 점수 요소를 기록 — 이후 실제 재생/평점과 대조해 추천 가중치를 학습하는 데 쓰임)
 - 로그: `./data/logs/<날짜>_<AM|PM>.log`
 - 음원 파일: `./data/songs/<내용 해시>.<확장자>` (라이브러리에 추가 시 원본을 복사)
@@ -76,6 +77,7 @@ src/lyricstorage/
     │   ├── stats.py                 /api/stats — 재생 기록, 기간별 순위
     │   ├── recommendations.py       /api/recommendations/today — 오늘의 곡 추천 목록
     │   ├── albums.py                /api/albums — 앨범 단위 정보 수정, zip 다운로드
+    │   ├── artists.py               /api/artists — 곡 아티스트 이명 등록/대표 이름 변경
     │   ├── logs.py                  /api/logs — 로그 파일 목록/조회
     │   └── files.py                 /api/files — data 폴더 트리/내용/삭제
     │

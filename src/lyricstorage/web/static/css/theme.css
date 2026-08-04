@@ -1505,6 +1505,56 @@ textarea.file-content-body:disabled {
   background: var(--bg-elevated);
   color: var(--accent);
 }
+.artist-alias-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 20px;
+}
+.artist-alias-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 6px 3px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.artist-alias-chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.artist-alias-chip-remove:hover {
+  color: #e5484d;
+}
+.artist-alias-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.artist-alias-add-row input {
+  flex: 1;
+  min-width: 0;
+}
+.artist-alias-add-row button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.artist-alias-add-row button:hover {
+  background: var(--bg-elevated);
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

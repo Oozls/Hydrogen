@@ -152,6 +152,13 @@ export const api = {
   albumArtUrl: (albumId) => `/api/albums/${albumId}/art`,
   useTrackArtForAlbum: (albumId) => request("POST", `/api/albums/${albumId}/art/from-track`),
   albumDownloadUrl: (albumId) => `/api/albums/${albumId}/download`,
+  getArtists: () => request("GET", "/api/artists"),
+  resolveArtist: (name) => request("POST", "/api/artists/resolve", { json: { name } }),
+  renameArtist: (artistId, name) => request("PUT", `/api/artists/${artistId}`, { json: { name } }),
+  addArtistAlias: (artistId, alias) =>
+    request("POST", `/api/artists/${artistId}/aliases`, { json: { alias } }),
+  removeArtistAlias: (artistId, alias) =>
+    request("DELETE", `/api/artists/${artistId}/aliases?alias=${encodeURIComponent(alias)}`),
   logPlay: (trackId, title, artist, album, listenedMs) =>
     request("POST", "/api/stats/plays", {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },
