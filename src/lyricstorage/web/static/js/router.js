@@ -19,13 +19,17 @@ function parseRoute(pathname, search) {
   if (raw === "today") return { type: "today" };
   if (raw === "browse" || raw.startsWith("browse/")) {
     const rest = raw === "browse" ? "" : raw.slice("browse/".length);
-    if (rest === "" || rest === "artists") return { type: "browse", mode: "artist" };
-    if (rest === "song-artists") return { type: "browse", mode: "song-artist" };
-    if (rest.startsWith("song-artists/")) {
-      const name = decodeURIComponent(rest.slice("song-artists/".length));
+    // URL은 화면에 보이는 이름(서클/아티스트)을 그대로 따르지만, 내부 mode
+    // 값은 예전 이름("artist"=서클 탭, "song-artist"=아티스트 탭)을 그대로
+    // 쓴다 — browse.js 전체에 흩어진 mode 비교를 다 바꾸는 대신 이 경계에서만
+    // URL 이름과 내부 이름을 잇는다.
+    if (rest === "" || rest === "circles") return { type: "browse", mode: "artist" };
+    if (rest === "artists") return { type: "browse", mode: "song-artist" };
+    if (rest.startsWith("artists/")) {
+      const name = decodeURIComponent(rest.slice("artists/".length));
       if (name) return { type: "browse", mode: "song-artist", songArtistName: name };
     }
-    if (rest === "albums") return { type: "browse", mode: "album", artistFilter: params.get("artist") || null };
+    if (rest === "albums") return { type: "browse", mode: "album", artistFilter: params.get("circle") || null };
     if (rest.startsWith("albums/")) {
       const id = decodeURIComponent(rest.slice("albums/".length));
       if (id) return { type: "browse", mode: "album", albumId: id };
@@ -74,22 +78,22 @@ export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday }) 
       navigate("/");
     },
     goBrowse() {
-      navigate("/browse/artists");
+      navigate("/browse/circles");
     },
     goBrowseSongs() {
       navigate("/browse/songs");
     },
-    goBrowseSongArtists() {
-      navigate("/browse/song-artists");
+    goBrowseArtists() {
+      navigate("/browse/artists");
     },
-    goBrowseAlbums(artistFilter) {
-      navigate(artistFilter ? `/browse/albums?artist=${encodeURIComponent(artistFilter)}` : "/browse/albums");
+    goBrowseAlbums(circleFilter) {
+      navigate(circleFilter ? `/browse/albums?circle=${encodeURIComponent(circleFilter)}` : "/browse/albums");
     },
     goAlbumDetail(albumId) {
       navigate(`/browse/albums/${encodeURIComponent(albumId)}`);
     },
     goSongArtistDetail(name) {
-      navigate(`/browse/song-artists/${encodeURIComponent(name)}`);
+      navigate(`/browse/artists/${encodeURIComponent(name)}`);
     },
     goPlaylist(name) {
       navigate(`/playlist/${encodeURIComponent(name)}`);

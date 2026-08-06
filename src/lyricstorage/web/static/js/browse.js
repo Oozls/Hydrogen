@@ -978,7 +978,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     filterField = "artist";
     render();
     if (refs && refs.router) {
-      refs.router.setUrl(artistName ? `/browse/albums?artist=${encodeURIComponent(artistName)}` : "/browse/albums");
+      refs.router.setUrl(artistName ? `/browse/albums?circle=${encodeURIComponent(artistName)}` : "/browse/albums");
     }
   }
 
@@ -1133,14 +1133,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     songArtistDetailIdentity = identity;
     renderSongArtistDetail(identity);
     songArtistDetailPanel.classList.add("active");
-    if (refs && refs.router) refs.router.setUrl(`/browse/song-artists/${encodeURIComponent(identity.name)}`);
+    if (refs && refs.router) refs.router.setUrl(`/browse/artists/${encodeURIComponent(identity.name)}`);
   }
 
   function closeSongArtistDetail() {
     songArtistDetailPanel.classList.remove("active");
     songArtistsPanel.classList.add("active");
     songArtistDetailIdentity = null;
-    if (refs && refs.router) refs.router.setUrl("/browse/song-artists");
+    if (refs && refs.router) refs.router.setUrl("/browse/artists");
   }
 
   // 앨범 탭은 아티스트별 구획 없이 전체 앨범을 하나의 그리드로 보여준다(카드
@@ -1262,8 +1262,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     normalizeFilterField();
     render();
     if (refs && refs.router) {
-      const paths = { artist: "/browse/artists", "song-artist": "/browse/song-artists", album: "/browse/albums", song: "/browse/songs" };
-      refs.router.setUrl(paths[mode] || "/browse/artists");
+      // 내부 mode 값("artist"=서클, "song-artist"=아티스트)은 그대로 두고
+      // URL만 새 이름을 쓴다(router.js의 parseRoute와 짝을 맞춤).
+      const paths = { artist: "/browse/circles", "song-artist": "/browse/artists", album: "/browse/albums", song: "/browse/songs" };
+      refs.router.setUrl(paths[mode] || "/browse/circles");
     }
   }
 

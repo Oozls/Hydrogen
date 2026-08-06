@@ -60,7 +60,7 @@ function createRatingBadge(rating) {
 }
 
 const VALID_PERIODS = ["day", "week", "month"];
-const VALID_GROUPS = ["track", "album-artist", "artist", "album"];
+const VALID_GROUPS = ["track", "circle", "artist", "album"];
 
 export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums, onOpenArtist, refs) {
   const panelEl = document.getElementById("stats-panel");
@@ -139,7 +139,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
   async function refresh() {
     closeArtistDetail();
-    const isCatalog = group === "album-artist";
+    const isCatalog = group === "circle";
     const isTrack = group === "track";
     // 기간/분류 탭을 바꾸는 동안 이전 화면이 잠깐 그대로 멈춰 있는 것처럼 보이는
     // 대신, 데이터가 오기 전부터 바로 로딩 표시로 바꾼다.
