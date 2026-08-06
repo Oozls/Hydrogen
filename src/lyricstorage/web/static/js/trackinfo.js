@@ -57,7 +57,7 @@ export function setupTrackInfo(onSaved, onDeleted) {
     showArt(`${api.artUrl(trackId)}?t=${Date.now()}`);
     dialog.showModal();
 
-    await store.refresh();
+    await store.ensureLoaded();
     titleValues = distinctValues(store.getTracks(), "title");
     artistValues = distinctValues(store.getTracks(), "artist");
   }

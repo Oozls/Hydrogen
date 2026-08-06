@@ -216,7 +216,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 즉시) 그린다.
   store.subscribe(() => {
     syncFromStore();
-    if (panelEl.classList.contains("active")) render();
+    if (panelEl.classList.contains("active")) renderCurrentView();
   });
 
   async function handleUpload(fileList) {
@@ -1116,6 +1116,19 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     else renderArtists();
   }
 
+  // 지금 실제로 열려 있는 화면(탭 목록 또는 앨범/곡아티스트 상세)에 맞춰 다시
+  // 그린다. store 갱신/트랙 전환처럼 "무엇이 보이는 중이든 최신 상태로 맞춰라"
+  // 신호가 올 때 쓴다 — 상세 화면이 열려 있으면 그 상세를, 아니면 현재 탭을 그린다.
+  function renderCurrentView() {
+    if (albumDetailPanel.classList.contains("active")) {
+      renderAlbumDetailRows(currentAlbumGroup);
+    } else if (songArtistDetailPanel.classList.contains("active")) {
+      renderSongArtistDetail(songArtistDetailIdentity);
+    } else {
+      render();
+    }
+  }
+
   // 앨범/아티스트 탭은 개별 곡명이 없는 그룹 단위라 "곡명" 범위가 의미가 없고,
   // 아티스트 탭은 앨범명 범위도 의미가 없다 — 각 모드에 안 맞는 선택지는
   // 비활성화하고, 그 상태로 넘어왔으면 "전체"로 되돌린다.
@@ -1232,15 +1245,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   // 재생 곡이 바뀔 때마다 현재 보이는 목록(곡 목록 또는 앨범 상세)을 다시 그려
   // 재생 중 표시(강조 + ▶ 접두사)를 갱신한다.
-  player.addEventListener("trackchange", () => {
-    if (albumDetailPanel.classList.contains("active")) {
-      renderAlbumDetailRows(currentAlbumGroup);
-    } else if (songArtistDetailPanel.classList.contains("active")) {
-      renderSongArtistDetail(songArtistDetailIdentity);
-    } else {
-      render();
-    }
-  });
+  player.addEventListener("trackchange", renderCurrentView);
 
   // 재생바 하트로 레이팅을 바꾸면 그 곡이 보이는 목록(곡 목록/앨범 상세)에도
   // 바로 반영한다. player.currentTrack이 이 목록의 tracks 배열과 같은 객체
@@ -1401,11 +1406,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       panelEl.classList.add("active");
       searchInput.value = "";
       searchFieldSelect.value = "all";
-      renderLoading(songsList);
-      renderLoading(albumsList);
-      renderLoading(artistsList);
-      await loadLibraryAndAlbums();
+      syncFromStore();
 
+      // 목표 탭을 먼저 정해서 지금 있는 캐시로(콜드 스타트라 비어있어도) 즉시
+      // 그린다 — 예전엔 fetch가 끝난 뒤에야 탭을 정해서, 그동안 직전 탭(주로
+      // 기본값인 "아티스트" 탭)이 목적지와 무관하게 잠깐 보이는 버그가 있었다.
       if (artistFocus) {
         openArtistAlbums(artistFocus);
       } else if (route && route.mode === "album" && route.artistFilter) {
@@ -1417,6 +1422,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         switchMode(focus ? "album" : (route && route.mode) || "artist");
       }
       loadTodaySongs();
+
+      // store에 이미 캐시가 있으면(재진입 등 흔한 경우) fetch를 기다리지 않고
+      // 배경에서만 새로고침한다 — 위에서 이미 캐시로 그렸으므로 화면은 즉시
+      // 보인다. 아직 한 번도 못 불러왔으면(세션 첫 진입) 채울 데이터 자체가
+      // 없으니 이번만 기다린다(store.ensureLoaded()가 그 판단을 해준다).
+      if (!store.isLoaded()) {
+        renderLoading(songsList);
+        renderLoading(albumsList);
+        renderLoading(artistsList);
+      }
+      await store.ensureLoaded();
+      syncFromStore();
 
       if (focus) {
         const group = groupAlbums(tracks, albums).find(

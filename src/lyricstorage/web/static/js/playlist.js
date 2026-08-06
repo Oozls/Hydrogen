@@ -448,7 +448,7 @@ export function setupPlaylist(
       await alertDialog("먼저 플레이리스트를 만들거나 선택하세요.");
       return;
     }
-    await store.refresh();
+    await store.ensureLoaded();
     pickerAlbumGroups = groupAlbums(store.getTracks(), store.getAlbums());
     pickerChecked = new Set();
     pickerCurrentAlbum = null;

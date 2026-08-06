@@ -53,8 +53,22 @@ function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+// 화면 진입 시 "데이터를 보여줘야 하는데 fetch를 기다려야 하나?"에 대한 공용
+// 답. 이미 한 번이라도 불러온 적 있으면(흔한 경우) 지금 있는 캐시를 바로 쓰고
+// 새로고침은 배경에서만 돈다 — 화면은 fetch를 기다리지 않고 즉시 그려진다.
+// 아직 한 번도 못 불러왔으면(세션 첫 진입) 보여줄 데이터 자체가 없으니 이번만
+// 기다린다.
+function ensureLoaded() {
+  if (state.loaded) {
+    refresh();
+    return Promise.resolve(state);
+  }
+  return refresh();
+}
+
 export const store = {
   refresh,
+  ensureLoaded,
   subscribe,
   getTracks: () => state.tracks,
   getAlbums: () => state.albums,

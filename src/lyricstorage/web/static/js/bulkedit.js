@@ -89,7 +89,7 @@ export function setupBulkEdit(onSaved, onDeleted) {
     artInput.value = "";
     countEl.textContent = `선택한 ${trackIds.length}곡에 적용됩니다.`;
 
-    await store.refresh();
+    await store.ensureLoaded();
     const selected = store.getTracks().filter((t) => trackIds.includes(t.track_id));
 
     for (const field of fields) {
