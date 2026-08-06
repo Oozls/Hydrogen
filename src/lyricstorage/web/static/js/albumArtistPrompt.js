@@ -18,7 +18,7 @@ export function setupAlbumArtistPrompt() {
     controls.innerHTML = "";
     const done = document.createElement("span");
     done.className = "album-artist-prompt-done";
-    done.textContent = artist ? `설정됨 · ${artist}` : "설정됨(아티스트 없음)";
+    done.textContent = artist ? `설정됨 · ${artist}` : "설정됨(서클 없음)";
     controls.appendChild(done);
   }
 

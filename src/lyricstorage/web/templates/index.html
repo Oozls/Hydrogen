@@ -128,18 +128,11 @@
         </div>
         <div class="stats-controls-row">
           <div class="tabs" id="browse-tabs">
-            <button class="tab-btn active" data-mode="artist" type="button">아티스트</button>
+            <button class="tab-btn active" data-mode="artist" type="button">서클</button>
             <button class="tab-btn" data-mode="song-artist" type="button">곡 아티스트</button>
             <button class="tab-btn" data-mode="album" type="button">앨범</button>
             <button class="tab-btn" data-mode="song" type="button">곡</button>
           </div>
-          <input type="text" id="browse-search" placeholder="검색..." />
-          <select id="browse-search-field" class="search-scope-select" title="검색 범위">
-            <option value="all">전체</option>
-            <option value="title">곡명</option>
-            <option value="album">앨범명</option>
-            <option value="artist">아티스트명</option>
-          </select>
           <div class="spacer"></div>
           <button id="btn-browse-clear-selection" class="icon-btn" title="선택 취소" hidden>
             <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
@@ -308,7 +301,7 @@
           </div>
           <div class="tabs" id="stats-group-tabs">
             <button class="tab-btn active" data-group="track" type="button">곡</button>
-            <button class="tab-btn" data-group="album-artist" type="button">아티스트</button>
+            <button class="tab-btn" data-group="album-artist" type="button">서클</button>
             <button class="tab-btn" data-group="artist" type="button">곡 아티스트</button>
             <button class="tab-btn" data-group="album" type="button">앨범</button>
           </div>
@@ -627,7 +620,7 @@
     <label class="track-info-field">앨범명
       <input type="text" id="album-info-album" autocomplete="off" />
     </label>
-    <label class="track-info-field">앨범 아티스트
+    <label class="track-info-field">서클
       <input type="text" id="album-info-artist" autocomplete="off" />
     </label>
     <label class="track-info-field">연도
@@ -674,13 +667,13 @@
 
   <dialog id="album-artist-prompt-dialog" class="library-picker-dialog album-artist-prompt-dialog">
     <div class="library-picker-header">
-      <h3>새 앨범 아티스트 확인</h3>
+      <h3>새 서클 확인</h3>
       <div class="spacer"></div>
       <button id="album-artist-prompt-close" class="icon-btn" type="button" title="닫기">
         <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
       </button>
     </div>
-    <p class="album-art-prompt-desc">방금 새로 생긴 앨범의 아티스트를 확인하거나 수정하세요.</p>
+    <p class="album-art-prompt-desc">방금 새로 생긴 앨범의 서클을 확인하거나 수정하세요.</p>
     <ul id="album-artist-prompt-list" class="playlist-list album-artist-prompt-list"></ul>
   </dialog>
 

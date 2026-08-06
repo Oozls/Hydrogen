@@ -513,7 +513,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   function buildAlbumArtistCard(entry) {
     const card = document.createElement("div");
     card.className = "media-card media-card-clickable";
-    card.title = "이 아티스트의 앨범 보기";
+    card.title = "이 서클의 앨범 보기";
 
     const artWrap = document.createElement("div");
     artWrap.className = "media-card-art-wrap";
@@ -522,7 +522,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
     const titleRow = document.createElement("div");
     titleRow.className = "media-card-title-row";
-    titleRow.appendChild(createMarqueeClip("media-card-title", "", entry.name || "(아티스트 없음)"));
+    titleRow.appendChild(createMarqueeClip("media-card-title", "", entry.name || "(서클 없음)"));
     card.appendChild(titleRow);
 
     const meta = document.createElement("div");

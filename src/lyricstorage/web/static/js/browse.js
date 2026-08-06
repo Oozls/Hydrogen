@@ -67,10 +67,6 @@ const SONGS_PAGE_SIZE_FALLBACK = 50;
 
 export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit, identityDialogApi, refs) {
   const panelEl = document.getElementById("browse-panel");
-  const searchInput = document.getElementById("browse-search");
-  const searchFieldSelect = document.getElementById("browse-search-field");
-  const searchFieldTitleOption = searchFieldSelect.querySelector('option[value="title"]');
-  const searchFieldAlbumOption = searchFieldSelect.querySelector('option[value="album"]');
   const tabsEl = document.getElementById("browse-tabs");
   const artistsPanel = document.getElementById("browse-artists-panel");
   const artistsList = document.getElementById("browse-artists-list");
@@ -117,6 +113,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let circlesRegistry = [];
   let libraryName = null;
   let mode = "artist";
+  // 브라우즈 자체 검색창(구식 검색바)은 사이드바 통합 검색으로 대체되어
+  // 사라졌다. 다만 서클 카드를 눌러 앨범 탭을 그 서클로 필터링해서 보여주는
+  // 내부 동작(openArtistAlbums)은 여전히 이 상태를 쓴다 — 이제 사용자가 직접
+  // 입력할 수 있는 자리는 없고, 코드에서만 채워 넣는다.
+  let filterQuery = "";
+  let filterField = "all";
   let selectedTrackIds = new Set();
   let lastClickedIndex = null;
   let currentAlbumGroup = null;
@@ -615,7 +617,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     card.appendChild(artWrap);
     const title = document.createElement("div");
     title.className = "media-card-title";
-    title.textContent = entry.name || "(아티스트 없음)";
+    title.textContent = entry.name || "(서클 없음)";
     card.appendChild(title);
     card.addEventListener("click", () => openArtistAlbums(entry.name));
     return card;
@@ -685,8 +687,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       if (!validIds.has(id)) selectedTrackIds.delete(id);
     }
 
-    const q = searchInput.value.trim().toLowerCase();
-    const field = searchFieldSelect.value;
+    const q = filterQuery.trim().toLowerCase();
+    const field = filterField;
     syncSelectionUI();
 
     const filtered = tracks.filter((t) => matchesSong(t, q, field));
@@ -912,7 +914,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   };
 
   async function openCircleIdentityEditor(name) {
-    const identity = await api.resolveCircle(name || "(아티스트 없음)");
+    const identity = await api.resolveCircle(name || "(서클 없음)");
     identityDialogApi.open(identity, {
       title: "서클 정보 수정",
       endpoints: CIRCLE_ENDPOINTS,
@@ -939,7 +941,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
     const titleRow = document.createElement("div");
     titleRow.className = "media-card-title-row";
-    const title = createMarqueeClip("media-card-title", "", entry.name || "(아티스트 없음)");
+    const title = createMarqueeClip("media-card-title", "", entry.name || "(서클 없음)");
     titleRow.appendChild(title);
 
     // 이명 등록 버튼 — 클릭해도 카드 자체의 openArtistAlbums로 넘어가지 않게 막는다.
@@ -972,8 +974,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 그대로 재활용한다.
   function openArtistAlbums(artistName) {
     switchMode("album");
-    searchInput.value = artistName || "";
-    searchFieldSelect.value = "artist";
+    filterQuery = artistName || "";
+    filterField = "artist";
     render();
     if (refs && refs.router) {
       refs.router.setUrl(artistName ? `/browse/albums?artist=${encodeURIComponent(artistName)}` : "/browse/albums");
@@ -985,7 +987,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 서클 이명 레지스트리로 표기가 다른 같은 서클을 하나로 합쳐서 묶는다(곡
   // 아티스트 탭이 artistsRegistry로 하는 것과 동일).
   function renderArtists() {
-    const q = searchInput.value.trim().toLowerCase();
+    const q = filterQuery.trim().toLowerCase();
     artistsList.innerHTML = "";
 
     const resolveCircleName = buildArtistNameResolver(circlesRegistry);
@@ -999,7 +1001,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       name,
       albums: albumsForArtist,
     }));
-    entries = entries.filter((e) => !q || (e.name || "(아티스트 없음)").toLowerCase().includes(q));
+    entries = entries.filter((e) => !q || (e.name || "(서클 없음)").toLowerCase().includes(q));
     entries.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
 
     if (!entries.length) {
@@ -1042,7 +1044,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 쉼표로 여럿 가능)을 기준으로 묶고, 이명 레지스트리로 같은 사람을 통합한다.
   // 재생 순위와 무관한 카탈로그라 이름순으로만 나열한다.
   function renderSongArtists() {
-    const q = searchInput.value.trim().toLowerCase();
+    const q = filterQuery.trim().toLowerCase();
     songArtistsList.innerHTML = "";
 
     const resolveName = buildArtistNameResolver(artistsRegistry);
@@ -1119,7 +1121,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   async function openSongArtistDetail(name) {
     mode = "song-artist";
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
-    syncSearchFieldOptions();
+    normalizeFilterField();
     songsPanel.classList.remove("active");
     albumsPanel.classList.remove("active");
     artistsPanel.classList.remove("active");
@@ -1145,8 +1147,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 안에 아티스트명을 따로 표시). 드래그 정렬(SortableJS)도 구획 경계 없이 그리드
   // 전체에서 자유롭게 순서를 바꿀 수 있다.
   function renderAlbums() {
-    const q = searchInput.value.trim().toLowerCase();
-    const field = searchFieldSelect.value;
+    const q = filterQuery.trim().toLowerCase();
+    const field = filterField;
     albumsList.innerHTML = "";
     if (albumsSortable) {
       albumsSortable.destroy();
@@ -1232,15 +1234,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   // 앨범/아티스트 탭은 개별 곡명이 없는 그룹 단위라 "곡명" 범위가 의미가 없고,
-  // 아티스트 탭은 앨범명 범위도 의미가 없다 — 각 모드에 안 맞는 선택지는
-  // 비활성화하고, 그 상태로 넘어왔으면 "전체"로 되돌린다.
-  function syncSearchFieldOptions() {
+  // 아티스트 탭은 앨범명 범위도 의미가 없다 — 그 상태로 넘어왔으면(circle 카드
+  // 클릭 등으로 filterField가 남아있는 경우) "전체"로 되돌린다.
+  function normalizeFilterField() {
     const isAlbumMode = mode === "album";
     const isArtistMode = mode === "artist" || mode === "song-artist";
-    searchFieldTitleOption.disabled = isAlbumMode || isArtistMode;
-    searchFieldAlbumOption.disabled = isArtistMode;
-    if ((isAlbumMode || isArtistMode) && searchFieldSelect.value === "title") searchFieldSelect.value = "all";
-    if (isArtistMode && searchFieldSelect.value === "album") searchFieldSelect.value = "all";
+    if ((isAlbumMode || isArtistMode) && filterField === "title") filterField = "all";
+    if (isArtistMode && filterField === "album") filterField = "all";
   }
 
   function switchMode(next) {
@@ -1259,7 +1259,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     artistsPanel.classList.toggle("active", mode === "artist");
     songArtistsPanel.classList.toggle("active", mode === "song-artist");
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
-    syncSearchFieldOptions();
+    normalizeFilterField();
     render();
     if (refs && refs.router) {
       const paths = { artist: "/browse/artists", "song-artist": "/browse/song-artists", album: "/browse/albums", song: "/browse/songs" };
@@ -1270,22 +1270,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   tabsEl.addEventListener("click", (e) => {
     const btn = e.target.closest(".tab-btn");
     if (!btn) return;
-    // 아티스트 카드 클릭 시 앨범 탭으로 넘어가며 검색창에 그 아티스트명을
+    // 서클 카드 클릭 시 앨범 탭으로 넘어가며 filterQuery에 그 서클명을
     // 채워두는데(openArtistAlbums), 그 상태로 탭 버튼을 눌러 수동으로 다른 탭으로
     // 옮기면 그 필터가 계속 남아있어 다른 항목이 안 보이는 문제가 있었다. 탭
-    // 버튼을 직접 눌렀을 때는 항상 검색을 초기화해 전체 목록부터 다시 보여준다.
-    searchInput.value = "";
-    searchFieldSelect.value = "all";
+    // 버튼을 직접 눌렀을 때는 항상 필터를 초기화해 전체 목록부터 다시 보여준다.
+    filterQuery = "";
+    filterField = "all";
     switchMode(btn.dataset.mode);
-  });
-
-  searchInput.addEventListener("input", () => {
-    songsPage = 0;
-    render();
-  });
-  searchFieldSelect.addEventListener("change", () => {
-    songsPage = 0;
-    render();
   });
 
   clearSelectionBtn.addEventListener("click", () => {
@@ -1416,7 +1407,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 불안정하므로(특히 iOS Safari), 자체 JS 드래그 구현(forceFallback)을
   // 강제해 터치에서도 일관되게 동작하게 한다.
   function isSongSearchActive() {
-    return searchInput.value.trim() !== "";
+    return filterQuery.trim() !== "";
   }
 
   async function resyncFromServer() {
@@ -1488,10 +1479,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     },
   });
 
-  searchInput.addEventListener("input", () => {
-    songsSortable.option("disabled", isSongSearchActive());
-  });
-
   return {
     // focus 없이 들어오면 기본으로 아티스트 탭을 보여준다. focus를 넘기면(재생바
     // 앨범명 클릭, 재생 통계 TOP3 앨범 클릭 등 외부 진입점용) 대신 앨범 탭으로
@@ -1515,8 +1502,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // 맞는 URL로 주소창을 맞춘다(각 함수 안의 setUrl 호출).
     async show(route, focus, artistFocus) {
       panelEl.classList.add("active");
-      searchInput.value = "";
-      searchFieldSelect.value = "all";
+      filterQuery = "";
+      filterField = "all";
       syncFromStore();
 
       // 목표 탭을 먼저 정해서 지금 있는 캐시로(콜드 스타트라 비어있어도) 즉시

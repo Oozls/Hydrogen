@@ -2440,15 +2440,6 @@ textarea.file-content-body:disabled {
 }
 
 /* -- 브라우즈 --------------------------------------------------------- */
-#browse-search {
-  flex: 1;
-  min-width: 160px;
-  max-width: 320px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
 #browse-songs-panel,
 #browse-albums-panel {
   flex: 1;
