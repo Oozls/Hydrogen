@@ -8,6 +8,7 @@ import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
 import { buildArtistCell } from "./songArtist.js";
+import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -642,19 +643,28 @@ export function setupPlaylist(
     }
   });
 
+  // 목록 전체를 다시 그리는 대신(모든 행의 마퀴 스크롤이 리셋되는 원인이었다)
+  // 이전/새 재생 행만 patch한다. 다만 선택 중이던 행이 있었다면(드문 경우)
+  // 선택 해제로 체크박스 등 시각 상태도 같이 바뀌어야 하므로 그때만 전체를 다시 그린다.
   player.addEventListener("trackchange", () => {
+    const hadSelection = selectedIndices.size > 0;
     selectedIndices.clear();
-    renderList();
+    if (hadSelection) {
+      renderList();
+      return;
+    }
+    patchPlayingRow(listEl, player.currentTrack ? player.currentTrack.track_id : null);
   });
 
   // 재생바 하트로 레이팅을 바꾸면 지금 보고 있는 재생목록에도 바로 반영한다.
+  // 이것도 목록 전체가 아니라 그 행만 patch한다.
   player.addEventListener("ratingchange", (e) => {
     const matches = currentPlaylist.tracks.filter((t) => t.track_id === e.detail.trackId);
     if (matches.length) {
       matches.forEach((track) => {
         track.rating = e.detail.rating;
       });
-      renderList();
+      patchRatingBadge(listEl, e.detail.trackId, e.detail.rating);
     }
   });
 

@@ -11,6 +11,7 @@ import { showArtSpinner } from "./artspinner.js";
 import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { fillArtistArt } from "./artistArt.js";
+import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
 
 function fmtDuration(ms) {
@@ -348,6 +349,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     function buildRow(track, i) {
       const li = document.createElement("li");
       li.className = "playlist-row";
+      li.dataset.trackId = track.track_id;
       const selected = selectedTrackIds.has(track.track_id);
       if (selected) li.classList.add("selected");
       const isPlaying = !!player.currentTrack && player.currentTrack.track_id === track.track_id;
@@ -1245,22 +1247,31 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   // 재생 곡이 바뀔 때마다 현재 보이는 목록(곡 목록 또는 앨범 상세)을 다시 그려
   // 재생 중 표시(강조 + ▶ 접두사)를 갱신한다.
-  player.addEventListener("trackchange", renderCurrentView);
+  // 지금 실제로 보이는 화면의 곡 행 컨테이너. 앨범/아티스트/곡아티스트 탭은
+  // 카드 그리드라 재생 중 표시나 평점 배지가 없으므로 null(patch할 대상 없음).
+  function currentRowContainer() {
+    if (albumDetailPanel.classList.contains("active")) return albumDetailList;
+    if (songArtistDetailPanel.classList.contains("active")) return songArtistDetailListEl;
+    if (mode === "song") return songsList;
+    return null;
+  }
+
+  // 재생 곡이 바뀔 때마다 목록 전체를 다시 그리는 대신(모든 행의 마퀴 스크롤이
+  // 리셋되는 원인이었다), 이전/새 재생 행 둘만 patch한다.
+  player.addEventListener("trackchange", () => {
+    const container = currentRowContainer();
+    if (container) patchPlayingRow(container, player.currentTrack ? player.currentTrack.track_id : null);
+  });
 
   // 재생바 하트로 레이팅을 바꾸면 그 곡이 보이는 목록(곡 목록/앨범 상세)에도
   // 바로 반영한다. player.currentTrack이 이 목록의 tracks 배열과 같은 객체
   // 참조를 공유하지 않을 수도 있으므로(예: 다른 재생목록 재생 중), track_id로
-  // 찾아 직접 patch한다.
+  // 찾아 직접 patch한다. 이것도 목록 전체가 아니라 그 행 하나만 patch한다.
   player.addEventListener("ratingchange", (e) => {
     const match = tracks.find((t) => t.track_id === e.detail.trackId);
     if (match) match.rating = e.detail.rating;
-    if (albumDetailPanel.classList.contains("active")) {
-      renderAlbumDetailRows(currentAlbumGroup);
-    } else if (songArtistDetailPanel.classList.contains("active")) {
-      renderSongArtistDetail(songArtistDetailIdentity);
-    } else if (mode === "song") {
-      renderSongs();
-    }
+    const container = currentRowContainer();
+    if (container) patchRatingBadge(container, e.detail.trackId, e.detail.rating);
   });
 
   // 현재 화면에 보이는 목록에 대해서만 리사이즈 시 마퀴를 재계산한다.

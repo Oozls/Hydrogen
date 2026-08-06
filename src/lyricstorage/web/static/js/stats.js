@@ -5,6 +5,7 @@ import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 import { fillArtistArt } from "./artistArt.js";
 import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
+import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 const TRACK_PAGE_SIZE_FALLBACK = 50;
@@ -761,13 +762,20 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
   // 재생 곡이 바뀌거나 재생바에서 레이팅을 바꾸면 지금 보이는 최근 재생 목록에도
   // 바로 반영한다(강조 표시/▶ 접두사, 레이팅 배지).
+  // 목록 전체를 다시 그리는 대신(마퀴 리셋의 원인이었다) 지금 페이지에 보이는
+  // 행 중 바뀐 것만 patch한다 — 바뀐 곡이 현재 페이지에 없으면 자연히 아무 일도
+  // 일어나지 않는다.
   player.addEventListener("trackchange", () => {
-    if (panelEl.classList.contains("active") && group === "track") renderTrackPage();
+    if (panelEl.classList.contains("active") && group === "track") {
+      patchPlayingRow(trackListEl, player.currentTrack ? player.currentTrack.track_id : null);
+    }
   });
   player.addEventListener("ratingchange", (e) => {
     const match = trackItems.find((t) => t.track_id === e.detail.trackId);
     if (match) match.rating = e.detail.rating;
-    if (panelEl.classList.contains("active") && group === "track") renderTrackPage();
+    if (panelEl.classList.contains("active") && group === "track") {
+      patchRatingBadge(trackListEl, e.detail.trackId, e.detail.rating);
+    }
   });
 
   let marqueeResizeTimer = null;
