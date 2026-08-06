@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { store } from "./store.js";
 import { iconSpan } from "./icons.js";
 import { alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
@@ -193,19 +194,30 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
   }
 
-  async function loadLibraryAndAlbums() {
-    const [library, albumsResult, artistsResult, circlesResult] = await Promise.all([
-      api.getLibrary(),
-      api.getAlbums(),
-      api.getArtists(),
-      api.getCircles(),
-    ]);
-    tracks = library.tracks;
-    albums = albumsResult.albums;
-    artistsRegistry = artistsResult.artists;
-    circlesRegistry = circlesResult.circles;
-    libraryName = library.name;
+  // store.js가 fetch를 한 곳에 모아둔 캐시를 이 모듈의 로컬 변수로 복사한다.
+  // 렌더 로직(renderSongs/renderAlbums 등)은 전부 이 로컬 변수를 참조하므로
+  // store 도입 전과 동일하게 동작하고, 이 함수만 "어디서 데이터를 가져오는지"를 안다.
+  function syncFromStore() {
+    tracks = store.getTracks();
+    albums = store.getAlbums();
+    artistsRegistry = store.getArtists();
+    circlesRegistry = store.getCircles();
+    libraryName = store.getLibraryName();
   }
+
+  async function loadLibraryAndAlbums() {
+    await store.refresh();
+    syncFromStore();
+  }
+
+  // 다른 화면(트랙 정보 수정, 일괄 편집 등)에서 store.refresh()가 일어나면
+  // 브라우즈가 지금 보이는 중일 때만 다시 그린다 — 숨겨진 동안은 로컬 변수만
+  // 최신으로 맞춰두고, 다음에 show()가 호출될 때(fetch 없이 이미 최신 상태이므로
+  // 즉시) 그린다.
+  store.subscribe(() => {
+    syncFromStore();
+    if (panelEl.classList.contains("active")) render();
+  });
 
   async function handleUpload(fileList) {
     if (!fileList || !fileList.length) return;

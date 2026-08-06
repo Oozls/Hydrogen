@@ -1,4 +1,5 @@
 import { PlayerEngine } from "./player.js";
+import { store } from "./store.js";
 import { setupNowPlaying } from "./nowplaying.js";
 import { setupPlaylist } from "./playlist.js";
 import { setupLyrics } from "./lyrics.js";
@@ -24,6 +25,10 @@ function readBootstrap() {
 
 document.addEventListener("DOMContentLoaded", () => {
   const bootstrap = readBootstrap();
+  // 화면들이 각자 처음 열릴 때 라이브러리를 fetch하길 기다리는 대신, 앱이
+  // 뜨자마자 한 번 미리 데워둔다 — 첫 라우팅 진입 시점에 이미 캐시가 있으면
+  // 그만큼 fetch 대기가 줄어든다(완전히 없어지는 건 3단계 라우팅 개편에서).
+  store.refresh();
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 

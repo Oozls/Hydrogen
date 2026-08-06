@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { store } from "./store.js";
 import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
@@ -111,15 +112,11 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   // 곡 아티스트별 소속 앨범 맵을 새로 계산한다(아티스트 카드 콜라주/상세 화면
   // 공용). 라이브러리 스냅샷 전체가 필요하므로 아티스트 그룹을 볼 때만 부른다.
   async function loadArtistAlbumsMap() {
-    const [library, albumsResult, artistsResult] = await Promise.all([
-      api.getLibrary(),
-      api.getAlbums(),
-      api.getArtists(),
-    ]);
-    const albumById = new Map(albumsResult.albums.map((a) => [a.id, a]));
-    const resolveName = buildArtistNameResolver(artistsResult.artists);
+    await store.refresh();
+    const albumById = new Map(store.getAlbums().map((a) => [a.id, a]));
+    const resolveName = buildArtistNameResolver(store.getArtists());
     const map = new Map();
-    for (const track of library.tracks) {
+    for (const track of store.getTracks()) {
       for (const rawName of splitArtists(track.artist)) {
         const name = resolveName(rawName);
         if (!map.has(name)) map.set(name, new Map());
@@ -175,8 +172,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       nextBtn.disabled = offset <= 0;
       if (group === "artist") await loadArtistAlbumsMap();
       if (group === "album") {
-        const albumsResult = await api.getAlbums();
-        albumMetaById = new Map(albumsResult.albums.map((a) => [a.id, a]));
+        await store.refresh();
+        albumMetaById = new Map(store.getAlbums().map((a) => [a.id, a]));
       }
       renderList(data.items, group);
     }
@@ -250,7 +247,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   async function enrichTracks(items) {
     let libraryTracks = [];
     try {
-      libraryTracks = (await api.getLibrary()).tracks;
+      await store.refresh();
+      libraryTracks = store.getTracks();
     } catch (_err) {
       libraryTracks = [];
     }
@@ -538,18 +536,17 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   async function renderAlbumArtists() {
     // 이 기간에 재생된 앨범만 모은다(순위는 안 매기지만 목록 자체는 기간 필터를
     // 따라야 하므로 group="album" 집계를 limit=0(무제한)으로 재사용한다).
-    const [albumsResult, circlesResult, periodAlbums] = await Promise.all([
-      api.getAlbums(),
-      api.getCircles(),
-      api.getTopStats(period, "album", offset, 0),
-    ]);
+    // 앨범/서클 목록은 store(store.js)의 공유 캐시를 쓴다 — 기간별 재생 집계
+    // (api.getTopStats)만 이 화면 고유의 요청이라 따로 부른다.
+    await store.refresh();
+    const periodAlbums = await api.getTopStats(period, "album", offset, 0);
     periodLabel.textContent = formatRange(periodAlbums.range_start, periodAlbums.range_end, period);
     nextBtn.disabled = offset <= 0;
 
     // 서클 이명 레지스트리로 대표 이름으로 묶는다(브라우즈 아티스트 탭과 동일) —
     // 그래야 표기가 다른 같은 서클이 여기서도 갈라지지 않는다.
-    const resolveCircleName = buildArtistNameResolver(circlesResult.circles);
-    const albumMeta = new Map(albumsResult.albums.map((a) => [a.id, a]));
+    const resolveCircleName = buildArtistNameResolver(store.getCircles());
+    const albumMeta = new Map(store.getAlbums().map((a) => [a.id, a]));
     const byArtist = new Map();
     for (const item of periodAlbums.items) {
       const album = item.album_id ? albumMeta.get(item.album_id) : null;
@@ -637,9 +634,9 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   // identity(대표 이름 + 이명)에 속한 모든 이름과 매칭되는 곡을 앨범별로 묶어
   // 곡 목록 영역을 다시 그린다. 이명 추가/삭제나 대표 이름 변경 후에도 이걸로
   // 목록만 새로 매칭해서 다시 그린다(패널을 새로 열 필요 없음).
-  function renderArtistDetailFromLibrary(library, identity) {
+  function renderArtistDetailFromLibrary(tracks, identity) {
     const matchNames = new Set([identity.name, ...identity.aliases]);
-    const matched = library.tracks.filter((t) => splitArtists(t.artist).some((n) => matchNames.has(n)));
+    const matched = tracks.filter((t) => splitArtists(t.artist).some((n) => matchNames.has(n)));
 
     const byAlbum = new Map();
     for (const track of matched) {
@@ -685,12 +682,12 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
     // "(아티스트 없음)" 자리표시자는 실제 아티스트가 아니라 이명 레지스트리에
     // 저장할 대상이 아니므로, 이때만 아이디 없는 임시 정체성을 만들어 쓴다.
     const isPlaceholder = !artistName || artistName === "(아티스트 없음)";
-    const [identity, library] = await Promise.all([
+    const [identity] = await Promise.all([
       isPlaceholder ? Promise.resolve({ id: null, name: artistName || "", aliases: [] }) : api.resolveArtist(artistName),
-      api.getLibrary(),
+      store.refresh(),
     ]);
     artistDetailIdentity = identity;
-    renderArtistDetailFromLibrary(library, identity);
+    renderArtistDetailFromLibrary(store.getTracks(), identity);
 
     listEl.style.display = "none";
     artistDetailPanel.hidden = false;
@@ -701,8 +698,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   // 최신 정체성 기준으로 다시 매칭해서 보여준다.
   async function refreshArtistDetailAfterEdit() {
     if (!artistDetailIdentity || artistDetailPanel.hidden) return;
-    const library = await api.getLibrary();
-    renderArtistDetailFromLibrary(library, artistDetailIdentity);
+    await store.refresh();
+    renderArtistDetailFromLibrary(store.getTracks(), artistDetailIdentity);
     requestAnimationFrame(() => applyMarquee(artistDetailListEl));
   }
 
@@ -722,7 +719,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   artistDetailEditBtn.addEventListener("click", () => {
     if (!artistDetailIdentity || !artistDetailIdentity.id) return;
     identityDialogApi.open(artistDetailIdentity, {
-      getTracks: () => api.getLibrary().then((l) => l.tracks),
+      getTracks: () => store.getTracks(),
       onChange: (updated) => {
         artistDetailIdentity = updated;
         artistIdentityDirty = true;

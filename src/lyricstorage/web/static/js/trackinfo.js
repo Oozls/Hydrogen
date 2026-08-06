@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { store } from "./store.js";
 import { alertDialog, confirmDialog } from "./dialog.js";
 import { distinctValues, buildAutocomplete } from "./autocomplete.js";
 import { showArtSpinner } from "./artspinner.js";
@@ -56,9 +57,9 @@ export function setupTrackInfo(onSaved, onDeleted) {
     showArt(`${api.artUrl(trackId)}?t=${Date.now()}`);
     dialog.showModal();
 
-    const library = await api.getLibrary();
-    titleValues = distinctValues(library.tracks, "title");
-    artistValues = distinctValues(library.tracks, "artist");
+    await store.refresh();
+    titleValues = distinctValues(store.getTracks(), "title");
+    artistValues = distinctValues(store.getTracks(), "artist");
   }
 
   artBtn.addEventListener("click", () => artInput.click());

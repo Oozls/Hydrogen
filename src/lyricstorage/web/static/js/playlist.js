@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { store } from "./store.js";
 import { iconSpan } from "./icons.js";
 import { confirmDialog, promptDialog, alertDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
@@ -447,8 +448,8 @@ export function setupPlaylist(
       await alertDialog("먼저 플레이리스트를 만들거나 선택하세요.");
       return;
     }
-    const [library, albumsResult] = await Promise.all([api.getLibrary(), api.getAlbums()]);
-    pickerAlbumGroups = groupAlbums(library.tracks, albumsResult.albums);
+    await store.refresh();
+    pickerAlbumGroups = groupAlbums(store.getTracks(), store.getAlbums());
     pickerChecked = new Set();
     pickerCurrentAlbum = null;
     if (!pickerAlbumGroups.length) {

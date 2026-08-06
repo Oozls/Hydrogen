@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { store } from "./store.js";
 import { alertDialog, confirmDialog } from "./dialog.js";
 import { distinctValues, buildAutocomplete } from "./autocomplete.js";
 import { showArtSpinner } from "./artspinner.js";
@@ -88,8 +89,8 @@ export function setupBulkEdit(onSaved, onDeleted) {
     artInput.value = "";
     countEl.textContent = `선택한 ${trackIds.length}곡에 적용됩니다.`;
 
-    const library = await api.getLibrary();
-    const selected = library.tracks.filter((t) => trackIds.includes(t.track_id));
+    await store.refresh();
+    const selected = store.getTracks().filter((t) => trackIds.includes(t.track_id));
 
     for (const field of fields) {
       field.dirty = false;
@@ -104,9 +105,9 @@ export function setupBulkEdit(onSaved, onDeleted) {
     }
 
     libraryValues = {
-      title: distinctValues(library.tracks, "title"),
-      artist: distinctValues(library.tracks, "artist"),
-      album: distinctValues(library.tracks, "album"),
+      title: distinctValues(store.getTracks(), "title"),
+      artist: distinctValues(store.getTracks(), "artist"),
+      album: distinctValues(store.getTracks(), "album"),
     };
 
     dialog.showModal();
