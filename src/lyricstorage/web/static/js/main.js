@@ -67,6 +67,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const nowPlayingApi = setupNowPlaying(player, openAlbumFromTrack, openArtistFromTrack);
   const sidebarApi = setupSidebar(bootstrap, {
+    player,
+    refs,
     onSelectPlaylist: (name) => refs.router.goPlaylist(name),
     onGoHome: () => refs.router.goHome(),
     onGoBrowse: () => refs.router.goBrowse(),

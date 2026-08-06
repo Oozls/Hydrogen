@@ -23,6 +23,16 @@
           <span class="icon" style="--icon: url(/static/icons/disc.svg)"></span>
           <span>브라우즈</span>
         </button>
+        <div class="sidebar-search-wrap">
+          <input
+            type="text"
+            id="sidebar-search-input"
+            class="sidebar-search-input"
+            placeholder="곡·앨범·서클·아티스트 검색"
+            autocomplete="off"
+          />
+          <div id="sidebar-search-results" class="sidebar-search-results" hidden></div>
+        </div>
         <div class="panel-header-row">
           <span class="section-title">재생목록</span>
           <button id="btn-new-playlist" class="icon-btn" title="새 플레이리스트">
