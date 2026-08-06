@@ -71,6 +71,12 @@
           </div>
           <div id="home-recent-row" class="home-recent-row scroll-autohide"></div>
         </section>
+        <section id="home-newlyadded-section" class="home-section" hidden>
+          <div class="panel-header-row">
+            <span class="section-title">최근 추가</span>
+          </div>
+          <div id="home-newlyadded-row" class="home-recent-row scroll-autohide"></div>
+        </section>
         <section class="home-section">
           <div class="panel-header-row">
             <span class="section-title">빠른 선곡</span>
@@ -152,7 +158,12 @@
         <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
         <input type="file" id="browse-reimport-artists-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
         <div id="browse-artists-panel" class="tab-panel active">
-          <div id="browse-artists-list" class="card-grid"></div>
+          <div class="stats-track-body">
+            <div class="stats-track-list-col">
+              <div id="browse-artists-list" class="card-grid"></div>
+            </div>
+            <div id="browse-artists-top3" class="stats-track-top3" hidden></div>
+          </div>
         </div>
         <div id="browse-song-artists-panel" class="tab-panel">
           <div id="browse-song-artists-list" class="card-grid"></div>
@@ -191,7 +202,12 @@
           </div>
         </div>
         <div id="browse-albums-panel" class="tab-panel">
-          <div id="browse-albums-list" class="card-grid"></div>
+          <div class="stats-track-body">
+            <div class="stats-track-list-col">
+              <div id="browse-albums-list" class="card-grid"></div>
+            </div>
+            <div id="browse-albums-top3" class="stats-track-top3" hidden></div>
+          </div>
         </div>
         <div id="browse-album-detail-panel" class="tab-panel">
           <div class="album-detail-header">

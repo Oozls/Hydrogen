@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { store } from "./store.js";
 import { iconSpan } from "./icons.js";
 import { buildArtEl } from "./artspinner.js";
 import { startRecommendQueue } from "./queue.js";
@@ -8,14 +9,18 @@ import { buildArtistCell } from "./songArtist.js";
 
 const RECENT_LIMIT = 12;
 const QUICKPICK_LIMIT = 18;
+const NEWLY_ADDED_LIMIT = 12;
 
 export function setupHome(player, onOpenAlbum, onOpenArtist) {
   const panelEl = document.getElementById("home-panel");
   const recentRowEl = document.getElementById("home-recent-row");
   const quickpicksGridEl = document.getElementById("home-quickpicks-grid");
+  const newlyAddedSectionEl = document.getElementById("home-newlyadded-section");
+  const newlyAddedRowEl = document.getElementById("home-newlyadded-row");
 
   let recentItems = [];
   let quickpickItems = [];
+  let newlyAddedItems = [];
 
   function buildRecentCard(item) {
     const card = document.createElement("div");
@@ -73,6 +78,18 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
     requestAnimationFrame(() => applyMarquee(recentRowEl));
   }
 
+  // 라이브러리에 새로 들어온 곡을 발견할 방법이 없었다("오늘의 곡" 추천은
+  // 안 들어본 곡 위주라 결과적으로 겹치긴 하지만, "새로 추가됨" 자체를 보여주진
+  // 않는다). added_at(라이브러리 추가 시각)이 있는 곡만 최신순으로 몇 곡 보여준다
+  // — 이 필드가 생기기 전에 추가된 기존 곡은 added_at이 비어 있어 여기 안 뜬다.
+  function renderNewlyAdded() {
+    newlyAddedRowEl.innerHTML = "";
+    newlyAddedSectionEl.hidden = !newlyAddedItems.length;
+    if (!newlyAddedItems.length) return;
+    newlyAddedItems.forEach((item) => newlyAddedRowEl.appendChild(buildRecentCard(item)));
+    requestAnimationFrame(() => applyMarquee(newlyAddedRowEl));
+  }
+
   function buildQuickpickRow(item) {
     const row = document.createElement("div");
     row.className = "home-quickpick-row";
@@ -116,6 +133,7 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
   }
 
   attachScrollAutoHide(recentRowEl);
+  attachScrollAutoHide(newlyAddedRowEl);
   attachScrollAutoHide(panelEl);
 
   // 패널 폭이 바뀌면(사이드바 토글, 창 크기 조절 등) 마퀴가 필요한지 다시 재야 한다.
@@ -124,9 +142,18 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
     clearTimeout(marqueeResizeTimer);
     marqueeResizeTimer = setTimeout(() => {
       applyMarquee(recentRowEl);
+      applyMarquee(newlyAddedRowEl);
       applyMarquee(quickpicksGridEl);
     }, 150);
   });
+
+  function loadNewlyAdded() {
+    newlyAddedItems = store
+      .getTracks()
+      .filter((t) => t.added_at)
+      .sort((a, b) => (a.added_at < b.added_at ? 1 : -1))
+      .slice(0, NEWLY_ADDED_LIMIT);
+  }
 
   async function load() {
     // reroll에 매번 새 무작위 토큰을 넘겨서, "오늘의 곡"처럼 하루 종일 고정되지
@@ -135,10 +162,13 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
     const [recentResult, quickpicksResult] = await Promise.all([
       api.getRecentPlays(RECENT_LIMIT).catch(() => ({ items: [] })),
       api.getTodaySongs(QUICKPICK_LIMIT, reroll, false).catch(() => ({ items: [] })),
+      store.ensureLoaded().catch(() => null),
     ]);
     recentItems = recentResult.items;
     quickpickItems = quickpicksResult.items;
+    loadNewlyAdded();
     renderRecent();
+    renderNewlyAdded();
     renderQuickpicks();
   }
 

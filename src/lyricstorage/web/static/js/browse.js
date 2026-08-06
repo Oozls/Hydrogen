@@ -91,6 +91,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const songsNextPageBtn = document.getElementById("browse-songs-next-page");
   const songsPageLabel = document.getElementById("browse-songs-page-label");
   const songsTop3El = document.getElementById("browse-songs-top3");
+  const albumsTop3El = document.getElementById("browse-albums-top3");
+  const artistsTop3El = document.getElementById("browse-artists-top3");
   const albumsList = document.getElementById("browse-albums-list");
   const albumDetailList = document.getElementById("browse-album-detail-list");
   const albumDetailTitleClip = document.querySelector(".album-detail-title-clip");
@@ -567,6 +569,102 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     todaySongs.slice(0, 3).forEach((item, i) => songsTop3El.appendChild(buildTodaySongCard(item, i)));
   }
 
+  // "오늘의 곡"(곡 단위 추천)과 같은 재료를 앨범/서클 단위로 집계해 앨범 탭/
+  // 아티스트 탭에도 같은 모양의 위젯을 보여준다 — 추천이 "곡" 탭에만 있어서
+  // 앨범/서클 단위로 둘러볼 때는 발견 신호가 끊기던 문제를 없앤다. 새 추천
+  // 알고리즘이 아니라 이미 받아온 todaySongs를 그룹핑만 다시 한 것이므로
+  // 서버 왕복이 추가로 들지 않는다.
+  function buildRecommendedAlbumCard(group) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    const stopSpin = showArtSpinner(artWrap);
+    const img = document.createElement("img");
+    img.className = "media-card-art";
+    img.alt = "";
+    img.src = api.albumArtUrl(group.id);
+    img.onload = () => stopSpin();
+    img.onerror = () => {
+      stopSpin();
+      img.remove();
+      artWrap.appendChild(iconSpan("music", "icon-lg"));
+    };
+    artWrap.appendChild(img);
+    card.appendChild(artWrap);
+    const title = document.createElement("div");
+    title.className = "media-card-title";
+    title.textContent = group.album || "(앨범 없음)";
+    card.appendChild(title);
+    if (group.artist) {
+      const artist = document.createElement("div");
+      artist.className = "media-card-artist";
+      artist.textContent = group.artist;
+      card.appendChild(artist);
+    }
+    card.addEventListener("click", () => openAlbumDetail(group));
+    return card;
+  }
+
+  function buildRecommendedCircleCard(entry) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    fillArtistArt(artWrap, entry.albums);
+    card.appendChild(artWrap);
+    const title = document.createElement("div");
+    title.className = "media-card-title";
+    title.textContent = entry.name || "(아티스트 없음)";
+    card.appendChild(title);
+    card.addEventListener("click", () => openArtistAlbums(entry.name));
+    return card;
+  }
+
+  // todaySongs가 걸쳐 있는 앨범 중 최대 3개를 골라 앨범 탭 옆에 보여준다.
+  function renderRecommendedAlbums() {
+    albumsTop3El.innerHTML = "";
+    const albumIds = new Set(todaySongs.map((t) => t.album_id).filter(Boolean));
+    const groups = albumIds.size ? groupAlbums(tracks, albums).filter((g) => albumIds.has(g.id)) : [];
+    if (lyricsActive || !groups.length) {
+      albumsTop3El.hidden = true;
+      return;
+    }
+    albumsTop3El.hidden = false;
+    const heading = document.createElement("div");
+    heading.className = "stats-track-top3-heading";
+    heading.textContent = "오늘의 추천 앨범";
+    albumsTop3El.appendChild(heading);
+    groups.slice(0, 3).forEach((g) => albumsTop3El.appendChild(buildRecommendedAlbumCard(g)));
+  }
+
+  // todaySongs가 속한 앨범들의 서클(대표 이름 기준)을 최대 3개 골라 아티스트
+  // 탭 옆에 보여준다.
+  function renderRecommendedCircles() {
+    artistsTop3El.innerHTML = "";
+    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
+    const albumById = new Map(albums.map((a) => [a.id, a]));
+    const byName = new Map();
+    for (const item of todaySongs) {
+      const album = item.album_id ? albumById.get(item.album_id) : null;
+      const name = resolveCircleName((album ? album.artist : "") || "");
+      if (!name) continue;
+      if (!byName.has(name)) byName.set(name, []);
+      if (album) byName.get(name).push(album);
+    }
+    const entries = [...byName.entries()].map(([name, albumsForName]) => ({ name, albums: albumsForName }));
+    if (lyricsActive || !entries.length) {
+      artistsTop3El.hidden = true;
+      return;
+    }
+    artistsTop3El.hidden = false;
+    const heading = document.createElement("div");
+    heading.className = "stats-track-top3-heading";
+    heading.textContent = "오늘의 추천 서클";
+    artistsTop3El.appendChild(heading);
+    entries.slice(0, 3).forEach((entry) => artistsTop3El.appendChild(buildRecommendedCircleCard(entry)));
+  }
+
   // 실패해도(네트워크 오류 등) 브라우즈 화면 전체를 방해하지 않도록 조용히
   // 위젯만 숨긴다 — 오늘의 곡은 부가 기능이다.
   async function loadTodaySongs() {
@@ -577,6 +675,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       todaySongs = [];
     }
     renderTodaySongsTop3();
+    renderRecommendedAlbums();
+    renderRecommendedCircles();
   }
 
   function renderSongs() {
@@ -1487,6 +1587,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     setLyricsActive(active) {
       lyricsActive = active;
       renderTodaySongsTop3();
+      renderRecommendedAlbums();
+      renderRecommendedCircles();
     },
   };
 }
