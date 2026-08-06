@@ -110,6 +110,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let tracks = [];
   let albums = [];
   let artistsRegistry = [];
+  let circlesRegistry = [];
   let libraryName = null;
   let mode = "artist";
   let selectedTrackIds = new Set();
@@ -193,14 +194,16 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   async function loadLibraryAndAlbums() {
-    const [library, albumsResult, artistsResult] = await Promise.all([
+    const [library, albumsResult, artistsResult, circlesResult] = await Promise.all([
       api.getLibrary(),
       api.getAlbums(),
       api.getArtists(),
+      api.getCircles(),
     ]);
     tracks = library.tracks;
     albums = albumsResult.albums;
     artistsRegistry = artistsResult.artists;
+    circlesRegistry = circlesResult.circles;
     libraryName = library.name;
   }
 
@@ -786,6 +789,29 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     return card;
   }
 
+  // 서클(앨범 아티스트) 정체성 편집은 곡 아티스트와 같은 다이얼로그를 재사용하되,
+  // API만 circles.js 쪽으로 갈아 끼운다(identity_registry.py를 공유하므로 로직은 동일).
+  const CIRCLE_ENDPOINTS = {
+    rename: (id, name) => api.renameCircle(id, name),
+    addAlias: (id, alias) => api.addCircleAlias(id, alias),
+    removeAlias: (id, alias) => api.removeCircleAlias(id, alias),
+  };
+
+  async function openCircleIdentityEditor(name) {
+    const identity = await api.resolveCircle(name || "(아티스트 없음)");
+    identityDialogApi.open(identity, {
+      title: "서클 정보 수정",
+      endpoints: CIRCLE_ENDPOINTS,
+      getTracks: () => albums.filter((a) => a.artist).map((a) => ({ artist: a.artist })),
+      onChange: () => {
+        loadLibraryAndAlbums().then(render);
+      },
+      onClose: () => {
+        loadLibraryAndAlbums().then(render);
+      },
+    });
+  }
+
   // 아티스트 카드의 커버는 '앨범 아티스트'의 앨범 중 무작위로 최대 4개를 골라
   // 콜라주로 채운다(fillArtistArt, 재생 통계 아티스트 탭과 공유).
   function buildArtistCard(entry) {
@@ -801,6 +827,19 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     titleRow.className = "media-card-title-row";
     const title = createMarqueeClip("media-card-title", "", entry.name || "(아티스트 없음)");
     titleRow.appendChild(title);
+
+    // 이명 등록 버튼 — 클릭해도 카드 자체의 openArtistAlbums로 넘어가지 않게 막는다.
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "icon-btn media-card-drag-handle";
+    editBtn.title = "서클 이름/이명 수정";
+    editBtn.appendChild(iconSpan("edit-3", "icon-sm"));
+    editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCircleIdentityEditor(entry.name);
+    });
+    titleRow.appendChild(editBtn);
+
     card.appendChild(titleRow);
 
     const meta = document.createElement("div");
@@ -827,15 +866,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
   }
 
-  // 아티스트 탭은 곡 아티스트가 아니라 '앨범 아티스트'(Album.artist) 기준으로
+  // 아티스트 탭은 곡 아티스트가 아니라 '앨범 아티스트'(Album.artist, 서클) 기준으로
   // 묶는다 — 앨범 안의 개별 곡 아티스트가 달라도 여기엔 앨범 아티스트만 나온다.
+  // 서클 이명 레지스트리로 표기가 다른 같은 서클을 하나로 합쳐서 묶는다(곡
+  // 아티스트 탭이 artistsRegistry로 하는 것과 동일).
   function renderArtists() {
     const q = searchInput.value.trim().toLowerCase();
     artistsList.innerHTML = "";
 
+    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
     const byArtist = new Map();
     for (const album of albums) {
-      const name = album.artist || "";
+      const name = resolveCircleName(album.artist || "");
       if (!byArtist.has(name)) byArtist.set(name, []);
       byArtist.get(name).push(album);
     }
@@ -997,7 +1039,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       albumsSortable = null;
     }
 
-    const groups = groupAlbums(tracks, albums).filter((g) => matchesAlbum(g, q, field));
+    // group.artist를 서클 이명 레지스트리로 대표 이름으로 바꿔서 검색/표시한다 —
+    // 그래야 표기가 다른 앨범도 아티스트 탭에서 넘어온 대표 이름으로 필터링된다.
+    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
+    const groups = groupAlbums(tracks, albums)
+      .map((g) => ({ ...g, artist: resolveCircleName(g.artist || "") }))
+      .filter((g) => matchesAlbum(g, q, field));
     renderedAlbumGroups = groups;
     if (!groups.length) {
       renderEmpty(albumsList);

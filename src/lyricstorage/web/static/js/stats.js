@@ -538,13 +538,17 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   async function renderAlbumArtists() {
     // 이 기간에 재생된 앨범만 모은다(순위는 안 매기지만 목록 자체는 기간 필터를
     // 따라야 하므로 group="album" 집계를 limit=0(무제한)으로 재사용한다).
-    const [albumsResult, periodAlbums] = await Promise.all([
+    const [albumsResult, circlesResult, periodAlbums] = await Promise.all([
       api.getAlbums(),
+      api.getCircles(),
       api.getTopStats(period, "album", offset, 0),
     ]);
     periodLabel.textContent = formatRange(periodAlbums.range_start, periodAlbums.range_end, period);
     nextBtn.disabled = offset <= 0;
 
+    // 서클 이명 레지스트리로 대표 이름으로 묶는다(브라우즈 아티스트 탭과 동일) —
+    // 그래야 표기가 다른 같은 서클이 여기서도 갈라지지 않는다.
+    const resolveCircleName = buildArtistNameResolver(circlesResult.circles);
     const albumMeta = new Map(albumsResult.albums.map((a) => [a.id, a]));
     const byArtist = new Map();
     for (const item of periodAlbums.items) {
@@ -552,7 +556,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       // 곡 아티스트(item.artist)가 아니라 앨범의 대표 아티스트(album.artist)로
       // 묶는다 — 여러 곡 아티스트가 섞인 컴필레이션 앨범도 앨범 아티스트 기준
       // 하나로만 잡혀야 브라우즈의 앨범 아티스트 탭과 일관된다.
-      const name = (album ? album.artist : item.artist) || "";
+      const name = resolveCircleName((album ? album.artist : item.artist) || "");
       if (!byArtist.has(name)) byArtist.set(name, { albums: [], count: 0, listened_ms: 0 });
       const entry = byArtist.get(name);
       if (album) entry.albums.push(album);

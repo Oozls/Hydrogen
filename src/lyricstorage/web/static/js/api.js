@@ -159,6 +159,13 @@ export const api = {
     request("POST", `/api/artists/${artistId}/aliases`, { json: { alias } }),
   removeArtistAlias: (artistId, alias) =>
     request("DELETE", `/api/artists/${artistId}/aliases?alias=${encodeURIComponent(alias)}`),
+  getCircles: () => request("GET", "/api/circles"),
+  resolveCircle: (name) => request("POST", "/api/circles/resolve", { json: { name } }),
+  renameCircle: (circleId, name) => request("PUT", `/api/circles/${circleId}`, { json: { name } }),
+  addCircleAlias: (circleId, alias) =>
+    request("POST", `/api/circles/${circleId}/aliases`, { json: { alias } }),
+  removeCircleAlias: (circleId, alias) =>
+    request("DELETE", `/api/circles/${circleId}/aliases?alias=${encodeURIComponent(alias)}`),
   logPlay: (trackId, title, artist, album, listenedMs) =>
     request("POST", "/api/stats/plays", {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },

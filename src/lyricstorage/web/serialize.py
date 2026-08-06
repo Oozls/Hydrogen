@@ -17,6 +17,7 @@ def track_to_json(track: Track) -> dict:
         "duration_ms": track.duration_ms,
         "has_lyrics": track.has_lyrics,
         "rating": track.rating,
+        "added_at": track.added_at,
     }
 
 

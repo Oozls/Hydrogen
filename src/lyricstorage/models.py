@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -144,12 +145,14 @@ class Track:
     album_id: str = ""
     duration_ms: int = 0
     rating: float = 0.0
+    added_at: str = ""  # 라이브러리에 추가된 시각(ISO) — "최근 추가" 발견용, 과거 데이터엔 빈 문자열
 
     @classmethod
     def from_file(cls, path: str) -> "Track":
         tags = read_tags(path)
         track = cls(path=str(path), **tags)
         track.album_id = albums_repo.get_or_create_album(track.album, track.artist).id
+        track.added_at = datetime.now().isoformat(timespec="seconds")
         return track
 
     @property
@@ -171,6 +174,7 @@ class Track:
             album_id=data.get("album_id", ""),
             duration_ms=data.get("duration_ms", 0),
             rating=float(data.get("rating", 0) or 0),
+            added_at=data.get("added_at", ""),
         )
 
 
