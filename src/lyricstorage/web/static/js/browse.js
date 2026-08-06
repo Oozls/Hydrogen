@@ -1098,6 +1098,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       renderEmpty(songArtistDetailListEl);
       return;
     }
+    // renderSongRows는 앨범/아티스트 칸 폭(applyColumnPriority)을 자기가 받은
+    // container(구획별 <ul>) 기준으로만 계산한다. 구획마다 따로 부르면 제목
+    // 길이가 구획마다 달라 배정되는 폭도 달라져 앨범명 칸이 구획 경계에서
+    // 어긋난다. 모든 구획이 다 그려진 뒤 전체 컨테이너를 대상으로 한 번 더
+    // 계산해서, 표처럼 전체 목록에서 칸 폭이 통일되게 맞춘다.
+    let pendingSections = sections.length;
+    function alignColumnsOnceAllSectionsRendered() {
+      pendingSections -= 1;
+      if (pendingSections > 0) return;
+      applyColumnPriority(songArtistDetailListEl);
+      applyMarquee(songArtistDetailListEl);
+    }
     sections.forEach((section) => {
       const sectionEl = document.createElement("div");
       sectionEl.className = "album-section";
@@ -1107,8 +1119,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       sectionEl.appendChild(header);
       const list = document.createElement("ul");
       list.className = "playlist-list";
-      renderSongRows(list, section.tracks, (track) =>
-        playFromList(track, allTracks, identity.name || "아티스트")
+      renderSongRows(
+        list,
+        section.tracks,
+        (track) => playFromList(track, allTracks, identity.name || "아티스트"),
+        alignColumnsOnceAllSectionsRendered
       );
       sectionEl.appendChild(list);
       songArtistDetailListEl.appendChild(sectionEl);

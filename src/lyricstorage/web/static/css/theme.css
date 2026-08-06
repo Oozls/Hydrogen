@@ -645,6 +645,7 @@ select#today-limit-select {
   min-width: 44px;
   color: var(--text-secondary);
   font-size: 13px;
+  text-align: left;
 }
 .playlist-row-album-link {
   cursor: pointer;
@@ -658,6 +659,7 @@ select#today-limit-select {
   min-width: 44px;
   color: var(--text-secondary);
   font-size: 13px;
+  text-align: left;
 }
 .playlist-row-artist-link {
   cursor: pointer;
