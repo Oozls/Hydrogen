@@ -39,38 +39,33 @@ export async function startRecommendQueue(player, track) {
   }
 }
 
-// 추천 큐(queueMode === "recommend")가 마지막 곡까지 도달할 때마다 한 곡씩 더
-// 받아와 이어 붙인다. 앱 시작 시 한 번만 호출해 항상 활성 상태로 둔다 — 확장
-// 화면이 열려 있지 않아도 라디오처럼 계속 이어져야 하기 때문.
+// 추천 큐(queueMode === "recommend")는 곡이 바뀔 때마다(끝나서 넘어가든 건너뛰든)
+// 한 곡씩 더 받아와 끝에 이어 붙인다 — 처음에 시드 곡 뒤로 9곡을 채워두고
+// 시작하므로, 이렇게 매번 하나씩 보충하면 항상 9곡만큼의 여유가 유지된다.
+// 앱 시작 시 한 번만 호출해 항상 활성 상태로 둔다 — 확장 화면이 열려 있지
+// 않아도 라디오처럼 계속 이어져야 하기 때문.
 export function setupQueueEngine(player) {
-  let lastPlaylistRef = null;
-  let queuedIds = null;
   let extending = false;
 
   player.addEventListener("trackchange", async () => {
-    if (player.playlist !== lastPlaylistRef) {
-      lastPlaylistRef = player.playlist;
-      queuedIds =
-        player.queueMode === "recommend" && player.playlist
-          ? new Set(player.playlist.tracks.map((t) => t.track_id))
-          : null;
-    }
     if (player.queueMode !== "recommend" || !player.playlist || extending) return;
     if (player.playlist === seedingPlaylist) return;
-    if (player.currentIndex !== player.playlist.tracks.length - 1) return;
 
     extending = true;
     const playlistAtRequest = player.playlist;
     try {
       const seedTrackId = playlistAtRequest.tracks[0].track_id;
+      // 큐에 이미 들어간 곡 id는 매번 지금 playlist.tracks에서 새로 뽑는다 —
+      // 별도 캐시(Set)를 따로 두면, 시작 시 받아온 초기 9곡처럼 이 리스너가
+      // 모르는 사이에 채워진 곡들이 제외 목록에서 빠져 중복 추천될 수 있다.
+      const excludeIds = playlistAtRequest.tracks.map((t) => t.track_id);
       const { items } = await api.getQueueSongs({
         seedTrackId,
         count: 1,
-        excludeIds: Array.from(queuedIds),
+        excludeIds,
       });
       if (player.playlist === playlistAtRequest && items && items.length) {
         player.appendTracks(items);
-        items.forEach((t) => queuedIds.add(t.track_id));
       }
     } catch (_err) {
       /* 다음 곡을 못 받아오면 조용히 무시 — 재생은 마지막 곡에서 멈춘다 */

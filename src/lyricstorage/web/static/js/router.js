@@ -11,7 +11,11 @@ function parseRoute(pathname, search) {
     const name = decodeURIComponent(raw.slice("playlist/".length));
     if (name) return { type: "playlist", name };
   }
-  if (raw === "stats") return { type: "stats" };
+  if (raw === "stats" || raw.startsWith("stats/")) {
+    const rest = raw === "stats" ? "" : raw.slice("stats/".length);
+    const [period, group] = rest.split("/").filter(Boolean);
+    return { type: "stats", period: period || null, group: group || null };
+  }
   if (raw === "today") return { type: "today" };
   if (raw === "browse" || raw.startsWith("browse/")) {
     const rest = raw === "browse" ? "" : raw.slice("browse/".length);
@@ -40,7 +44,7 @@ export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday }) 
   function dispatch() {
     const route = parseRoute(location.pathname, location.search);
     if (route.type === "playlist") onPlaylist(route.name);
-    else if (route.type === "stats") onStats();
+    else if (route.type === "stats") onStats(route);
     else if (route.type === "today") onToday();
     else if (route.type === "browse") onBrowse(route);
     else onHome();
@@ -57,7 +61,13 @@ export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday }) 
   }
 
   window.addEventListener("popstate", dispatch);
-  dispatch();
+  // setupRouter()가 반환되기 전에 dispatch()를 바로 부르면, onBrowse/onStats
+  // 콜백 안에서 쓰는 refs.router(main.js가 setupRouter의 반환값을 받아 대입하는
+  // 시점은 이 함수가 "리턴한 뒤"라 아직 null)가 첫 진입(새로고침으로 바로 들어온
+  // 딥링크) 때만 비어 있어, 그 안의 주소창 보정(setUrl) 호출이 조용히 무시된다.
+  // 마이크로태스크로 한 틱 미루면 대입이 먼저 끝난 뒤 실행돼 항상 refs.router가
+  // 채워져 있다.
+  queueMicrotask(dispatch);
 
   return {
     goHome() {
@@ -84,8 +94,8 @@ export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday }) 
     goPlaylist(name) {
       navigate(`/playlist/${encodeURIComponent(name)}`);
     },
-    goStats() {
-      navigate("/stats");
+    goStats(period, group) {
+      navigate(period && group ? `/stats/${period}/${group}` : "/stats");
     },
     goToday() {
       navigate("/today");

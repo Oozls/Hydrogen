@@ -49,35 +49,6 @@ export function buildArtistCell(clipClassName, artistString, onOpenArtist) {
   return clip;
 }
 
-// 아티스트(들)와 앨범명을 "아티스트, 아티스트 · 앨범" 한 줄로 붙여 보여주는 공용
-// 빌더. 홈 카드/재생바처럼 표 형태 컬럼으로 나눌 필요 없이 한 줄 요약만 필요한
-// 곳에서 쓴다. container는 이미 DOM에 있는 요소를 그대로 비우고 채운다.
-export function fillSublineRow(container, { artist, album, onOpenArtist, onOpenAlbum } = {}) {
-  container.innerHTML = "";
-  if (artist) container.appendChild(buildArtistCell("subline-part", artist, onOpenArtist));
-  if (artist && album) {
-    const sep = document.createElement("span");
-    sep.className = "subline-sep";
-    sep.textContent = "·";
-    container.appendChild(sep);
-  }
-  if (album) {
-    // subline-part-album은 재생바에서만 쓰이는 스타일 훅이다(theme.css) — 아티스트
-    // 칸은 항상 텍스트 폭 그대로 보여주고, 폭이 부족해 다른 버튼과 겹칠 상황에는
-    // 앨범 칸만 줄어들며 자동 스크롤(marquee)되게 한다.
-    const albumClip = createMarqueeClip("subline-part subline-part-album", "", album);
-    if (onOpenAlbum) {
-      albumClip.classList.add("playlist-row-album-link");
-      albumClip.title = "앨범 보기";
-      albumClip.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onOpenAlbum();
-      });
-    }
-    container.appendChild(albumClip);
-  }
-}
-
 // 등록된 이명(별칭)을 대표 이름으로 바꿔주는 조회 함수를 만든다. 곡 파일의
 // artist 문자열이나 재생 기록에는 옛 이름이 그대로 남아있을 수 있으므로,
 // 콜라주/집계 화면에서 같은 사람으로 묶어 보여줄 때 이 함수를 거친다.

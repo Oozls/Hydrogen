@@ -57,7 +57,10 @@ function createRatingBadge(rating) {
   return badge;
 }
 
-export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums, onOpenArtist) {
+const VALID_PERIODS = ["day", "week", "month"];
+const VALID_GROUPS = ["track", "album-artist", "artist", "album"];
+
+export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums, onOpenArtist, refs) {
   const panelEl = document.getElementById("stats-panel");
   const periodTabs = document.getElementById("stats-period-tabs");
   const groupTabs = document.getElementById("stats-group-tabs");
@@ -91,6 +94,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   // 가사 패널이 열려 있으면 통계 화면의 TOP 3 앨범 패널은 숨긴다(공간 확보).
   let lyricsActive = false;
   let lastAlbumItems = [];
+  // "앨범" 탭에서 앨범 카드에 곡 아티스트 대신 앨범 아티스트명을 보여주기 위한 조회용.
+  let albumMetaById = new Map();
   // 아티스트 그룹 카드의 콜라주 표지를 위해, 곡 아티스트별로 그 아티스트가
   // 참여한(쉼표 분리 기준) 곡들이 속한 앨범 목록을 미리 계산해둔다.
   let artistAlbumsMap = new Map();
@@ -126,17 +131,31 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
     artistAlbumsMap = new Map([...map.entries()].map(([name, albums]) => [name, [...albums.values()]]));
   }
 
+  function renderLoading(container) {
+    container.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "list-loading";
+    loading.textContent = "불러오는 중...";
+    container.appendChild(loading);
+  }
+
   async function refresh() {
     closeArtistDetail();
     const isCatalog = group === "album-artist";
+    const isTrack = group === "track";
+    // 기간/분류 탭을 바꾸는 동안 이전 화면이 잠깐 그대로 멈춰 있는 것처럼 보이는
+    // 대신, 데이터가 오기 전부터 바로 로딩 표시로 바꾼다.
+    trackBodyEl.hidden = !isTrack;
+    trackPagination.hidden = true;
+    listEl.style.display = isTrack ? "none" : "";
+    if (isTrack) top3El.hidden = true;
+    renderLoading(isTrack ? trackListEl : listEl);
+
     if (isCatalog) {
-      trackBodyEl.hidden = true;
-      trackPagination.hidden = true;
-      listEl.style.display = "";
       await renderAlbumArtists();
       return;
     }
-    if (group === "track") {
+    if (isTrack) {
       // 곡 목록과 오른쪽 TOP 3 앨범은 같은 기간을 대상으로 하는 별개의 집계라
       // 병렬로 받아온다(둘 다 이미 있는 /api/stats/top 엔드포인트 재사용).
       const [trackData, albumData] = await Promise.all([
@@ -145,8 +164,6 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       ]);
       periodLabel.textContent = formatRange(trackData.range_start, trackData.range_end, period);
       nextBtn.disabled = offset <= 0;
-      listEl.style.display = "none";
-      trackBodyEl.hidden = false;
       trackItems = await enrichTracks(trackData.items);
       trackPage = 0;
       renderTrackPage();
@@ -156,10 +173,11 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       const data = await api.getTopStats(period, group, offset);
       periodLabel.textContent = formatRange(data.range_start, data.range_end, period);
       nextBtn.disabled = offset <= 0;
-      trackBodyEl.hidden = true;
-      trackPagination.hidden = true;
-      listEl.style.display = "";
       if (group === "artist") await loadArtistAlbumsMap();
+      if (group === "album") {
+        const albumsResult = await api.getAlbums();
+        albumMetaById = new Map(albumsResult.albums.map((a) => [a.id, a]));
+      }
       renderList(data.items, group);
     }
   }
@@ -459,10 +477,13 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
     const title = createMarqueeClip("media-card-title", "", titleText);
     card.appendChild(title);
 
-    if (group !== "artist" && item.artist) {
+    // 앨범 탭은 그 재생이 어떤 곡 아티스트였는지가 아니라, 앨범 자체의 대표
+    // 아티스트(앨범 아티스트)를 보여준다 — 브라우즈의 앨범 탭과 동일한 기준.
+    const displayArtist = group === "album" ? albumMetaById.get(item.album_id)?.artist || item.artist : item.artist;
+    if (group !== "artist" && displayArtist) {
       const artist = document.createElement("div");
       artist.className = "media-card-artist";
-      artist.textContent = item.artist;
+      artist.textContent = displayArtist;
       card.appendChild(artist);
     }
 
@@ -507,9 +528,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
     const meta = document.createElement("div");
     meta.className = "media-card-meta";
-    const albumCount = document.createElement("span");
-    albumCount.textContent = `앨범 ${entry.albums.length}개`;
-    meta.appendChild(albumCount);
+    meta.textContent = `앨범 ${entry.albums.length}개 · ${entry.count}회 · ${Math.round(entry.listened_ms / 60000)}분`;
     card.appendChild(meta);
 
     card.addEventListener("click", () => onOpenArtistAlbums && onOpenArtistAlbums(entry.name));
@@ -526,18 +545,26 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
     periodLabel.textContent = formatRange(periodAlbums.range_start, periodAlbums.range_end, period);
     nextBtn.disabled = offset <= 0;
 
-    const albumById = new Map(albumsResult.albums.map((a) => [a.id, a]));
+    const albumMeta = new Map(albumsResult.albums.map((a) => [a.id, a]));
     const byArtist = new Map();
     for (const item of periodAlbums.items) {
-      const album = item.album_id ? albumById.get(item.album_id) : null;
+      const album = item.album_id ? albumMeta.get(item.album_id) : null;
       // 곡 아티스트(item.artist)가 아니라 앨범의 대표 아티스트(album.artist)로
       // 묶는다 — 여러 곡 아티스트가 섞인 컴필레이션 앨범도 앨범 아티스트 기준
       // 하나로만 잡혀야 브라우즈의 앨범 아티스트 탭과 일관된다.
       const name = (album ? album.artist : item.artist) || "";
-      if (!byArtist.has(name)) byArtist.set(name, []);
-      if (album) byArtist.get(name).push(album);
+      if (!byArtist.has(name)) byArtist.set(name, { albums: [], count: 0, listened_ms: 0 });
+      const entry = byArtist.get(name);
+      if (album) entry.albums.push(album);
+      entry.count += item.count || 0;
+      entry.listened_ms += item.listened_ms || 0;
     }
-    let entries = [...byArtist.entries()].map(([name, albumsForArtist]) => ({ name, albums: albumsForArtist }));
+    let entries = [...byArtist.entries()].map(([name, v]) => ({
+      name,
+      albums: v.albums,
+      count: v.count,
+      listened_ms: v.listened_ms,
+    }));
     entries.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
 
     listEl.innerHTML = "";
@@ -702,6 +729,12 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
   artistDetailBackBtn.addEventListener("click", closeArtistDetail);
 
+  // 지금 보고 있는 기간/분류를 주소창에 반영한다(브라우즈 탭처럼 다른 화면
+  // 진입/상태 변경이 매번 새 히스토리 항목을 쌓지 않도록 setUrl만 사용).
+  function syncUrl() {
+    if (refs && refs.router) refs.router.setUrl(`/stats/${period}/${group}`);
+  }
+
   function switchTabs(tabsEl, dataKey, onSelect) {
     tabsEl.addEventListener("click", (e) => {
       const btn = e.target.closest(".tab-btn");
@@ -709,6 +742,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       [...tabsEl.children].forEach((b) => b.classList.toggle("active", b === btn));
       onSelect(btn.dataset[dataKey]);
       offset = 0;
+      syncUrl();
       refresh();
     });
   }
@@ -754,9 +788,14 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   });
 
   return {
-    show() {
+    show(route) {
       panelEl.classList.add("active");
+      if (route && VALID_PERIODS.includes(route.period)) period = route.period;
+      if (route && VALID_GROUPS.includes(route.group)) group = route.group;
+      [...periodTabs.children].forEach((b) => b.classList.toggle("active", b.dataset.period === period));
+      [...groupTabs.children].forEach((b) => b.classList.toggle("active", b.dataset.group === group));
       offset = 0;
+      syncUrl();
       refresh();
     },
     hide() {

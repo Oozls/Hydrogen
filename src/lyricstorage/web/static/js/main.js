@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupRating(player);
   setupQueueEngine(player);
   setupExpandedPlayer(player, { onOpen: () => sidebarApi.closeDrawer() });
-  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistAlbumsFromStats, openArtistFromTrack);
+  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistAlbumsFromStats, openArtistFromTrack, refs);
   const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack);
   const todaySongsApi = setupTodaySongs(
     bootstrap,
@@ -213,12 +213,12 @@ document.addEventListener("DOMContentLoaded", () => {
       sidebarApi.setActive(name);
       sidebarApi.refreshDataSize();
     },
-    onStats: () => {
+    onStats: (route) => {
       homeApi.hide();
       playlistApi.hide();
       browseApi.hide();
       todaySongsApi.hide();
-      statsApi.show();
+      statsApi.show(route);
       sidebarApi.setActive("__stats__");
       sidebarApi.refreshDataSize();
     },

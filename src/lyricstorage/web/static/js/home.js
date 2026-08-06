@@ -4,7 +4,7 @@ import { buildArtEl } from "./artspinner.js";
 import { startRecommendQueue } from "./queue.js";
 import { attachScrollAutoHide } from "./scrollAutoHide.js";
 import { createMarqueeClip, applyMarquee } from "./marquee.js";
-import { fillSublineRow, buildArtistCell } from "./songArtist.js";
+import { buildArtistCell } from "./songArtist.js";
 
 const RECENT_LIMIT = 12;
 const QUICKPICK_LIMIT = 18;
@@ -82,15 +82,20 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
     const text = document.createElement("div");
     text.className = "home-quickpick-text";
     text.appendChild(createMarqueeClip("home-quickpick-title", "", item.title || item.track_id));
-    const subtitle = document.createElement("div");
-    subtitle.className = "home-quickpick-subtitle subline-row";
-    fillSublineRow(subtitle, {
-      artist: item.artist,
-      album: item.album,
-      onOpenArtist,
-      onOpenAlbum: item.album && onOpenAlbum ? () => onOpenAlbum(item) : null,
-    });
-    text.appendChild(subtitle);
+    // 아티스트명을 앨범명 위에, 각각 따로 줄을 차지하게 한다(다시 듣기 카드와 동일).
+    if (item.artist) text.appendChild(buildArtistCell("home-quickpick-subtitle", item.artist, onOpenArtist));
+    if (item.album) {
+      const albumClip = createMarqueeClip("home-quickpick-album", "", item.album);
+      if (onOpenAlbum) {
+        albumClip.classList.add("playlist-row-album-link");
+        albumClip.title = "앨범 보기";
+        albumClip.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onOpenAlbum(item);
+        });
+      }
+      text.appendChild(albumClip);
+    }
     row.appendChild(text);
 
     row.addEventListener("click", () => startRecommendQueue(player, item));

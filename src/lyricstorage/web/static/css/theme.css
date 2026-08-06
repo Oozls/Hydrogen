@@ -177,40 +177,19 @@ textarea {
   text-overflow: ellipsis;
 }
 
+/* 곡명 아래에 곡 아티스트명, 그 아래에 앨범명(+연도)을 각각 줄로 쌓아 보여준다. */
 .now-playing-subline {
   min-width: 0;
-  font-size: 14px;
 }
-
-/* 아티스트(들)+앨범명을 한 줄에 이어 붙이되, 각각 개별적으로 클릭 가능한
-   조각으로 나눠 보여주는 공용 레이아웃(재생바 부제, 홈 카드 부제 공용). */
-.subline-row {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 0;
-}
-.subline-part {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.now-playing-artist {
+  display: block;
+  font-size: 12px;
   color: var(--text-secondary);
 }
-.subline-sep {
-  flex: none;
+.now-playing-album {
+  display: block;
+  font-size: 11px;
   color: var(--text-muted);
-}
-
-/* 재생바의 아티스트명/앨범명은 기본적으로 텍스트 내용 폭 그대로 보여준다
-   (줄어들지 않음). 폭이 부족해 다른 버튼 쪽과 겹칠 상황에만 앨범명 칸이
-   대신 줄어들고, 그때는 이미 줄어든 칸 폭 덕분에 applyMarquee가 자동으로
-   스크롤을 태운다(marquee.js는 칸 폭보다 텍스트가 길면 항상 스크롤한다). */
-.now-playing-subline .subline-part {
-  flex-shrink: 0;
-}
-.now-playing-subline .subline-part-album {
-  flex-shrink: 1;
 }
 
 .main-columns {
@@ -2153,31 +2132,39 @@ textarea.file-content-body:disabled {
   white-space: nowrap;
 }
 .home-quickpick-subtitle {
+  display: block;
   font-size: 13px;
+  color: var(--text-secondary);
+}
+.home-quickpick-album {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 /* -- 확장 재생 화면 (재생바 상단 이동 + 상세/대기 목록) ------------------------ */
-/* bottom:0 대신 top:100% + translateY(자기 높이만큼)로 "하단 고정"을 표현한다.
-   전에는 top:0/transform: translateY(calc(-100vh + height))로 이동시켰는데,
-   100vh는 모바일 브라우저의 동적 주소창/툴바 등 환경에 따라 실제로 보이는
-   화면 높이와 어긋나는 경우가 있어(visualViewport와 100vh 불일치), 그 값을
-   기준으로 큰 폭을 이동시키면 일부 환경에서 재생바가 화면 위로 넘어가 버리고
-   버튼도 함께 화면 밖으로 나가 다시 내릴 수 없는 문제가 있었다. top:100%는
-   percentage 기준이라 브라우저가 항상 실제 현재 뷰포트 높이로 다시 계산해
-   주므로 이 문제가 없고, transform은 --transport-bar-height라는 고정값만
-   옮기면 되니 훨씬 안전하다. */
+/* 예전엔 top:100%+transform(고정 px)로 하단에 고정해뒀었는데, top은 레이아웃
+   속성이라 애니메이션 중 매 프레임 메인 스레드에서 다시 계산돼야 한다. 반면
+   #expanded-player-panel은 transform 하나만 애니메이션하는 컴포지터 전용
+   움직임이라, 메인 스레드가 바쁜 환경(화면이 크거나 기기 성능이 낮을 때)에서는
+   두 애니메이션의 실제 프레임 속도가 어긋나 재생바와 대기 목록 패널이 순간적으로
+   겹치거나 벌어져 보였다. top/bottom은 그대로 고정(0)해 두고 transform 하나만
+   움직이면 이 둘은 항상 같은 컴포지터 타임라인을 타서 화면 크기와 무관하게
+   완전히 같은 속도로 움직인다. 100vh 대신 100dvh를 써서 모바일 브라우저의
+   동적 주소창/툴바로 인한 뷰포트 높이 불일치 문제도 함께 피한다. */
 .transport-bar {
-  top: 100%;
-  bottom: auto;
-  transform: translateY(calc(-1 * var(--transport-bar-height)));
-  transition: top 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.32s ease;
+  top: auto;
+  bottom: 0;
+  transform: translateY(0);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease;
 }
 .transport-bar.expanded {
-  top: 0;
-  transform: translateY(0);
+  transform: translateY(calc(-100dvh + var(--transport-bar-height)));
   border-top: none;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  /* 재생바 바로 아래는(평소와 달리) 다른 콘텐츠가 아니라 같은 배경색의 대기
+     목록 패널이 맞닿아 있어, 여기 그림자를 넣으면 실제로는 틈이 없는데도
+     경계선에 미세한 틈이 있는 것처럼 보인다. */
+  box-shadow: none;
 }
 .expanded-player-panel {
   display: flex;

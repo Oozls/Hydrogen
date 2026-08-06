@@ -1,9 +1,9 @@
 import { api } from "./api.js";
 import { setIcon } from "./icons.js";
-import { applyMarquee } from "./marquee.js";
+import { createMarqueeClip, applyMarquee } from "./marquee.js";
 import { showArtSpinner } from "./artspinner.js";
 import { openImageLightbox } from "./imageLightbox.js";
-import { fillSublineRow } from "./songArtist.js";
+import { buildArtistCell } from "./songArtist.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
@@ -79,16 +79,53 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     });
   }
 
-  // 아티스트명(들)/앨범명을 한 줄("아티스트 · 앨범")로 보여준다. 아티스트가
-  // 쉼표로 여럿이면 각각, 앨범명은 통째로 개별적으로 클릭해서 그 아티스트/앨범
-  // 상세로 이동할 수 있다.
+  // 앨범 연도는 트랙 정보에 없어서(앨범 쪽에만 저장됨) 앨범 단건 조회로 따로
+  // 받아와야 한다 — 같은 앨범을 반복 재생할 때 매번 다시 부르지 않도록 캐싱한다.
+  const albumYearCache = new Map();
+  function resolveAlbumYear(albumId) {
+    if (albumYearCache.has(albumId)) return Promise.resolve(albumYearCache.get(albumId));
+    return api
+      .getAlbum(albumId)
+      .then((data) => {
+        const year = (data && data.album && data.album.year) || null;
+        albumYearCache.set(albumId, year);
+        return year;
+      })
+      .catch(() => null);
+  }
+
+  // 곡명 아래에 곡 아티스트명, 그 아래에 앨범명(+연도)을 각각 줄을 나눠 보여준다.
+  // 아티스트가 쉼표로 여럿이면 각각, 앨범명은 통째로 개별적으로 클릭해서 그
+  // 아티스트/앨범 상세로 이동할 수 있다.
   function updateSubline(track) {
-    fillSublineRow(sublineEl, {
-      artist: track && track.artist,
-      album: track && track.album,
-      onOpenArtist,
-      onOpenAlbum: track && track.album && onOpenAlbum ? () => onOpenAlbum(track) : null,
-    });
+    sublineEl.innerHTML = "";
+    if (!track) return;
+    if (track.artist) sublineEl.appendChild(buildArtistCell("now-playing-artist", track.artist, onOpenArtist));
+    if (track.album) {
+      const cachedYear = track.album_id ? albumYearCache.get(track.album_id) : null;
+      const albumClip = createMarqueeClip(
+        "now-playing-album",
+        "",
+        cachedYear ? `${track.album} · ${cachedYear}` : track.album
+      );
+      if (onOpenAlbum) {
+        albumClip.classList.add("playlist-row-album-link");
+        albumClip.title = "앨범 보기";
+        albumClip.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onOpenAlbum(track);
+        });
+      }
+      sublineEl.appendChild(albumClip);
+      if (track.album_id && !albumYearCache.has(track.album_id)) {
+        resolveAlbumYear(track.album_id).then((year) => {
+          // 응답이 오는 동안 곡이 바뀌었으면(이 클립은 더 이상 화면에 없음) 버린다.
+          if (!year || player.currentTrack !== track) return;
+          albumClip.firstChild.textContent = `${track.album} · ${year}`;
+          requestAnimationFrame(() => applyMarquee(nowPlayingTextEl));
+        });
+      }
+    }
   }
 
   function setTrack(track, { bustArtCache = false } = {}) {
