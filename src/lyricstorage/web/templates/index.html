@@ -123,7 +123,6 @@
               placeholder="곡·앨범·서클·아티스트 검색"
               autocomplete="off"
             />
-            <div id="browse-search-results" class="browse-search-results" hidden></div>
           </div>
         </div>
         <div class="stats-controls-row">
@@ -150,6 +149,9 @@
         <input type="file" id="browse-file-input" accept=".mp3,.wav,.m4a" multiple hidden />
         <input type="file" id="browse-folder-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
         <input type="file" id="browse-reimport-artists-input" accept=".mp3,.wav,.m4a" multiple webkitdirectory hidden />
+        <div id="browse-search-results-panel" class="tab-panel">
+          <div id="browse-search-results-sections" class="album-sections"></div>
+        </div>
         <div id="browse-artists-panel" class="tab-panel active">
           <div class="stats-track-body">
             <div class="stats-track-list-col">

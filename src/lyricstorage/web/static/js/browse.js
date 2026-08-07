@@ -69,7 +69,8 @@ const SONGS_PAGE_SIZE_FALLBACK = 50;
 export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit, identityDialogApi, refs) {
   const panelEl = document.getElementById("browse-panel");
   const searchInput = document.getElementById("browse-search-input");
-  const searchResultsEl = document.getElementById("browse-search-results");
+  const searchResultsPanel = document.getElementById("browse-search-results-panel");
+  const searchResultsSectionsEl = document.getElementById("browse-search-results-sections");
   const tabsEl = document.getElementById("browse-tabs");
   const artistsPanel = document.getElementById("browse-artists-panel");
   const artistsList = document.getElementById("browse-artists-list");
@@ -824,6 +825,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   function openAlbumDetail(group) {
     currentAlbumGroup = group;
     fillAlbumDetailHeader(group);
+    exitSearchResults();
     artistsPanel.classList.remove("active");
     albumsPanel.classList.remove("active");
     albumDetailPanel.classList.add("active");
@@ -1141,6 +1143,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     mode = "song-artist";
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
     normalizeFilterField();
+    exitSearchResults();
     songsPanel.classList.remove("active");
     albumsPanel.classList.remove("active");
     artistsPanel.classList.remove("active");
@@ -1247,6 +1250,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       renderAlbumDetailRows(currentAlbumGroup);
     } else if (songArtistDetailPanel.classList.contains("active")) {
       renderSongArtistDetail(songArtistDetailIdentity);
+    } else if (searchResultsPanel.classList.contains("active") && searchInput.value.trim()) {
+      renderSearchResults(searchInput.value.trim());
     } else {
       render();
     }
@@ -1270,6 +1275,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       syncSelectionUI();
     }
     if (enteringSong) songsPage = 0; // 곡 탭에 새로 들어올 때마다 1페이지부터 보여준다.
+    exitSearchResults();
     albumDetailPanel.classList.remove("active");
     currentAlbumGroup = null;
     closeSongArtistDetail();
@@ -1364,6 +1370,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   function currentRowContainer() {
     if (albumDetailPanel.classList.contains("active")) return albumDetailList;
     if (songArtistDetailPanel.classList.contains("active")) return songArtistDetailListEl;
+    if (searchResultsPanel.classList.contains("active")) return searchResultsSectionsEl;
     if (mode === "song") return songsList;
     return null;
   }
@@ -1399,6 +1406,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       } else if (songArtistDetailPanel.classList.contains("active")) {
         applyColumnPriority(songArtistDetailListEl);
         applyMarquee(songArtistDetailListEl);
+      } else if (searchResultsPanel.classList.contains("active")) {
+        applyColumnPriority(searchResultsSectionsEl);
+        applyMarquee(searchResultsSectionsEl);
       } else if (songsPanel.classList.contains("active")) {
         applyColumnPriority(songsList);
         applyMarquee(songsList);
@@ -1413,68 +1423,144 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
   });
 
-  // 브라우즈 통합 검색: 곡/앨범/서클/아티스트를 한 번에 찾아, 고르면 지금 보고
-  // 있는 탭 안에서 해당 상세로 바로 이동한다(곡은 검색 결과를 임시 재생목록
-  // 삼아 바로 재생). 원래 사이드바에 있었으나, 브라우즈 화면에서만 쓰이므로
-  // 브라우즈 헤더로 옮겼다.
-  function closeSearchResults() {
-    searchResultsEl.innerHTML = "";
-    searchResultsEl.hidden = true;
+  // 브라우즈 통합 검색: 곡/앨범/서클/아티스트를 한 번에 찾아, 다른 탭들과
+  // 동격인 화면 중앙의 목록 패널(searchResultsPanel)에 결과를 띄운다. 카드/행은
+  // 각 탭이 이미 쓰는 buildAlbumCard/buildArtistCard/buildSongArtistCard/
+  // renderSongRows를 그대로 재사용해, 클릭하면 각 카드가 원래 하던 대로(앨범
+  // 상세 열기, 서클→앨범 탭 필터, 아티스트 상세 열기) 동작한다. 곡만 예외로
+  // 재생만 하고 결과 화면에 머문다(하나 골라 듣고 다른 곡도 이어서 고를 수 있게).
+  const searchTabPanels = [
+    artistsPanel,
+    songArtistsPanel,
+    songArtistDetailPanel,
+    songsPanel,
+    albumsPanel,
+    albumDetailPanel,
+    searchResultsPanel,
+  ];
+  // 검색으로 들어오기 직전에 보고 있던 패널 — 검색을 그냥 지우고 나가면(피킹 없이)
+  // 그 화면으로 되돌아간다. 앨범/서클/아티스트 결과를 고르면 그 목적지 함수가
+  // 스스로 자기 패널을 active로 만들므로(exitSearchResults 참고) 여기로 안 온다.
+  let panelBeforeSearch = null;
+
+  function showSearchResultsPanel() {
+    if (!searchResultsPanel.classList.contains("active")) {
+      panelBeforeSearch = searchTabPanels.find((p) => p !== searchResultsPanel && p.classList.contains("active")) || null;
+    }
+    searchTabPanels.forEach((p) => p.classList.toggle("active", p === searchResultsPanel));
   }
 
-  function buildSearchGroup(title, items, labelFn, onPick) {
-    if (!items.length) return null;
-    const group = document.createElement("div");
-    group.className = "browse-search-group";
-    const heading = document.createElement("div");
-    heading.className = "browse-search-group-title";
-    heading.textContent = title;
-    group.appendChild(heading);
-    items.forEach((item) => {
-      const row = document.createElement("div");
-      row.className = "browse-search-result-row";
-      row.textContent = labelFn(item);
-      row.addEventListener("mousedown", (e) => e.preventDefault()); // input의 blur보다 클릭이 먼저 처리되게
-      row.addEventListener("click", () => {
-        onPick(item);
-        searchInput.value = "";
-        closeSearchResults();
-      });
-      group.appendChild(row);
-    });
-    return group;
+  // 탭 전환/앨범 상세/아티스트 상세처럼 검색 결과를 고른 게 아니라 다른 곳으로
+  // 아예 넘어갈 때 부른다. 목적지 패널은 각자 알아서 active로 만들 것이므로
+  // 여기선 검색창과 검색 패널만 정리한다.
+  function exitSearchResults() {
+    if (searchInput.value) searchInput.value = "";
+    searchResultsPanel.classList.remove("active");
+    panelBeforeSearch = null;
+  }
+
+  // 입력을 지우거나(예: 백스페이스로 다 지움) 결과 없이 검색을 그만둘 때 —
+  // 원래 보고 있던 패널로 돌아간다.
+  function closeSearchResults() {
+    searchResultsSectionsEl.innerHTML = "";
+    searchResultsPanel.classList.remove("active");
+    if (panelBeforeSearch) panelBeforeSearch.classList.add("active");
+    panelBeforeSearch = null;
+  }
+
+  // renderArtists/renderSongArtists는 카탈로그 전체를 훑어 항목을 만드는데,
+  // 검색 결과는 최대 몇 개(RESULT_LIMIT)뿐이라 그 몇 개만 골라 같은 모양의
+  // 항목({name, albums} / {name, count, albums})을 다시 만든다 — 카드 자체는
+  // buildArtistCard/buildSongArtistCard를 그대로 재사용하기 위함.
+  function findCircleEntry(name) {
+    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
+    return { name, albums: albums.filter((a) => resolveCircleName(a.artist || "") === name) };
+  }
+
+  function findSongArtistEntry(name) {
+    const resolveName = buildArtistNameResolver(artistsRegistry);
+    const albumById = new Map(albums.map((a) => [a.id, a]));
+    let count = 0;
+    const albumIds = new Set();
+    for (const track of tracks) {
+      if (splitArtists(track.artist).some((raw) => resolveName(raw) === name)) {
+        count += 1;
+        if (track.album_id) albumIds.add(track.album_id);
+      }
+    }
+    return { name, count, albums: [...albumIds].map((id) => albumById.get(id)).filter(Boolean) };
+  }
+
+  function buildSearchSection(title, buildBody) {
+    const section = document.createElement("div");
+    section.className = "album-section";
+    const header = document.createElement("div");
+    header.className = "album-section-header";
+    header.textContent = title;
+    section.appendChild(header);
+    section.appendChild(buildBody());
+    return section;
   }
 
   function renderSearchResults(query) {
     const result = searchAll(query);
-    searchResultsEl.innerHTML = "";
-    const groups = [
-      buildSearchGroup(
-        "곡",
-        result.tracks,
-        (t) => (t.artist ? `${t.title || t.track_id} — ${t.artist}` : t.title || t.track_id),
-        (t) => {
-          player.setPlaylist({ name: "검색 결과", tracks: result.tracks });
-          player.playIndex(result.tracks.indexOf(t));
-        }
-      ),
-      buildSearchGroup("앨범", result.albums, (a) => a.name || "(앨범 없음)", (a) => {
-        const group = groupAlbums(tracks, albums).find((g) => g.id === a.id);
-        if (group) openAlbumDetail(group);
-      }),
-      buildSearchGroup("서클", result.circles, (name) => name, (name) => openArtistAlbums(name)),
-      buildSearchGroup("아티스트", result.songArtists, (name) => name, (name) => openSongArtistDetail(name)),
-    ].filter(Boolean);
+    searchResultsSectionsEl.innerHTML = "";
+    showSearchResultsPanel();
 
-    if (!groups.length) {
-      const empty = document.createElement("div");
-      empty.className = "browse-search-empty";
-      empty.textContent = "검색 결과가 없습니다.";
-      searchResultsEl.appendChild(empty);
-    } else {
-      groups.forEach((g) => searchResultsEl.appendChild(g));
+    const sections = [];
+    if (result.tracks.length) {
+      sections.push(
+        buildSearchSection("곡", () => {
+          const list = document.createElement("ul");
+          list.className = "playlist-list";
+          renderSongRows(list, result.tracks, (t) => playFromList(t, result.tracks, "검색 결과"));
+          return list;
+        })
+      );
     }
-    searchResultsEl.hidden = false;
+    const albumGroups = result.albums
+      .map((a) => groupAlbums(tracks, albums).find((g) => g.id === a.id))
+      .filter(Boolean);
+    if (albumGroups.length) {
+      sections.push(
+        buildSearchSection("앨범", () => {
+          const grid = document.createElement("div");
+          grid.className = "card-grid";
+          albumGroups.forEach((g) => grid.appendChild(buildAlbumCard(g)));
+          return grid;
+        })
+      );
+    }
+    if (result.circles.length) {
+      sections.push(
+        buildSearchSection("서클", () => {
+          const grid = document.createElement("div");
+          grid.className = "card-grid";
+          result.circles.forEach((name) => grid.appendChild(buildArtistCard(findCircleEntry(name))));
+          return grid;
+        })
+      );
+    }
+    if (result.songArtists.length) {
+      sections.push(
+        buildSearchSection("아티스트", () => {
+          const grid = document.createElement("div");
+          grid.className = "card-grid";
+          result.songArtists.forEach((name) => grid.appendChild(buildSongArtistCard(findSongArtistEntry(name))));
+          return grid;
+        })
+      );
+    }
+
+    if (!sections.length) {
+      renderEmpty(searchResultsSectionsEl);
+      return;
+    }
+    sections.forEach((s) => searchResultsSectionsEl.appendChild(s));
+    requestAnimationFrame(() => {
+      applyColumnPriority(searchResultsSectionsEl);
+      applyMarquee(searchResultsSectionsEl);
+    });
   }
 
   searchInput.addEventListener("input", () => {
@@ -1485,10 +1571,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
     store.ensureLoaded().then(() => renderSearchResults(q));
   });
-  searchInput.addEventListener("focus", () => {
-    if (searchInput.value.trim()) renderSearchResults(searchInput.value.trim());
-  });
-  searchInput.addEventListener("blur", closeSearchResults);
   // 한글 입력처럼 조합 중에는 input 이벤트가 아직 완성되지 않은 글자를 검색할
   // 수 있으므로, 엔터로 입력을 마치면 그 시점의 값으로 결과를 다시 확실히 띄운다.
   searchInput.addEventListener("keydown", (e) => {
