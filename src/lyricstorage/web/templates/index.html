@@ -23,16 +23,6 @@
           <span class="icon" style="--icon: url(/static/icons/disc.svg)"></span>
           <span>브라우즈</span>
         </button>
-        <div class="sidebar-search-wrap">
-          <input
-            type="text"
-            id="sidebar-search-input"
-            class="sidebar-search-input"
-            placeholder="곡·앨범·서클·아티스트 검색"
-            autocomplete="off"
-          />
-          <div id="sidebar-search-results" class="sidebar-search-results" hidden></div>
-        </div>
         <div class="panel-header-row">
           <span class="section-title">재생목록</span>
           <button id="btn-new-playlist" class="icon-btn" title="새 플레이리스트">
@@ -125,6 +115,16 @@
       <section id="browse-panel" class="panel browse-panel page-panel">
         <div class="overlay-header">
           <span class="section-title">라이브러리 브라우즈</span>
+          <div class="browse-search-wrap">
+            <input
+              type="text"
+              id="browse-search-input"
+              class="browse-search-input"
+              placeholder="곡·앨범·서클·아티스트 검색"
+              autocomplete="off"
+            />
+            <div id="browse-search-results" class="browse-search-results" hidden></div>
+          </div>
         </div>
         <div class="stats-controls-row">
           <div class="tabs" id="browse-tabs">

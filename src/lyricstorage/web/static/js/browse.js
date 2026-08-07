@@ -13,6 +13,7 @@ import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { fillArtistArt } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
+import { searchAll } from "./search.js";
 
 function fmtDuration(ms) {
   const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
@@ -67,6 +68,8 @@ const SONGS_PAGE_SIZE_FALLBACK = 50;
 
 export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBulkEdit, identityDialogApi, refs) {
   const panelEl = document.getElementById("browse-panel");
+  const searchInput = document.getElementById("browse-search-input");
+  const searchResultsEl = document.getElementById("browse-search-results");
   const tabsEl = document.getElementById("browse-tabs");
   const artistsPanel = document.getElementById("browse-artists-panel");
   const artistsList = document.getElementById("browse-artists-list");
@@ -113,10 +116,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let circlesRegistry = [];
   let libraryName = null;
   let mode = "artist";
-  // 브라우즈 자체 검색창(구식 검색바)은 사이드바 통합 검색으로 대체되어
-  // 사라졌다. 다만 서클 카드를 눌러 앨범 탭을 그 서클로 필터링해서 보여주는
-  // 내부 동작(openArtistAlbums)은 여전히 이 상태를 쓴다 — 이제 사용자가 직접
-  // 입력할 수 있는 자리는 없고, 코드에서만 채워 넣는다.
+  // 브라우즈 자체의 탭별 검색창(구식 검색바)은 헤더의 통합 검색(아래
+  // searchInput)으로 대체되어 사라졌다. 다만 서클 카드를 눌러 앨범 탭을 그
+  // 서클로 필터링해서 보여주는 내부 동작(openArtistAlbums)은 여전히 이
+  // 상태를 쓴다 — 이제 사용자가 직접 입력할 수 있는 자리는 없고, 코드에서만
+  // 채워 넣는다.
   let filterQuery = "";
   let filterField = "all";
   let selectedTrackIds = new Set();
@@ -1407,6 +1411,90 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         applyMarquee(songArtistsList);
       }
     }, MARQUEE_RESIZE_DEBOUNCE_MS);
+  });
+
+  // 브라우즈 통합 검색: 곡/앨범/서클/아티스트를 한 번에 찾아, 고르면 지금 보고
+  // 있는 탭 안에서 해당 상세로 바로 이동한다(곡은 검색 결과를 임시 재생목록
+  // 삼아 바로 재생). 원래 사이드바에 있었으나, 브라우즈 화면에서만 쓰이므로
+  // 브라우즈 헤더로 옮겼다.
+  function closeSearchResults() {
+    searchResultsEl.innerHTML = "";
+    searchResultsEl.hidden = true;
+  }
+
+  function buildSearchGroup(title, items, labelFn, onPick) {
+    if (!items.length) return null;
+    const group = document.createElement("div");
+    group.className = "browse-search-group";
+    const heading = document.createElement("div");
+    heading.className = "browse-search-group-title";
+    heading.textContent = title;
+    group.appendChild(heading);
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "browse-search-result-row";
+      row.textContent = labelFn(item);
+      row.addEventListener("mousedown", (e) => e.preventDefault()); // input의 blur보다 클릭이 먼저 처리되게
+      row.addEventListener("click", () => {
+        onPick(item);
+        searchInput.value = "";
+        closeSearchResults();
+      });
+      group.appendChild(row);
+    });
+    return group;
+  }
+
+  function renderSearchResults(query) {
+    const result = searchAll(query);
+    searchResultsEl.innerHTML = "";
+    const groups = [
+      buildSearchGroup(
+        "곡",
+        result.tracks,
+        (t) => (t.artist ? `${t.title || t.track_id} — ${t.artist}` : t.title || t.track_id),
+        (t) => {
+          player.setPlaylist({ name: "검색 결과", tracks: result.tracks });
+          player.playIndex(result.tracks.indexOf(t));
+        }
+      ),
+      buildSearchGroup("앨범", result.albums, (a) => a.name || "(앨범 없음)", (a) => {
+        const group = groupAlbums(tracks, albums).find((g) => g.id === a.id);
+        if (group) openAlbumDetail(group);
+      }),
+      buildSearchGroup("서클", result.circles, (name) => name, (name) => openArtistAlbums(name)),
+      buildSearchGroup("아티스트", result.songArtists, (name) => name, (name) => openSongArtistDetail(name)),
+    ].filter(Boolean);
+
+    if (!groups.length) {
+      const empty = document.createElement("div");
+      empty.className = "browse-search-empty";
+      empty.textContent = "검색 결과가 없습니다.";
+      searchResultsEl.appendChild(empty);
+    } else {
+      groups.forEach((g) => searchResultsEl.appendChild(g));
+    }
+    searchResultsEl.hidden = false;
+  }
+
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim();
+    if (!q) {
+      closeSearchResults();
+      return;
+    }
+    store.ensureLoaded().then(() => renderSearchResults(q));
+  });
+  searchInput.addEventListener("focus", () => {
+    if (searchInput.value.trim()) renderSearchResults(searchInput.value.trim());
+  });
+  searchInput.addEventListener("blur", closeSearchResults);
+  // 한글 입력처럼 조합 중에는 input 이벤트가 아직 완성되지 않은 글자를 검색할
+  // 수 있으므로, 엔터로 입력을 마치면 그 시점의 값으로 결과를 다시 확실히 띄운다.
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const q = searchInput.value.trim();
+    if (q) store.ensureLoaded().then(() => renderSearchResults(q));
   });
 
   // -- 드래그로 순서 변경 (재생목록 화면과 동일한 SortableJS 인터페이스) ------

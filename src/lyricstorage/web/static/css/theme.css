@@ -332,10 +332,12 @@ textarea {
   background: var(--bg-elevated);
   color: var(--accent);
 }
-.sidebar-search-wrap {
+.browse-search-wrap {
   position: relative;
+  width: 260px;
+  flex: none;
 }
-.sidebar-search-input {
+.browse-search-input {
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -344,7 +346,7 @@ textarea {
   font-size: 13px;
   color: var(--text-primary);
 }
-.sidebar-search-results {
+.browse-search-results {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -358,14 +360,14 @@ textarea {
   overflow-y: auto;
   padding: 6px;
 }
-.sidebar-search-group-title {
+.browse-search-group-title {
   text-transform: uppercase;
   letter-spacing: 1px;
   font-size: 11px;
   color: var(--text-muted);
   padding: 6px 8px 2px;
 }
-.sidebar-search-result-row {
+.browse-search-result-row {
   padding: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
@@ -375,10 +377,10 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sidebar-search-result-row:hover {
+.browse-search-result-row:hover {
   background: #1f2330;
 }
-.sidebar-search-empty {
+.browse-search-empty {
   color: var(--text-muted);
   padding: 12px 8px;
   text-align: center;
@@ -1702,6 +1704,8 @@ textarea.file-content-body:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .today-panel-hint {
   margin: 0;

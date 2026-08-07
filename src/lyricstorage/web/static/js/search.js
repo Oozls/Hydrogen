@@ -2,9 +2,9 @@ import { store } from "./store.js";
 import { splitArtists, buildArtistNameResolver } from "./songArtist.js";
 
 // store.js의 캐시 위에서 곡/앨범/서클/곡아티스트 네 종류를 한 번에 훑는 통합
-// 검색. 브라우즈 화면의 탭별 검색(browse.js)은 "지금 보고 있는 탭 안에서 좁혀
-// 찾기"용으로 그대로 남겨두고, 이건 어느 탭에 있든 이름 하나로 네 종류를
-// 가로질러 찾을 수 있는 별도 진입점(사이드바)이다.
+// 검색. 브라우즈 화면의 탭별 필터(filterQuery/filterField)는 "지금 보고 있는
+// 탭 안에서 좁혀 찾기"용으로 그대로 남겨두고, 이건 브라우즈 헤더에서 어느
+// 탭에 있든 이름 하나로 네 종류를 가로질러 찾을 수 있는 별도 진입점이다.
 const RESULT_LIMIT = 8;
 
 export function searchAll(query) {

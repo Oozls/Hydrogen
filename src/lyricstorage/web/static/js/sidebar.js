@@ -1,7 +1,5 @@
 import { api } from "./api.js";
 import { fetchNonGlobalPlaylistNames } from "./playlistNames.js";
-import { store } from "./store.js";
-import { searchAll } from "./search.js";
 
 function fmtBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes < 0) return "-";
@@ -14,7 +12,7 @@ function fmtBytes(bytes) {
   return `${gb.toFixed(2)} GB`;
 }
 
-export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse, onGoStats, onGoToday, player, refs }) {
+export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse, onGoStats, onGoToday }) {
   const sidebarEl = document.getElementById("sidebar");
   const toggleBtn = document.getElementById("btn-sidebar-toggle");
   const backdrop = document.getElementById("sidebar-backdrop");
@@ -24,8 +22,6 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse
   const statsBtn = document.getElementById("btn-sidebar-stats");
   const todayBtn = document.getElementById("btn-sidebar-today");
   const dataSizeText = document.getElementById("sidebar-data-size-text");
-  const searchInput = document.getElementById("sidebar-search-input");
-  const searchResultsEl = document.getElementById("sidebar-search-results");
 
   let names = bootstrap.playlist_names.slice();
   let activeName = "__home__";
@@ -95,82 +91,6 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse
       onGoToday();
       closeDrawer();
     });
-  }
-
-  // 사이드바 검색: 곡/앨범/서클/곡아티스트를 한 번에 찾는 전역 검색. 브라우즈의
-  // 탭별 검색과 달리 어느 화면에 있든 항상 쓸 수 있고, 결과를 고르면 해당
-  // 화면으로 곧장 이동한다(곡은 검색 결과를 임시 재생목록 삼아 바로 재생).
-  function closeSearchResults() {
-    searchResultsEl.innerHTML = "";
-    searchResultsEl.hidden = true;
-  }
-
-  function buildSearchGroup(title, items, labelFn, onPick) {
-    if (!items.length) return null;
-    const group = document.createElement("div");
-    group.className = "sidebar-search-group";
-    const heading = document.createElement("div");
-    heading.className = "sidebar-search-group-title";
-    heading.textContent = title;
-    group.appendChild(heading);
-    items.forEach((item) => {
-      const row = document.createElement("div");
-      row.className = "sidebar-search-result-row";
-      row.textContent = labelFn(item);
-      row.addEventListener("mousedown", (e) => e.preventDefault()); // input의 blur보다 클릭이 먼저 처리되게
-      row.addEventListener("click", () => {
-        onPick(item);
-        searchInput.value = "";
-        closeSearchResults();
-        closeDrawer();
-      });
-      group.appendChild(row);
-    });
-    return group;
-  }
-
-  function renderSearchResults(query) {
-    const result = searchAll(query);
-    searchResultsEl.innerHTML = "";
-    const groups = [
-      buildSearchGroup(
-        "곡",
-        result.tracks,
-        (t) => (t.artist ? `${t.title || t.track_id} — ${t.artist}` : t.title || t.track_id),
-        (t) => {
-          player.setPlaylist({ name: "검색 결과", tracks: result.tracks });
-          player.playIndex(result.tracks.indexOf(t));
-        }
-      ),
-      buildSearchGroup("앨범", result.albums, (a) => a.name || "(앨범 없음)", (a) => refs.router.goAlbumDetail(a.id)),
-      buildSearchGroup("서클", result.circles, (name) => name, (name) => refs.router.goBrowseAlbums(name)),
-      buildSearchGroup("곡 아티스트", result.songArtists, (name) => name, (name) => refs.router.goSongArtistDetail(name)),
-    ].filter(Boolean);
-
-    if (!groups.length) {
-      const empty = document.createElement("div");
-      empty.className = "sidebar-search-empty";
-      empty.textContent = "검색 결과가 없습니다.";
-      searchResultsEl.appendChild(empty);
-    } else {
-      groups.forEach((g) => searchResultsEl.appendChild(g));
-    }
-    searchResultsEl.hidden = false;
-  }
-
-  if (player && refs) {
-    searchInput.addEventListener("input", () => {
-      const q = searchInput.value.trim();
-      if (!q) {
-        closeSearchResults();
-        return;
-      }
-      store.ensureLoaded().then(() => renderSearchResults(q));
-    });
-    searchInput.addEventListener("focus", () => {
-      if (searchInput.value.trim()) renderSearchResults(searchInput.value.trim());
-    });
-    searchInput.addEventListener("blur", closeSearchResults);
   }
 
   render();
