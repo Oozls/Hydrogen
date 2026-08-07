@@ -23,6 +23,17 @@ export function buildAutocomplete(inputEl, listEl, getValues) {
     highlighted = -1;
   }
 
+  // <dialog>는 내용이 넘치면 자기 자신을 스크롤하는 UA 기본 동작이 있어서,
+  // 목록을 dialog 안에서 position:absolute로 두면 다이얼로그 크기에 잘려
+  // 스크롤해야만 보인다. position:fixed + 뷰포트 좌표로 직접 배치하면
+  // dialog의 overflow 클리핑을 벗어나 화면 위에 그대로 뜬다.
+  function position() {
+    const rect = inputEl.getBoundingClientRect();
+    listEl.style.left = `${rect.left}px`;
+    listEl.style.top = `${rect.bottom}px`;
+    listEl.style.width = `${rect.width}px`;
+  }
+
   function select(value) {
     inputEl.value = value;
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
@@ -42,6 +53,7 @@ export function buildAutocomplete(inputEl, listEl, getValues) {
       hide();
       return;
     }
+    position();
     matches.forEach((value, i) => {
       const li = document.createElement("li");
       li.className = "picker-row";

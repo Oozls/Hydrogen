@@ -1489,10 +1489,7 @@ textarea.file-content-body:disabled {
   color: var(--text-secondary);
 }
 .autocomplete-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+  position: fixed;
   margin: 2px 0 0;
   padding: 4px;
   list-style: none;
@@ -1592,6 +1589,7 @@ textarea.file-content-body:disabled {
   color: #e5484d;
 }
 .artist-alias-add-row {
+  position: relative;
   display: flex;
   gap: 6px;
   margin-top: 6px;

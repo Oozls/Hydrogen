@@ -790,10 +790,15 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   function closeAlbumDetail() {
+    const artist = currentAlbumGroup ? currentAlbumGroup.artist : "";
     albumDetailPanel.classList.remove("active");
-    albumsPanel.classList.add("active");
     currentAlbumGroup = null;
-    if (refs && refs.router) refs.router.setUrl("/browse/albums");
+    if (artist) {
+      openArtistAlbums(artist);
+    } else {
+      albumsPanel.classList.add("active");
+      if (refs && refs.router) refs.router.setUrl("/browse/albums");
+    }
   }
 
   function buildAlbumCard(group) {

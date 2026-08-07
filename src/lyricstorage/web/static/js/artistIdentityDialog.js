@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { alertDialog } from "./dialog.js";
 import { splitArtists } from "./songArtist.js";
+import { buildAutocomplete } from "./autocomplete.js";
 
 // 정체성(대표 이름 + 이명)을 수정하는 다이얼로그(#artist-info-dialog)는 재생
 // 통계 '곡 아티스트' 탭, 브라우즈 '곡 아티스트' 탭, 브라우즈 '아티스트'(서클) 탭이
@@ -30,6 +31,9 @@ export function setupArtistIdentityDialog() {
   let onChange = null;
   let getTracks = null;
   let endpoints = ARTIST_ENDPOINTS;
+  let aliasCandidates = [];
+
+  const aliasAutocomplete = buildAutocomplete(aliasInput, suggestionsEl, () => aliasCandidates);
 
   function renderChips() {
     aliasesEl.innerHTML = "";
@@ -68,14 +72,7 @@ export function setupArtistIdentityDialog() {
         if (!known.has(name)) names.add(name);
       }
     }
-    suggestionsEl.innerHTML = "";
-    [...names]
-      .sort((a, b) => a.localeCompare(b, "ko"))
-      .forEach((name) => {
-        const option = document.createElement("option");
-        option.value = name;
-        suggestionsEl.appendChild(option);
-      });
+    aliasCandidates = [...names].sort((a, b) => a.localeCompare(b, "ko"));
   }
 
   aliasAddBtn.addEventListener("click", async () => {
@@ -85,6 +82,7 @@ export function setupArtistIdentityDialog() {
       identity = await endpoints.addAlias(identity.id, alias);
       onChange(identity);
       aliasInput.value = "";
+      aliasAutocomplete.hide();
       renderChips();
       populateSuggestions();
     } catch (err) {
@@ -127,6 +125,7 @@ export function setupArtistIdentityDialog() {
       titleEl.textContent = title || "아티스트 정보 수정";
       nameInput.value = identity.name;
       aliasInput.value = "";
+      aliasAutocomplete.hide();
       renderChips();
       populateSuggestions();
       dialog.showModal();
