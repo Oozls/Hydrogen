@@ -1,5 +1,3 @@
-const MAX_SUGGESTIONS = 8;
-
 export function distinctValues(tracks, field) {
   const seen = new Set();
   const values = [];
@@ -46,7 +44,6 @@ export function buildAutocomplete(inputEl, listEl, getValues) {
     if (matches.length === 1 && matches[0].toLowerCase() === query) {
       matches = [];
     }
-    matches = matches.slice(0, MAX_SUGGESTIONS);
 
     listEl.innerHTML = "";
     if (!matches.length) {
