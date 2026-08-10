@@ -44,6 +44,11 @@ def get_recent():
     return jsonify({"items": stats.recent_tracks(limit, tracks=tracks)})
 
 
+@bp.get("/track/<track_id>/totals")
+def get_track_totals(track_id):
+    return jsonify(stats.track_totals(track_id))
+
+
 @bp.get("/top")
 def get_top():
     period = request.args.get("period", "day")

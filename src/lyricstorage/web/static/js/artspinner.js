@@ -21,6 +21,10 @@ export function buildArtEl(trackId, wrapClass) {
   const img = document.createElement("img");
   img.alt = "";
   img.loading = "lazy";
+  // 브라우저 기본 이미지 드래그(고스트 썸네일이 붙는 그 동작)를 꺼둔다 —
+  // 켜져 있으면 커버 아트를 누른 채 살짝만 움직여도 우리 pointer 기반
+  // 드래그(재생 대기 CD 스크럽 등)보다 먼저 네이티브 드래그가 가로채간다.
+  img.draggable = false;
   img.src = api.artUrl(trackId);
   img.onload = () => stopSpin();
   img.onerror = () => {

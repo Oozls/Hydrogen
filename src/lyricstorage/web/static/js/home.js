@@ -53,7 +53,14 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
       card.appendChild(albumClip);
     }
 
-    card.addEventListener("click", () => startRecommendQueue(player, item));
+    // /api/stats/recent가 주는 항목은 title/artist/album 등 표시용 필드만
+    // 있고 rating/duration_ms/has_lyrics가 없다 — 이 항목을 그대로 재생하면
+    // 재생바가 "이 트랙엔 값이 없다"로 읽어 레이팅 하트가 항상 비어 보인다.
+    // 라이브러리에 아직 있는 곡이면 거기서 전체 필드를 가진 사본을 찾아 쓴다.
+    card.addEventListener("click", () => {
+      const live = store.getTracks().find((t) => t.track_id === item.track_id);
+      startRecommendQueue(player, live || item);
+    });
     return card;
   }
 

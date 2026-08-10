@@ -107,7 +107,11 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPlayTracking(player);
   setupRating(player);
   setupQueueEngine(player);
-  setupExpandedPlayer(player, { onOpen: () => sidebarApi.closeDrawer() });
+  setupExpandedPlayer(player, {
+    onOpen: () => sidebarApi.closeDrawer(),
+    onOpenAlbum: openAlbumFromTrack,
+    onOpenArtist: openArtistFromTrack,
+  });
   const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistFromTrack, refs);
   const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack);
   const todaySongsApi = setupTodaySongs(

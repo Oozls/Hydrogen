@@ -622,7 +622,6 @@ select#today-limit-select {
 }
 .playlist-row-album-link:hover {
   color: var(--accent);
-  text-decoration: underline;
 }
 .playlist-row-artist {
   flex: 0 1 150px;
@@ -636,7 +635,6 @@ select#today-limit-select {
 }
 .playlist-row-artist-link:hover {
   color: var(--accent);
-  text-decoration: underline;
 }
 .playlist-row-duration {
   flex: 0 0 40px;
@@ -2225,53 +2223,193 @@ textarea.file-content-body:disabled {
   padding: 40px;
 }
 .expanded-player-detail {
-  flex: 1 1 40%;
+  flex: 1 1 46%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 28px;
   min-width: 0;
 }
-.expanded-player-art {
-  width: min(440px, 70%);
+.expanded-player-cd-stage {
+  position: relative;
+  width: min(380px, 62%);
   aspect-ratio: 1;
-  border-radius: 12px;
+  cursor: grab;
+  /* 터치 화면에서 브라우저 기본 스크롤/줌 제스처가 드래그와 경합하지 않게
+     막고, 빠르게 끌 때 안의 글자/이미지가 선택되지 않게 한다. */
+  touch-action: none;
+  user-select: none;
+}
+.expanded-player-cd-stage.dragging {
+  cursor: grabbing;
+}
+/* 대기 목록의 이전/다음 곡 CD가 -2..2 다섯 칸에 겹쳐 보인다. 자리(translateX)와
+   크기(scale)는 expanded-player.js가 매 프레임(rAF) 직접 계산해 인라인
+   transform으로 써넣는다 — 곡이 바뀔 때 화면 밖으로 밀려나는 디스크도 처음
+   부터 같은 연속 트윈에 참여시켜, 계단 없이 한 번에 부드럽게 움직이고 중앙을
+   스쳐 지나가는 디스크는 그 순간 자동으로 커졌다 작아진다(그 로직 참고).
+   여기(CSS)엔 일부러 transition을 두지 않는다 — 있으면 매 프레임 JS가 쓰는
+   transform 값을 또 한 번 지연시켜 두 번 겹친 느린 움직임(끈적임)이 된다.
+   드래그가 손가락을 1:1로 따라가야 하는 것도 같은 이유. 센터 홀/유광
+   하이라이트는 회전판과 별개로 무대 중앙에 고정해 두는 오버레이라, 어느
+   디스크가 중앙에 와도 항상 그 위에 그려진다. */
+.expanded-player-cd-disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   overflow: hidden;
   background: var(--bg-elevated);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.45),
+    0 0 0 6px rgba(255, 255, 255, 0.05),
+    0 0 0 7px rgba(0, 0, 0, 0.55);
 }
-.expanded-player-art-inner {
+.expanded-player-cd-disc:not(.is-current):hover {
+  filter: brightness(1.18);
+}
+@keyframes cd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 회전은 위치/크기를 담당하는 인라인 transform과 같은 속성(transform)을
+   놓고 경합하므로, 슬라이드 도중에는 절대 붙어 있으면 안 된다 — 자리를
+   완전히 잡고 멈춘 뒤(.spinning은 expanded-player.js가 트랜지션이 끝난
+   중앙 디스크에만, 그것도 재생 중일 때만 붙인다)에만 켠다. */
+.expanded-player-cd-disc.spinning {
+  animation: cd-spin 16s linear infinite;
+}
+.expanded-player-cd-inner {
   width: 100%;
   height: 100%;
 }
-.expanded-player-art img {
+.expanded-player-cd-disc img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  -webkit-user-drag: none;
 }
-.expanded-player-title {
-  /* .expanded-player-art가 position:relative라 그 box-shadow가 "포지션드
-     요소" 페인트 단계에서 뒤에 그려져, static인 텍스트를 DOM 순서와 무관하게
-     덮어버린다. 텍스트도 position:relative를 줘서 같은 단계에 넣어야
-     DOM 순서(아트 다음)대로 그 위에 그려진다. */
+.expanded-player-cd-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 200deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.12) 35deg,
+    transparent 90deg,
+    transparent 250deg,
+    rgba(255, 255, 255, 0.07) 300deg,
+    transparent 345deg
+  );
+  pointer-events: none;
+}
+.expanded-player-cd-hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 13%;
+  height: 13%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--bg-base);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.5),
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  z-index: 20;
+  pointer-events: none;
+}
+.expanded-player-info {
+  /* .expanded-player-cd-stage 안 디스크들이 position:absolute + box-shadow라,
+     같은 이유로 이 텍스트 블록도 position:relative를 줘야 DOM 순서대로 그
+     위에 그려진다. */
   position: relative;
-  font-size: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: min(360px, 88%);
+  gap: 4px;
+}
+/* 제목/아티스트/앨범 줄은 곡마다 내용이 있다 없다 하는데(앨범명이 없는 곡,
+   circle이 곡 아티스트와 같아 안 보이는 경우 등), 비어서 줄 자체가 접히면
+   그 아래(정보 블록)의 전체 높이가 곡마다 달라진다. .expanded-player-detail이
+   CD+정보 블록을 통째로 justify-content:center로 세로 가운데 정렬하고
+   있어서, 이 높이가 흔들리면 CD 자리도 같이 위아래로 흔들린다. 내용이 있을
+   때의 한 줄 높이를 비어 있을 때도 그대로 예약해 둔다(.expanded-player-stats의
+   min-height와 같은 이유). */
+#expanded-player-title {
+  min-height: 28px;
+}
+#expanded-player-artist {
+  min-height: 19px;
+}
+#expanded-player-album {
+  min-height: 18px;
+}
+/* 제목/아티스트/앨범명은 각각 마퀴 스크롤 clip(span)을 감싸는 얇은 wrapper이고,
+   실제 타이포그래피는 그 안쪽 -clip 클래스가 맡는다 — .expanded-queue-row-title
+   등 곡 행 마퀴와 동일한 구조. wrapper는 .expanded-player-info의 flex 자식으로
+   폭이 채워지고, -clip에 준 display:block이 그 폭을 그대로 물려받아야 마퀴가
+   넘침 여부를 정확히 판단할 수 있다. */
+.expanded-player-title-clip {
+  display: block;
+  font-size: 21px;
   font-weight: 700;
   text-align: center;
 }
-.expanded-player-subtitle {
-  position: relative;
-  font-size: 15px;
+.expanded-player-artist-clip {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-secondary);
   text-align: center;
 }
+.expanded-player-circle {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  cursor: pointer;
+}
+.expanded-player-circle:hover {
+  color: var(--accent);
+}
+/* 서클명이 곡 아티스트와 같아서 보여줄 게 없을 때도, hidden(display:none)
+   대신 이 클래스로 숨긴다 — display:none은 줄 자체를 접어 CD 높이가 곡마다
+   흔들리게 만든다(위 #expanded-player-title 주석 참고). */
+.expanded-player-circle.is-empty {
+  visibility: hidden;
+  cursor: default;
+  pointer-events: none;
+}
+.expanded-player-album-clip {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.expanded-player-stats {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  /* 총 재생 횟수/시간은 트랙이 바뀔 때마다 서버에 물어봐야 해서 잠깐 비어
+     있는 구간이 생긴다. min-height가 없으면 그 순간 이 줄이 찌부러졌다가
+     응답이 오면 다시 늘어나면서, 위(justify-content:center)로 정렬된 CD+정보
+     블록 전체가 눈에 띄게 출렁였다. 채워졌을 때의 높이(아이콘/글자 한 줄)를
+     비어 있을 때도 그대로 예약해 둔다. */
+  min-height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .expanded-player-queue {
-  flex: 1 1 60%;
+  flex: 1 1 54%;
   /* .expanded-player-body의 기본 align-items:stretch를 끄고, 곡 수만큼만
      높이를 차지하게 한다 — 그렇지 않으면 대기 목록이 짧을 때도 패널 전체
      높이만큼 늘어나 아래에 배경만 남은 빈 공간이 비대칭적으로 남는다.
@@ -2336,13 +2474,22 @@ textarea.file-content-body:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 아티스트명/앨범명을 각각 상세 페이지로 이동하는 별도 클립으로 나눈다
+   (buildArtistCell/앨범 클릭은 playlist.js 등 다른 목록과 동일한 패턴) —
+   그래서 하나로 합친 문자열이 아니라 두 조각 + 가운데점 구분자로 구성된다.
+   min-width:0을 줘야 flex 자식으로서 실제로 줄어들며 각자 말줄임/마퀴가 붙는다. */
 .expanded-queue-row-subtitle {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
   font-size: 12px;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.expanded-queue-row-artist,
+.expanded-queue-row-album {
+  display: block;
+  min-width: 0;
 }
 
 /* 아티스트 탭(브라우즈/재생 통계 공용): 앨범 커버 최대 4개로 채운 콜라주.
