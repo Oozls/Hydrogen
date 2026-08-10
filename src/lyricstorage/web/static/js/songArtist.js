@@ -60,3 +60,17 @@ export function buildArtistNameResolver(artists) {
   }
   return (name) => lookup.get(name) || name;
 }
+
+// 서클명과 곡 아티스트명이 같은 경우, 서클을 우선한다 — 이 함수는 이름(대표
+// 이름 또는 별칭)이 서클 레지스트리에 등록돼 있는지 확인한다. 못 찾으면
+// buildArtistNameResolver처럼 입력값을 그대로 돌려주지 않고 null을 돌려준다 —
+// 여기선 "서클이 맞는지"를 구분해야 호출부가 곡 아티스트 쪽 로직을 계속 탈지
+// 서클 쪽으로 넘길지 판단할 수 있다.
+export function buildCircleNameFinder(circles) {
+  const lookup = new Map();
+  for (const circle of circles) {
+    lookup.set(circle.name, circle.name);
+    for (const alias of circle.aliases) lookup.set(alias, circle.name);
+  }
+  return (name) => lookup.get(name) || null;
+}

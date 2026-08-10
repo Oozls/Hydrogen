@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 
-  const refs = { router: null, pendingAlbumFocus: null, pendingArtistFocus: null };
+  const refs = { router: null, pendingAlbumFocus: null };
   const identityDialogApi = setupArtistIdentityDialog();
 
   // 재생바/재생 통계에서 앨범명을 클릭하면 브라우즈 > 앨범 탭으로 이동해 그
@@ -45,13 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function openAlbumFromTrack(track) {
     if (!track || !track.album) return;
     refs.pendingAlbumFocus = { track_id: track.track_id, album: track.album, artist: track.artist };
-    refs.router.goBrowse();
-  }
-
-  // 재생 통계 '아티스트'(앨범 아티스트) 탭 카드를 클릭하면 브라우즈 > 앨범
-  // 탭으로 건너가 그 아티스트명으로 검색해둔 상태를 보여준다.
-  function openArtistAlbumsFromStats(artistName) {
-    refs.pendingArtistFocus = artistName;
     refs.router.goBrowse();
   }
 
@@ -115,7 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupRating(player);
   setupQueueEngine(player);
   setupExpandedPlayer(player, { onOpen: () => sidebarApi.closeDrawer() });
-  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistAlbumsFromStats, openArtistFromTrack, refs);
+  const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistFromTrack, refs);
   const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack);
   const todaySongsApi = setupTodaySongs(
     bootstrap,
@@ -202,9 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
       todaySongsApi.hide();
       const focus = refs.pendingAlbumFocus;
       refs.pendingAlbumFocus = null;
-      const artistFocus = refs.pendingArtistFocus;
-      refs.pendingArtistFocus = null;
-      browseApi.show(route, focus, artistFocus);
+      browseApi.show(route, focus);
       sidebarApi.setActive("__browse__");
       sidebarApi.refreshDataSize();
     },

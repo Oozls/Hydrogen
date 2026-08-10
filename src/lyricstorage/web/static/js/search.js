@@ -37,7 +37,10 @@ export function searchAll(query) {
       if (name) songArtistNames.add(name);
     }
   }
+  // 서클명과 같은 곡 아티스트명은 서클 쪽에만 뜨게 하고 곡 아티스트 검색
+  // 결과에서는 뺀다(브라우즈의 곡 아티스트 탭과 동일한 기준).
   const songArtistsMatch = [...songArtistNames]
+    .filter((name) => !circleNames.has(name))
     .filter((name) => name.toLowerCase().includes(q))
     .slice(0, RESULT_LIMIT);
 

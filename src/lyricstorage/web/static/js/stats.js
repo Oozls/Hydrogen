@@ -62,7 +62,7 @@ function createRatingBadge(rating) {
 const VALID_PERIODS = ["day", "week", "month"];
 const VALID_GROUPS = ["track", "circle", "artist", "album"];
 
-export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistAlbums, onOpenArtist, refs) {
+export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist, refs) {
   const panelEl = document.getElementById("stats-panel");
   const periodTabs = document.getElementById("stats-period-tabs");
   const groupTabs = document.getElementById("stats-group-tabs");
@@ -83,6 +83,12 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   const artistDetailListEl = document.getElementById("stats-artist-detail-list");
   const artistDetailBackBtn = document.getElementById("btn-stats-artist-detail-back");
   const artistDetailEditBtn = document.getElementById("btn-stats-artist-detail-edit");
+  const circleDetailPanel = document.getElementById("stats-circle-detail-panel");
+  const circleDetailTitleEl = document.getElementById("stats-circle-detail-title");
+  const circleDetailAliasesEl = document.getElementById("stats-circle-detail-aliases");
+  const circleDetailListEl = document.getElementById("stats-circle-detail-list");
+  const circleDetailBackBtn = document.getElementById("btn-stats-circle-detail-back");
+  const circleDetailEditBtn = document.getElementById("btn-stats-circle-detail-edit");
 
   let period = "day";
   let group = "track";
@@ -109,6 +115,9 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   // 이명/대표 이름을 바꾼 채로 상세 화면에서 뒤로 가면, 아티스트 순위 목록도
   // 옛 이름 기준으로 남아있지 않도록 한 번 더 새로고침한다.
   let artistIdentityDirty = false;
+  // 서클 상세 화면에 지금 열려 있는 정체성 — 아티스트 상세와 동일한 패턴.
+  let circleDetailIdentity = null;
+  let circleIdentityDirty = false;
 
   // 곡 아티스트별 소속 앨범 맵을 새로 계산한다(아티스트 카드 콜라주/상세 화면
   // 공용). 라이브러리 스냅샷 전체가 필요하므로 아티스트 그룹을 볼 때만 부른다.
@@ -139,6 +148,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
   async function refresh() {
     closeArtistDetail();
+    closeCircleDetail();
     const isCatalog = group === "circle";
     const isTrack = group === "track";
     // 기간/분류 탭을 바꾸는 동안 이전 화면이 잠깐 그대로 멈춰 있는 것처럼 보이는
@@ -508,8 +518,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
   }
 
   // '아티스트' 탭(앨범 아티스트) 카드 — 브라우즈 아티스트 탭과 똑같은 디자인
-  // (콜라주 아트 + 앨범 개수)이지만, 클릭하면 재생 순위가 아니라 브라우즈의
-  // 앨범 탭으로 건너가 그 아티스트로 필터링된 앨범 목록을 보여준다.
+  // (콜라주 아트 + 앨범 개수)이며, 클릭하면 곡 아티스트 상세와 동일하게 이
+  // 화면 안에서 서클 상세(그 서클의 앨범 목록)를 연다.
   function buildAlbumArtistCard(entry) {
     const card = document.createElement("div");
     card.className = "media-card media-card-clickable";
@@ -530,7 +540,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
     meta.textContent = `앨범 ${entry.albums.length}개 · ${entry.count}회 · ${Math.round(entry.listened_ms / 60000)}분`;
     card.appendChild(meta);
 
-    card.addEventListener("click", () => onOpenArtistAlbums && onOpenArtistAlbums(entry.name));
+    card.addEventListener("click", () => openCircleDetail(entry.name));
     return card;
   }
 
@@ -731,6 +741,130 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
 
   artistDetailBackBtn.addEventListener("click", closeArtistDetail);
 
+  // 서클(앨범 아티스트) 정체성 편집은 곡 아티스트와 같은 다이얼로그를 재사용하되,
+  // API만 circles.js 쪽으로 갈아 끼운다(브라우즈의 서클 편집과 동일한 패턴).
+  const CIRCLE_ENDPOINTS = {
+    rename: (id, name) => api.renameCircle(id, name),
+    addAlias: (id, alias) => api.addCircleAlias(id, alias),
+    removeAlias: (id, alias) => api.removeCircleAlias(id, alias),
+  };
+
+  function buildCircleDetailAlbumCard(album, trackCount) {
+    const card = document.createElement("div");
+    card.className = "media-card media-card-clickable";
+    card.title = "앨범 보기";
+
+    const artWrap = document.createElement("div");
+    artWrap.className = "media-card-art-wrap";
+    const stopSpin = showArtSpinner(artWrap);
+    const img = document.createElement("img");
+    img.className = "media-card-art";
+    img.alt = "";
+    img.src = api.albumArtUrl(album.id);
+    img.onload = () => stopSpin();
+    img.onerror = () => {
+      stopSpin();
+      img.remove();
+      artWrap.appendChild(iconSpan("music", "icon-lg"));
+    };
+    artWrap.appendChild(img);
+    card.appendChild(artWrap);
+
+    card.appendChild(createMarqueeClip("media-card-title", "", album.name || "(앨범 없음)"));
+
+    const meta = document.createElement("div");
+    meta.className = "media-card-meta";
+    meta.textContent = `${trackCount}곡`;
+    card.appendChild(meta);
+
+    // 앨범 id 없이 앨범명+아티스트명만으로도 브라우즈의 앨범 상세를 찾을 수
+    // 있다(TOP 3 앨범 카드와 동일한 방식) — track_id는 그냥 없다고 넘긴다.
+    card.addEventListener("click", () => onOpenAlbum({ album: album.name, artist: album.artist, track_id: null }));
+    return card;
+  }
+
+  // identity(대표 이름 + 이명)에 속한 모든 서클 표기와 일치하는 앨범을 모아
+  // 상세 화면을 그린다 — 곡 아티스트 상세와 동일하게 기간과 무관하게 카탈로그
+  // 전체에서 뽑는다(재생 순위가 아니라 그 서클의 전체 앨범을 훑어보는 화면).
+  function renderCircleDetailFromLibrary(albums, tracks, identity) {
+    const matchNames = new Set([identity.name, ...identity.aliases]);
+    const matched = albums.filter((a) => matchNames.has(a.artist || ""));
+    matched.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+
+    const trackCountByAlbumId = new Map();
+    for (const t of tracks) {
+      if (!t.album_id) continue;
+      trackCountByAlbumId.set(t.album_id, (trackCountByAlbumId.get(t.album_id) || 0) + 1);
+    }
+
+    circleDetailTitleEl.textContent = identity.name || "(서클 없음)";
+    circleDetailAliasesEl.textContent = identity.aliases.length ? `이명: ${identity.aliases.join(", ")}` : "";
+    circleDetailEditBtn.hidden = !identity.id;
+    circleDetailListEl.innerHTML = "";
+    if (!matched.length) {
+      const empty = document.createElement("div");
+      empty.className = "stats-empty";
+      empty.textContent = "앨범을 찾을 수 없습니다.";
+      circleDetailListEl.appendChild(empty);
+    } else {
+      matched.forEach((album) =>
+        circleDetailListEl.appendChild(buildCircleDetailAlbumCard(album, trackCountByAlbumId.get(album.id) || 0))
+      );
+    }
+  }
+
+  // 서클 카드를 클릭하면, 그 서클의 모든 앨범(등록된 이명 포함)을 상세 화면으로
+  // 보여준다. 곡 아티스트 상세(openArtistDetail)와 동일한 구조.
+  async function openCircleDetail(circleName) {
+    const isPlaceholder = !circleName || circleName === "(서클 없음)";
+    const [identity] = await Promise.all([
+      isPlaceholder ? Promise.resolve({ id: null, name: circleName || "", aliases: [] }) : api.resolveCircle(circleName),
+      store.ensureLoaded(),
+    ]);
+    circleDetailIdentity = identity;
+    renderCircleDetailFromLibrary(store.getAlbums(), store.getTracks(), identity);
+
+    listEl.style.display = "none";
+    circleDetailPanel.hidden = false;
+    requestAnimationFrame(() => applyMarquee(circleDetailListEl));
+  }
+
+  // 이명 편집 다이얼로그를 닫은 뒤(이름/이명이 바뀌었을 수 있음) 앨범 목록을
+  // 최신 정체성 기준으로 다시 매칭해서 보여준다.
+  async function refreshCircleDetailAfterEdit() {
+    if (!circleDetailIdentity || circleDetailPanel.hidden) return;
+    await store.ensureLoaded();
+    renderCircleDetailFromLibrary(store.getAlbums(), store.getTracks(), circleDetailIdentity);
+    requestAnimationFrame(() => applyMarquee(circleDetailListEl));
+  }
+
+  function closeCircleDetail() {
+    if (circleDetailPanel.hidden) return;
+    circleDetailPanel.hidden = true;
+    circleDetailIdentity = null;
+    if (group !== "track") listEl.style.display = "";
+    if (circleIdentityDirty) {
+      circleIdentityDirty = false;
+      refresh();
+    }
+  }
+
+  circleDetailEditBtn.addEventListener("click", () => {
+    if (!circleDetailIdentity || !circleDetailIdentity.id) return;
+    identityDialogApi.open(circleDetailIdentity, {
+      title: "서클 정보 수정",
+      endpoints: CIRCLE_ENDPOINTS,
+      getTracks: () => store.getAlbums().filter((a) => a.artist).map((a) => ({ artist: a.artist })),
+      onChange: (updated) => {
+        circleDetailIdentity = updated;
+        circleIdentityDirty = true;
+      },
+      onClose: refreshCircleDetailAfterEdit,
+    });
+  });
+
+  circleDetailBackBtn.addEventListener("click", closeCircleDetail);
+
   // 지금 보고 있는 기간/분류를 주소창에 반영한다(브라우즈 탭처럼 다른 화면
   // 진입/상태 변경이 매번 새 히스토리 항목을 쌓지 않도록 setUrl만 사용).
   function syncUrl() {
@@ -786,6 +920,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtistA
       if (!artistDetailPanel.hidden) {
         applyColumnPriority(artistDetailListEl);
         applyMarquee(artistDetailListEl);
+      } else if (!circleDetailPanel.hidden) {
+        applyMarquee(circleDetailListEl);
       } else if (group === "track") {
         applyColumnPriority(trackListEl);
         applyMarquee(trackListEl);

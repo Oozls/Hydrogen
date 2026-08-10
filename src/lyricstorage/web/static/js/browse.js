@@ -12,7 +12,7 @@ import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { fillArtistArt } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
-import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
+import { splitArtists, buildArtistNameResolver, buildCircleNameFinder, buildArtistCell } from "./songArtist.js";
 import { searchAll } from "./search.js";
 
 function fmtDuration(ms) {
@@ -949,6 +949,22 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
   }
 
+  // 지금 실제 존재하는 서클 이름 전체 — circlesRegistry는 이명 등록/개명이 있었던
+  // 서클만 담고 있어서, 한 번도 안 건드린(그냥 앨범 아티스트 그대로인) 서클은
+  // 빠져 있다. renderArtists와 동일하게 앨범에서 직접 뽑아야 전체 목록이 된다.
+  function getCircleNames() {
+    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
+    return new Set(albums.map((a) => resolveCircleName(a.artist || "")));
+  }
+
+  // 이름(또는 그 이명)이 서클과 겹치면 그 서클의 대표 이름을, 아니면 null을
+  // 돌려준다. 서클명과 곡 아티스트명이 같을 때 서클을 우선하기 위한 판정이다.
+  function matchCircleName(name) {
+    const circleNames = getCircleNames();
+    if (circleNames.has(name)) return name;
+    return buildCircleNameFinder(circlesRegistry)(name);
+  }
+
   // 아티스트 탭은 곡 아티스트가 아니라 '앨범 아티스트'(Album.artist, 서클) 기준으로
   // 묶는다 — 앨범 안의 개별 곡 아티스트가 달라도 여기엔 앨범 아티스트만 나온다.
   // 서클 이명 레지스트리로 표기가 다른 같은 서클을 하나로 합쳐서 묶는다(곡
@@ -1031,6 +1047,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       count: e.count,
       albums: [...e.albumIds].map((id) => albumById.get(id)).filter(Boolean),
     }));
+    // 서클명과 같은 곡 아티스트명은 서클 탭에만 나오게 하고 여기선 뺀다.
+    entries = entries.filter((e) => !matchCircleName(e.name));
     entries = entries.filter((e) => !q || e.name.toLowerCase().includes(q));
     entries.sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
@@ -1101,6 +1119,15 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 이름 해석은 비동기(API 호출)라, 그 사이엔 어느 목록 패널도 새로 보여주지
   // 않고(이미 보이던 화면 그대로 유지) 해석이 끝나는 순간 한 번에 상세로 바꾼다.
   async function openSongArtistDetail(name) {
+    // 서클명과 같은 곡 아티스트명을 클릭한 경우 곡 아티스트 상세 대신 서클
+    // 쪽으로 보낸다 — nowplaying/재생목록/재생 통계/홈 등 다른 화면의 아티스트명
+    // 클릭도 전부 이 함수를 거쳐 라우팅되므로, 여기 한 곳만 고치면 된다.
+    const canonicalArtistName = buildArtistNameResolver(artistsRegistry)(name);
+    const circleName = matchCircleName(canonicalArtistName) || matchCircleName(name);
+    if (circleName) {
+      openArtistAlbums(circleName);
+      return;
+    }
     mode = "song-artist";
     [...tabsEl.children].forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
     normalizeFilterField();
@@ -1637,18 +1664,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // 경쟁 상태가 생기지 않는다. track_id를 우선 매칭하되, 재생 기록처럼 그
     // 트랙이 더 이상 라이브러리에 없을 수 있는 경우를 대비해 album+artist로도
     // 매칭한다.
-    // artistFocus(아티스트 이름 문자열)를 넘기면(재생 통계 '아티스트' 탭 카드
-    // 클릭 등) 앨범 탭으로 들어가 그 아티스트명으로 검색해둔 상태를 보여준다 —
-    // openArtistAlbums과 동일한 진입점을 외부에도 열어주는 것뿐이다.
     // route는 라우터가 해석한 현재 URL(/browse/... 의 mode/albumId/songArtistName/
     // artistFilter)이다 — 직접 접속/새로고침/뒤로가기처럼 URL 자체가 진입점일 때
-    // 그 상태를 그대로 복원한다. focus/artistFocus는 기존처럼 다른 화면(재생바
-    // 앨범명, 재생 통계 아티스트 카드 등)에서 넘어온 "다음 브라우즈 진입 시
-    // 열어야 할 대상"이며, 아직 앨범 id/정확한 이름을 모르는 채로(track_id/
-    // album/artist 문자열만 갖고) 넘어오므로 URL만으로는 표현할 수 없어
+    // 그 상태를 그대로 복원한다. focus는 기존처럼 다른 화면(재생바 앨범명 등)에서
+    // 넘어온 "다음 브라우즈 진입 시 열어야 할 대상"이며, 아직 앨범 id를 모르는 채로
+    // (track_id/album/artist 문자열만 갖고) 넘어오므로 URL만으로는 표현할 수 없어
     // 여전히 refs의 임시 필드로 전달받는다. 화면이 열리면 그 즉시 실제 위치에
     // 맞는 URL로 주소창을 맞춘다(각 함수 안의 setUrl 호출).
-    async show(route, focus, artistFocus) {
+    async show(route, focus) {
       panelEl.classList.add("active");
       filterQuery = "";
       filterField = "all";
@@ -1657,9 +1680,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       // 목표 탭을 먼저 정해서 지금 있는 캐시로(콜드 스타트라 비어있어도) 즉시
       // 그린다 — 예전엔 fetch가 끝난 뒤에야 탭을 정해서, 그동안 직전 탭(주로
       // 기본값인 "아티스트" 탭)이 목적지와 무관하게 잠깐 보이는 버그가 있었다.
-      if (artistFocus) {
-        openArtistAlbums(artistFocus);
-      } else if (route && route.mode === "album" && route.artistFilter) {
+      if (route && route.mode === "album" && route.artistFilter) {
         openArtistAlbums(route.artistFilter);
       } else if (route && route.songArtistName) {
         // openSongArtistDetail 스스로 목록 화면을 거치지 않고 곧장 상세로
