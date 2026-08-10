@@ -1,4 +1,4 @@
-# Lyric Storage
+# Hydrogen
 
 MP3 플레이어. 플레이리스트 관리와, 가사 텍스트에 타임스탬프를 직접 입력해 동기화하는 가사 편집 기능이 특징입니다. 저장 포맷은 표준 `.lrc`라 다른 플레이어와도 호환됩니다. 아이콘은 전부 [Feather Icons](https://feathericons.com)를 사용합니다. Flask로 만든 웹 앱입니다.
 

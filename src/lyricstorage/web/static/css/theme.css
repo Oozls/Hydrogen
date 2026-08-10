@@ -515,6 +515,15 @@ select#today-limit-select {
   border-radius: 6px;
   margin: 1px 2px;
   cursor: pointer;
+  /* line-height: normal은 폰트마다 반행간이 달라(한글/일본어 폴백 폰트가 라틴
+     폰트보다 살짝 큼), 행 텍스트가 어떤 문자를 담고 있느냐에 따라 행 높이가
+     미묘하게 달라진다. 브라우즈/통계 페이지네이션은 이 행 높이를 실측해
+     페이지당 행 수를 계산하는데(recalcSongsPageSize/recalcTrackPageSize),
+     마지막 페이지의 첫 행이 우연히 두 후보 페이지 크기를 핑퐁으로 오가게
+     만드는 곡을 만나면 매 프레임 재렌더가 무한 반복돼 깜빡거림으로 보인다.
+     1로 고정해 반행간을 없애면 행 높이가 폰트와 무관해져 이 진동이 생기지
+     않는다. */
+  line-height: 1;
 }
 .playlist-row:hover {
   background: #1f2330;
@@ -2235,6 +2244,10 @@ textarea.file-content-body:disabled {
   justify-content: center;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+.expanded-player-art-inner {
+  width: 100%;
+  height: 100%;
 }
 .expanded-player-art img {
   width: 100%;

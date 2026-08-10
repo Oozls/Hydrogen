@@ -1,9 +1,11 @@
 import { api } from "./api.js";
 
 // 홈 화면에서 재생을 시작하면 시드 곡 1개 + 알고리즘이 고른 곡들로 큐를 채운다.
-// 이후 곡이 끝나거나 건너뛸 때마다 한 곡씩 끝에 계속 채워 넣는다("라디오").
+// 이후 곡이 바뀔 때마다, 지금 재생 중인 곡 뒤로 항상 QUEUE_AHEAD_COUNT곡만큼
+// 남아있도록 부족한 만큼만 끝에 채워 넣는다("라디오").
 const QUEUE_INITIAL_COUNT = 9;
 const QUEUE_FAMILIAR_COUNT = 4;
+const QUEUE_AHEAD_COUNT = 9;
 
 // startRecommendQueue()가 초기 9곡을 받아오는 동안, 같은 큐에 대해
 // setupQueueEngine()의 자동 확장이 끼어들지 않게 막는 가드. 시드 곡 1개만 있는
@@ -40,8 +42,9 @@ export async function startRecommendQueue(player, track) {
 }
 
 // 추천 큐(queueMode === "recommend")는 곡이 바뀔 때마다(끝나서 넘어가든 건너뛰든)
-// 한 곡씩 더 받아와 끝에 이어 붙인다 — 처음에 시드 곡 뒤로 9곡을 채워두고
-// 시작하므로, 이렇게 매번 하나씩 보충하면 항상 9곡만큼의 여유가 유지된다.
+// 지금 재생 중인 곡 뒤로 QUEUE_AHEAD_COUNT곡이 남도록 부족한 개수만큼 받아와
+// 끝에 이어 붙인다. 한 곡씩만 더하던 예전 방식과 달리, 큐 안의 곡을 직접 눌러
+// 여러 칸을 한 번에 건너뛴 경우에도 모자란 만큼을 한 번에 채운다.
 // 앱 시작 시 한 번만 호출해 항상 활성 상태로 둔다 — 확장 화면이 열려 있지
 // 않아도 라디오처럼 계속 이어져야 하기 때문.
 export function setupQueueEngine(player) {
@@ -51,8 +54,11 @@ export function setupQueueEngine(player) {
     if (player.queueMode !== "recommend" || !player.playlist || extending) return;
     if (player.playlist === seedingPlaylist) return;
 
-    extending = true;
     const playlistAtRequest = player.playlist;
+    const deficit = player.currentIndex + 1 + QUEUE_AHEAD_COUNT - playlistAtRequest.tracks.length;
+    if (deficit <= 0) return;
+
+    extending = true;
     try {
       const seedTrackId = playlistAtRequest.tracks[0].track_id;
       // 큐에 이미 들어간 곡 id는 매번 지금 playlist.tracks에서 새로 뽑는다 —
@@ -61,7 +67,7 @@ export function setupQueueEngine(player) {
       const excludeIds = playlistAtRequest.tracks.map((t) => t.track_id);
       const { items } = await api.getQueueSongs({
         seedTrackId,
-        count: 1,
+        count: deficit,
         excludeIds,
       });
       if (player.playlist === playlistAtRequest && items && items.length) {
