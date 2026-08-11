@@ -825,6 +825,7 @@ select#today-limit-select {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 8px;
 }
 .lyrics-edit-scroll {
   flex: 1;
