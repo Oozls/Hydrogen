@@ -1035,7 +1035,9 @@ table.lyrics-edit-table {
   left: 0;
   right: 0;
   bottom: 0;
-  min-height: var(--transport-bar-height);
+  /* 자식 요소가 absolute라 높이가 늘어나면 좌우로 넘칠 수 있으므로 고정 높이 + 클리핑 */
+  height: var(--transport-bar-height);
+  overflow: hidden;
   z-index: 10;
   border-radius: 0;
   border: none;
@@ -2412,6 +2414,17 @@ textarea.file-content-body:disabled {
   gap: 6px;
   font-size: 12px;
   color: var(--text-muted);
+}
+#expanded-player-rating-slot {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+#expanded-player-rating-slot:empty {
+  display: none;
+}
+#expanded-player-rating-slot .track-rating {
+  margin-right: 0;
 }
 #expanded-player-queue .section-title {
   position: sticky;

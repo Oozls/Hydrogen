@@ -239,4 +239,23 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("volume-slider").value = String(initialVolume);
   nowPlayingApi.updateVolumeFill();
   player.setVolume(initialVolume);
+
+  // 좁은 화면(700px 이하)에서는 재생바 상단의 레이팅 위젯이 다른 컨트롤과 겹치므로,
+  // 확장 패널의 곡 정보 아래(rating-slot)로 옮긴다. rating.js는 #track-rating을
+  // 최초 1회만 쿼리하고 DOM 위치는 신경 쓰지 않으므로 그냥 노드를 옮기면 된다.
+  const ratingEl = document.getElementById("track-rating");
+  const ratingHomeSlot = ratingEl ? ratingEl.parentElement : null;
+  const ratingHomeNextSibling = ratingEl ? ratingEl.nextSibling : null;
+  const ratingNarrowSlot = document.getElementById("expanded-player-rating-slot");
+  const narrowQuery = window.matchMedia("(max-width: 700px)");
+  function relocateRating(isNarrow) {
+    if (!ratingEl || !ratingNarrowSlot || !ratingHomeSlot) return;
+    if (isNarrow) {
+      ratingNarrowSlot.appendChild(ratingEl);
+    } else {
+      ratingHomeSlot.insertBefore(ratingEl, ratingHomeNextSibling);
+    }
+  }
+  relocateRating(narrowQuery.matches);
+  narrowQuery.addEventListener("change", (e) => relocateRating(e.matches));
 });
