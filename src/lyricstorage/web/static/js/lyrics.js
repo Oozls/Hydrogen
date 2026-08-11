@@ -100,6 +100,10 @@ export function setupLyrics(player, onLyricsSaved) {
   const textModeBtn = document.getElementById("btn-lyrics-text-mode");
   const textArea = document.getElementById("lyrics-edit-text-area");
 
+  const helpBtn = document.getElementById("btn-lyrics-help");
+  const helpDialog = document.getElementById("lyrics-format-help-dialog");
+  const helpCloseBtn = document.getElementById("lyrics-format-help-close");
+
   const lyricsEditorApi = setupLyricsEditor(player);
 
   let trackId = null;
@@ -130,6 +134,8 @@ export function setupLyrics(player, onLyricsSaved) {
   }
   tabViewBtn.addEventListener("click", () => switchTab("view"));
   tabEditBtn.addEventListener("click", () => switchTab("edit"));
+  helpBtn.addEventListener("click", () => helpDialog.showModal());
+  helpCloseBtn.addEventListener("click", () => helpDialog.close());
   window.addEventListener("resize", () => {
     if (editPanel.classList.contains("active")) regrowEditTextareas();
   });

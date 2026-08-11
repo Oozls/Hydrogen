@@ -1281,6 +1281,29 @@ input[type="range"]:hover::-moz-range-thumb {
   max-height: 50dvh;
   margin-top: 0;
 }
+.lyrics-format-help-body {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.lyrics-format-help-body p {
+  margin: 0 0 8px;
+}
+.lyrics-format-help-body code {
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text-primary);
+  font-family: "Consolas", "Menlo", monospace;
+}
+.lyrics-format-help-body ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.lyrics-format-help-body li + li {
+  margin-top: 4px;
+}
 .confirm-dialog {
   width: 360px;
 }
