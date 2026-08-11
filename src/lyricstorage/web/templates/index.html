@@ -252,6 +252,9 @@
               <button id="btn-lyrics-text-mode" class="icon-btn toggle-btn" title="텍스트(lrc)로 편집">
                 <span class="icon" style="--icon: url(/static/icons/file-text.svg)"></span>
               </button>
+              <button id="btn-lyrics-help" class="icon-btn" type="button" title="가사 형식 도움말">
+                <span class="icon" style="--icon: url(/static/icons/help-circle.svg)"></span>
+              </button>
               <div class="spacer"></div>
               <button id="btn-lyrics-detail-edit" class="lyrics-detail-edit-btn" type="button">
                 <span class="icon icon-sm" style="--icon: url(/static/icons/edit-3.svg)"></span>
@@ -543,6 +546,26 @@
         <button id="lyrics-backups-preview-back" type="button">목록으로</button>
         <button id="lyrics-backups-restore" class="primary" type="button">이 백업으로 복원</button>
       </div>
+    </div>
+  </dialog>
+
+  <dialog id="lyrics-format-help-dialog" class="library-picker-dialog lyrics-format-help-dialog">
+    <div class="library-picker-header">
+      <h3>가사 텍스트(.lrc) 형식</h3>
+      <div class="spacer"></div>
+      <button id="lyrics-format-help-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <div class="lyrics-format-help-body">
+      <p>한 줄에 가사 한 줄, <code>[분:초.밀리초]가사</code> 형식으로 적습니다.</p>
+      <p><code>[01:23.45]함께 걷던 그 거리</code></p>
+      <ul>
+        <li>분은 자유 자릿수, 초는 2자리, 밀리초는 소수점 2자리(1/100초 단위)까지만 적습니다.</li>
+        <li>같은 줄 안에서 줄바꿈이 필요하면 <code>\n</code>으로 표시합니다.</li>
+        <li>저장할 때 시간 순서로 자동 정렬됩니다.</li>
+        <li>가사 내용이 비어 있는 줄은 저장되지 않습니다.</li>
+      </ul>
     </div>
   </dialog>
 
