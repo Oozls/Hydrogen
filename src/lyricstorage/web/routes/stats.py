@@ -46,7 +46,14 @@ def get_recent():
 
 @bp.get("/track/<track_id>/totals")
 def get_track_totals(track_id):
-    return jsonify(stats.track_totals(track_id))
+    period = request.args.get("period", "all")
+    if period != "all" and period not in stats.PERIODS:
+        return jsonify({"error": "period는 all/day/week/month 중 하나여야 합니다."}), 400
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except ValueError:
+        offset = 0
+    return jsonify(stats.track_totals(track_id, period, offset))
 
 
 @bp.get("/top")

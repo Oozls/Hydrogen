@@ -171,7 +171,11 @@ export const api = {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },
     }),
   getRecentPlays: (limit) => request("GET", `/api/stats/recent?limit=${limit || 12}`),
-  getTrackTotals: (trackId) => request("GET", `/api/stats/track/${encodeURIComponent(trackId)}/totals`),
+  getTrackTotals: (trackId, period, offset) =>
+    request(
+      "GET",
+      `/api/stats/track/${encodeURIComponent(trackId)}/totals?period=${period || "all"}&offset=${offset || 0}`
+    ),
   getTopStats: (period, group, offset, limit) =>
     request(
       "GET",

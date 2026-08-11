@@ -477,7 +477,15 @@
             <div id="expanded-player-artist"></div>
             <div id="expanded-player-circle" class="expanded-player-circle is-empty"></div>
             <div id="expanded-player-album"></div>
-            <div id="expanded-player-stats" class="expanded-player-stats"></div>
+            <div id="expanded-player-stats" class="expanded-player-stats">
+              <select id="expanded-player-stats-period" class="expanded-player-stats-period">
+                <option value="all">총합</option>
+                <option value="day">오늘</option>
+                <option value="week">이번주</option>
+                <option value="month">이번달</option>
+              </select>
+              <span id="expanded-player-stats-text"></span>
+            </div>
             <div id="expanded-player-rating-slot"></div>
           </div>
         </div>

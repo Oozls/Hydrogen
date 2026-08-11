@@ -59,11 +59,18 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
   const artistEl = document.getElementById("expanded-player-artist");
   const circleEl = document.getElementById("expanded-player-circle");
   const albumEl = document.getElementById("expanded-player-album");
-  const statsEl = document.getElementById("expanded-player-stats");
+  const statsEl = document.getElementById("expanded-player-stats-text");
+  const statsPeriodEl = document.getElementById("expanded-player-stats-period");
   const queueEl = document.getElementById("expanded-player-queue");
   const queueListEl = document.getElementById("expanded-player-queue-list");
 
   attachScrollAutoHide(queueEl);
+
+  statsPeriodEl.addEventListener("change", () => {
+    const track = player.currentTrack;
+    if (!track) return;
+    fetchAndRenderStats(track);
+  });
 
   let open = false;
   let lastTrack = null;
@@ -511,8 +518,14 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
       if (onOpenArtist) circleEl.onclick = () => onOpenArtist(circleName);
     }
 
+    fetchAndRenderStats(track);
+
+    requestAnimationFrame(() => applyMarquee(titleEl.parentElement));
+  }
+
+  function fetchAndRenderStats(track) {
     api
-      .getTrackTotals(track.track_id)
+      .getTrackTotals(track.track_id, statsPeriodEl.value, 0)
       .then((totals) => {
         if (player.currentTrack !== track) return;
         statsEl.innerHTML = "";
@@ -522,8 +535,6 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
         statsEl.appendChild(document.createTextNode(`${Math.round((totals.listened_ms || 0) / 60000)}분`));
       })
       .catch(() => {});
-
-    requestAnimationFrame(() => applyMarquee(titleEl.parentElement));
   }
 
   function buildQueueRow(track, isCurrent) {
