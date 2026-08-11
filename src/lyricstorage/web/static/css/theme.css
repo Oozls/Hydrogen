@@ -808,12 +808,11 @@ select#today-limit-select {
 .lyrics-line .lyric-secondary {
   margin: 0;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: inherit;
   transition: color 0.15s, font-size 0.15s;
 }
 .lyrics-line.active .lyric-secondary {
   font-size: 14px;
-  color: var(--text-primary);
 }
 .lyrics-placeholder {
   color: var(--text-muted);
