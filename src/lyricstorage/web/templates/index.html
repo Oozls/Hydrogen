@@ -226,69 +226,6 @@
         </div>
       </section>
 
-      <section id="lyrics-panel" class="panel lyrics-panel" style="display: none">
-        <span class="section-title">가사</span>
-        <div class="tabs">
-          <button id="tab-lyrics-view-btn" class="tab-btn active" type="button">가사 보기</button>
-          <button id="tab-lyrics-edit-btn" class="tab-btn" type="button">가사 편집</button>
-        </div>
-
-        <div id="lyrics-content-row" class="lyrics-content-row">
-          <div id="lyrics-view-panel" class="tab-panel active">
-            <ul id="lyrics-view-list" class="lyrics-view-list"></ul>
-          </div>
-
-          <div id="lyrics-edit-panel" class="tab-panel">
-            <div class="lyrics-edit-toolbar">
-              <button id="btn-lyrics-add-row" class="icon-btn" title="줄 추가">
-                <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
-              </button>
-              <button id="btn-lyrics-remove-row" class="icon-btn" title="선택한 줄 삭제">
-                <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
-              </button>
-              <button id="btn-lyrics-backups" class="icon-btn" title="가사 백업 보기">
-                <span class="icon" style="--icon: url(/static/icons/clock.svg)"></span>
-              </button>
-              <button id="btn-lyrics-text-mode" class="icon-btn toggle-btn" title="텍스트(lrc)로 편집">
-                <span class="icon" style="--icon: url(/static/icons/file-text.svg)"></span>
-              </button>
-              <button id="btn-lyrics-help" class="icon-btn" type="button" title="가사 형식 도움말">
-                <span class="icon" style="--icon: url(/static/icons/help-circle.svg)"></span>
-              </button>
-              <div class="lyrics-sync-offset" title="가사 싱크 보정 (재생 위치 기준, 저장되지 않음)">
-                <button id="btn-lyrics-sync-offset-minus" class="icon-btn" type="button" title="50ms 앞당기기">
-                  <span class="icon icon-sm" style="--icon: url(/static/icons/chevron-left.svg)"></span>
-                </button>
-                <span id="lyrics-sync-offset-value" class="lyrics-sync-offset-value">0ms</span>
-                <button id="btn-lyrics-sync-offset-plus" class="icon-btn" type="button" title="50ms 늦추기">
-                  <span class="icon icon-sm" style="--icon: url(/static/icons/chevron-right.svg)"></span>
-                </button>
-              </div>
-              <div class="spacer"></div>
-              <button id="btn-lyrics-detail-edit" class="lyrics-detail-edit-btn" type="button">
-                <span class="icon icon-sm" style="--icon: url(/static/icons/edit-3.svg)"></span>
-                상세 편집
-              </button>
-              <button id="btn-lyrics-clear" class="icon-btn" title="가사 전체 지우기">
-                <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
-              </button>
-            </div>
-            <div id="lyrics-edit-scroll" class="lyrics-edit-scroll">
-              <table class="lyrics-edit-table">
-                <thead>
-                  <tr>
-                    <th class="col-time">시간 (분:초:밀리초)</th>
-                    <th>가사</th>
-                  </tr>
-                </thead>
-                <tbody id="lyrics-edit-body"></tbody>
-              </table>
-            </div>
-            <textarea id="lyrics-edit-text-area" class="lyrics-edit-text-area" spellcheck="false" hidden></textarea>
-          </div>
-        </div>
-      </section>
-
       <div id="stats-panel" class="panel stats-panel page-panel">
         <div class="overlay-header">
           <span class="section-title">재생 통계</span>
@@ -506,6 +443,69 @@
           <span class="section-title">재생 대기 목록</span>
           <div id="expanded-player-queue-list" class="expanded-player-queue-list"></div>
         </div>
+
+        <section id="lyrics-panel" class="lyrics-panel" style="display: none">
+          <span class="section-title">가사</span>
+          <div class="tabs">
+            <button id="tab-lyrics-view-btn" class="tab-btn active" type="button">가사 보기</button>
+            <button id="tab-lyrics-edit-btn" class="tab-btn" type="button">가사 편집</button>
+          </div>
+
+          <div id="lyrics-content-row" class="lyrics-content-row">
+            <div id="lyrics-view-panel" class="tab-panel active">
+              <ul id="lyrics-view-list" class="lyrics-view-list"></ul>
+            </div>
+
+            <div id="lyrics-edit-panel" class="tab-panel">
+              <div class="lyrics-edit-toolbar">
+                <button id="btn-lyrics-add-row" class="icon-btn" title="줄 추가">
+                  <span class="icon" style="--icon: url(/static/icons/plus.svg)"></span>
+                </button>
+                <button id="btn-lyrics-remove-row" class="icon-btn" title="선택한 줄 삭제">
+                  <span class="icon" style="--icon: url(/static/icons/trash-2.svg)"></span>
+                </button>
+                <button id="btn-lyrics-backups" class="icon-btn" title="가사 백업 보기">
+                  <span class="icon" style="--icon: url(/static/icons/clock.svg)"></span>
+                </button>
+                <button id="btn-lyrics-text-mode" class="icon-btn toggle-btn" title="텍스트(lrc)로 편집">
+                  <span class="icon" style="--icon: url(/static/icons/file-text.svg)"></span>
+                </button>
+                <button id="btn-lyrics-help" class="icon-btn" type="button" title="가사 형식 도움말">
+                  <span class="icon" style="--icon: url(/static/icons/help-circle.svg)"></span>
+                </button>
+                <div class="lyrics-sync-offset" title="가사 싱크 보정 (재생 위치 기준, 저장되지 않음)">
+                  <button id="btn-lyrics-sync-offset-minus" class="icon-btn" type="button" title="50ms 앞당기기">
+                    <span class="icon icon-sm" style="--icon: url(/static/icons/chevron-left.svg)"></span>
+                  </button>
+                  <span id="lyrics-sync-offset-value" class="lyrics-sync-offset-value">0ms</span>
+                  <button id="btn-lyrics-sync-offset-plus" class="icon-btn" type="button" title="50ms 늦추기">
+                    <span class="icon icon-sm" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+                  </button>
+                </div>
+                <div class="spacer"></div>
+                <button id="btn-lyrics-detail-edit" class="lyrics-detail-edit-btn" type="button">
+                  <span class="icon icon-sm" style="--icon: url(/static/icons/edit-3.svg)"></span>
+                  상세 편집
+                </button>
+                <button id="btn-lyrics-clear" class="icon-btn" title="가사 전체 지우기">
+                  <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+                </button>
+              </div>
+              <div id="lyrics-edit-scroll" class="lyrics-edit-scroll">
+                <table class="lyrics-edit-table">
+                  <thead>
+                    <tr>
+                      <th class="col-time">시간 (분:초:밀리초)</th>
+                      <th>가사</th>
+                    </tr>
+                  </thead>
+                  <tbody id="lyrics-edit-body"></tbody>
+                </table>
+              </div>
+              <textarea id="lyrics-edit-text-area" class="lyrics-edit-text-area" spellcheck="false" hidden></textarea>
+            </div>
+          </div>
+        </section>
       </div>
     </section>
     </div>

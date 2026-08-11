@@ -225,11 +225,12 @@ textarea {
   display: flex;
 }
 
-/* 가사 패널은 DOM상 browse-panel과 stats-panel 사이에 있어서, 통계 화면에서
-   가사를 켜면 flex 문서 순서상 통계 패널보다 왼쪽에 와버린다. order로 항상
-   맨 뒤(오른쪽/아래)에 오도록 고정한다. */
-.lyrics-panel {
-  order: 1;
+/* 가사 패널은 이제 확장 재생 패널 안, 대기 목록과 같은 자리(토글로 교체)에
+   있으므로 대기 목록과 크기·위치·배경이 완전히 같아야 한다(아래
+   #expanded-player-queue, #lyrics-panel 공용 규칙 참고). */
+#lyrics-panel {
+  flex: 1 1 54%;
+  max-height: 100%;
 }
 
 .sidebar {
@@ -2538,33 +2539,26 @@ textarea.file-content-body:disabled {
   display: block;
   padding: 10px 8px;
   margin: 0 0 4px;
-  background: var(--bg-elevated);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
   z-index: 1;
 }
-#expanded-player-queue .section-title::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -6px;
-  height: 6px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
-  pointer-events: none;
+/* 가사 패널과 같은 자리를 나눠 쓰므로, 배경·둥근 모서리·크기·위치를 완전히
+   맞춘다(#lyrics-panel 쪽 flex 비율도 동일하게 맞춰뒀다). */
+.expanded-player-queue,
+#lyrics-panel {
+  background: var(--bg-panel);
+  border-radius: 10px;
 }
 .expanded-player-queue {
   flex: 1 1 54%;
-  /* .expanded-player-body의 기본 align-items:stretch를 끄고, 곡 수만큼만
-     높이를 차지하게 한다 — 그렇지 않으면 대기 목록이 짧을 때도 패널 전체
-     높이만큼 늘어나 아래에 배경만 남은 빈 공간이 비대칭적으로 남는다.
-     max-height로 패널을 넘지 않게만 막고, 넘치면 그때만 스크롤한다. */
-  align-self: flex-start;
   max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px;
 }
 .expanded-player-queue-list {
   display: flex;
@@ -3118,8 +3112,7 @@ textarea.file-content-body:disabled {
     margin-top: 46px;
   }
   .playlist-panel,
-  .browse-panel,
-  .lyrics-panel {
+  .browse-panel {
     flex: 1 1 0;
     min-height: 0;
   }
@@ -3165,7 +3158,8 @@ textarea.file-content-body:disabled {
   .expanded-player-detail {
     display: none;
   }
-  .expanded-player-queue {
+  .expanded-player-queue,
+  #lyrics-panel {
     flex: 1 1 100%;
   }
 

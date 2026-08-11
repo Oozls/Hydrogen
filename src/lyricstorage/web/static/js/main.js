@@ -127,17 +127,15 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   const lyricsPanelEl = document.getElementById("lyrics-panel");
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
+  const expandedQueueEl = document.getElementById("expanded-player-queue");
 
-  // 가사 패널은 기본적으로 숨겨져 있고, 트랜스포트 바의 토글 버튼으로 세션 중에만
-  // 켜고 끌 수 있다(새로고침하면 다시 숨김으로 시작). 통계 화면을 포함해 어느
-  // 화면에서든 토글할 수 있다. 다만 통계 화면의 TOP 3 앨범 패널과는 공간이
-  // 겹치므로, 가사 패널이 켜져 있는 동안은 TOP 3 앨범을 숨긴다.
+  // 가사 패널은 확장 재생 패널 안, 재생 대기 목록과 같은 자리를 나눠 쓴다 —
+  // 평소엔 대기 목록이 보이고, 토글 버튼을 누르면 가사로 바뀐다(세션 중에만
+  // 유지, 새로고침하면 다시 대기 목록으로 시작).
   let lyricsVisible = false;
   function syncLyricsPanelDisplay() {
     lyricsPanelEl.style.display = lyricsVisible ? "" : "none";
-    // 가사 패널이 나타나거나 사라지면 옆에 있는 재생목록/브라우즈/통계 패널의
-    // 실제 폭이 바뀌므로, 각 화면에 이미 있는 리사이즈 시 재계산 로직(컬럼 우선순위
-    // 숨김/마퀴 스크롤 여부)이 다시 돌도록 가짜 resize 이벤트를 발생시킨다.
+    expandedQueueEl.style.display = lyricsVisible ? "none" : "";
     window.dispatchEvent(new Event("resize"));
   }
   syncLyricsPanelDisplay();
@@ -145,8 +143,6 @@ document.addEventListener("DOMContentLoaded", () => {
     lyricsVisible = !lyricsVisible;
     lyricsToggleBtn.classList.toggle("active", lyricsVisible);
     syncLyricsPanelDisplay();
-    statsApi.setLyricsActive(lyricsVisible);
-    browseApi.setLyricsActive(lyricsVisible);
   });
 
   const browseApi = setupBrowse(

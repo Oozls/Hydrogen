@@ -99,8 +99,6 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
   let trackPageSize = TRACK_PAGE_SIZE_FALLBACK;
   let lastTrackPageTotalPages = 1;
   let trackPageLabelEditing = false;
-  // 가사 패널이 열려 있으면 통계 화면의 TOP 3 앨범 패널은 숨긴다(공간 확보).
-  let lyricsActive = false;
   let lastAlbumItems = [];
   // "앨범" 탭에서 앨범 카드에 곡 아티스트 대신 앨범 아티스트명을 보여주기 위한 조회용.
   let albumMetaById = new Map();
@@ -240,7 +238,7 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
 
   function renderTop3Albums(items) {
     top3El.innerHTML = "";
-    if (lyricsActive || !items.length) {
+    if (!items.length) {
       top3El.hidden = true;
       return;
     }
@@ -945,10 +943,6 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
     },
     hide() {
       panelEl.classList.remove("active");
-    },
-    setLyricsActive(active) {
-      lyricsActive = active;
-      if (group === "track") renderTop3Albums(lastAlbumItems);
     },
   };
 }

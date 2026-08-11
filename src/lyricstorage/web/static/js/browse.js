@@ -133,8 +133,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let todaySongs = [];
   // 곡 아티스트 상세 화면에 지금 열려 있는 정체성({id, name, aliases}).
   let songArtistDetailIdentity = null;
-  // 가사 패널이 열려 있으면 재생 통계 TOP 3 앨범과 마찬가지로 이 위젯도 숨긴다(공간 확보).
-  let lyricsActive = false;
 
   const albumArtPromptApi = setupAlbumArtPrompt();
   const albumArtistPromptApi = setupAlbumArtistPrompt();
@@ -563,7 +561,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   function renderTodaySongsTop3() {
     songsTop3El.innerHTML = "";
-    if (lyricsActive || !todaySongs.length) {
+    if (!todaySongs.length) {
       songsTop3El.hidden = true;
       return;
     }
@@ -617,7 +615,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     albumsTop3El.innerHTML = "";
     const albumIds = new Set(todaySongs.map((t) => t.album_id).filter(Boolean));
     const groups = albumIds.size ? groupAlbums(tracks, albums).filter((g) => albumIds.has(g.id)) : [];
-    if (lyricsActive || !groups.length) {
+    if (!groups.length) {
       albumsTop3El.hidden = true;
       return;
     }
@@ -1739,11 +1737,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       selectedTrackIds.clear();
       lastClickedIndex = null;
       render();
-    },
-    setLyricsActive(active) {
-      lyricsActive = active;
-      renderTodaySongsTop3();
-      renderRecommendedAlbums();
     },
   };
 }
