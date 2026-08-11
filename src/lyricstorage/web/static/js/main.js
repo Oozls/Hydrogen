@@ -44,6 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // album+artist로 앨범을 찾을 수 있게 한다.
   function openAlbumFromTrack(track) {
     if (!track || !track.album) return;
+    expandedPlayerApi.hide();
     refs.pendingAlbumFocus = { track_id: track.track_id, album: track.album, artist: track.artist };
     refs.router.goBrowse();
   }
@@ -55,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // pendingFocus 없이 라우터로 곧장 이동한다.
   function openArtistFromTrack(name) {
     if (!name) return;
+    expandedPlayerApi.hide();
     refs.router.goSongArtistDetail(name);
   }
 
@@ -107,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPlayTracking(player);
   setupRating(player);
   setupQueueEngine(player);
-  setupExpandedPlayer(player, {
+  const expandedPlayerApi = setupExpandedPlayer(player, {
     onOpen: () => sidebarApi.closeDrawer(),
     onOpenAlbum: openAlbumFromTrack,
     onOpenArtist: openArtistFromTrack,
