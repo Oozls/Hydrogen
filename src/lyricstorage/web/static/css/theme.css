@@ -271,7 +271,7 @@ textarea {
   right: 0;
   /* 재생바(트랜스포트 바) 영역은 어둡게 가리지 않도록 그 높이만큼 제외한다
      — 사이드바 드로어 자체도 같은 높이만큼만 차지한다(top:0 ~
-     bottom:var(--transport-bar-height)). z-index는 재생바(10)보다 낮게 둬서,
+     bottom:var(--transport-bar-height)). z-index는 재생바(#transport-stack, 40)보다 낮게 둬서,
      재생바가 위로 확장돼 이 배경과 같은 자리를 차지하는 순간에도 배경이
      재생바를 가리지 않게 한다. */
   bottom: var(--transport-bar-height);
@@ -1031,14 +1031,14 @@ table.lyrics-edit-table {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
+  pointer-events: auto;
   /* 자식 요소가 absolute라 높이가 늘어나면 좌우로 넘칠 수 있으므로 고정 높이 + 클리핑 */
   height: var(--transport-bar-height);
   overflow: hidden;
-  z-index: 10;
   border-radius: 0;
   border: none;
   border-top: 1px solid var(--border);
@@ -2172,23 +2172,41 @@ textarea.file-content-body:disabled {
 }
 
 /* -- 확장 재생 화면 (재생바 상단 이동 + 상세/대기 목록) ------------------------ */
-/* 예전엔 top:100%+transform(고정 px)로 하단에 고정해뒀었는데, top은 레이아웃
-   속성이라 애니메이션 중 매 프레임 메인 스레드에서 다시 계산돼야 한다. 반면
-   #expanded-player-panel은 transform 하나만 애니메이션하는 컴포지터 전용
-   움직임이라, 메인 스레드가 바쁜 환경(화면이 크거나 기기 성능이 낮을 때)에서는
-   두 애니메이션의 실제 프레임 속도가 어긋나 재생바와 대기 목록 패널이 순간적으로
-   겹치거나 벌어져 보였다. top/bottom은 그대로 고정(0)해 두고 transform 하나만
-   움직이면 이 둘은 항상 같은 컴포지터 타임라인을 타서 화면 크기와 무관하게
-   완전히 같은 속도로 움직인다. 100vh 대신 100dvh를 써서 모바일 브라우저의
-   동적 주소창/툴바로 인한 뷰포트 높이 불일치 문제도 함께 피한다. */
-.transport-bar {
-  top: auto;
+/* 예전엔 재생바(#transport-bar)와 패널(#expanded-player-panel)이 각자 독립된
+   fixed 요소로, 재생바는 bottom:0+translateY(dvh 기반 calc), 패널은
+   top:100px(고정)+translateY(자기 높이의 100%)로 따로 움직였다. 같은 시간/
+   이징을 써도 두 값은 서로 다른 계산식(dvh calc vs 퍼센트)이라 브라우저 배율/
+   DPI에 따라 서로 다른 서브픽셀로 반올림될 수 있어, 특정 환경에서 둘 사이에
+   미세한 틈이 항상 보이는 문제가 있었다. 지금은 둘을 #transport-stack 하나로
+   묶어 재생바는 위 100px, 패널은 그 아래 전부를 차지하도록 절대 배치해두고,
+   "펼침/접힘" 전환은 이 스택 전체에 딱 하나의 transform만 적용해서 표현한다 —
+   두 조각이 아예 같은 변환 행렬을 공유하므로 반올림 차이가 날 수 없다. 100vh
+   대신 100dvh를 써서 모바일 브라우저의 동적 주소창/툴바로 인한 뷰포트 높이
+   불일치 문제도 함께 피한다. */
+.transport-stack {
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
-  transform: translateY(0);
-  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s ease;
+  height: 100dvh;
+  z-index: 40;
+  pointer-events: none;
+  /* will-change는 "나중에 바뀔 수 있다"는 힌트일 뿐이라, 실제로 처음
+     transform이 바뀌는 순간에야 레이어가 완전히 래스터화되면서 그 첫 프레임에
+     잠깐 페인트가 비어(반투명하게 보여) 뒤 콘텐츠가 비치는 경우가 있었다.
+     translateZ(0)를 평소 transform 값에도 항상 포함시켜 두면(펼쳐질 때만
+     추가하는 게 아니라) 페이지가 뜬 시점부터 계속 별도 컴포지터 레이어로
+     유지되므로, "지금 막 승격되는 순간"이라는 게 아예 없어진다. */
+  will-change: transform;
+  /* 평소엔 재생바 높이만 남기고 스택 전체를 화면 아래로 내려서, 재생바만 화면
+     맨 아래에 붙어 보이게 한다. */
+  transform: translateY(calc(100dvh - var(--transport-bar-height))) translateZ(0);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.transport-bar.expanded {
-  transform: translateY(calc(-100dvh + var(--transport-bar-height)));
+.transport-stack.expanded {
+  transform: translateY(0) translateZ(0);
+}
+.transport-stack.expanded .transport-bar {
   border-top: none;
   /* 재생바 바로 아래는(평소와 달리) 다른 콘텐츠가 아니라 같은 배경색의 대기
      목록 패널이 맞닿아 있어, 여기 그림자를 넣으면 실제로는 틈이 없는데도
@@ -2197,28 +2215,28 @@ textarea.file-content-body:disabled {
 }
 .expanded-player-panel {
   display: flex;
-  position: fixed;
-  /* 상단은 .expanded 상태의 재생바(z-index 10, 같은 높이)가 이미 차지하므로,
-     그 아래부터만 덮는다 — 그렇지 않으면 이 패널의 배경이 재생바 위에 그려져
-     가려버린다. */
-  top: var(--transport-bar-height);
+  position: absolute;
+  /* 상단은 재생바(스택 안에서 위 100px)가 이미 차지하므로, 그 아래부터만
+     덮는다 — 그렇지 않으면 이 패널의 배경이 재생바 위에 그려져 가려버린다.
+     정확히 100px이 아니라 1px 겹치게 둔다 — 소수점 배율(예: 112.5%) 화면에서
+     두 요소의 경계가 서로 다른 기기 픽셀로 반올림되면 딱 맞닿게 둬도 머리카락
+     굵기의 틈이 보일 수 있는데, 배경색이 완전히 같으므로 살짝 겹쳐도(음수
+     방향 틈은 절대 안 생기게) 전혀 티가 나지 않는다. */
+  top: calc(var(--transport-bar-height) - 1px);
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 40;
   /* 재생바와 완전히 같은 배경색 — 위(재생바)와 아래(이 패널)가 하나로 이어져
      보이게 한다. */
   background: var(--bg-elevated);
-  /* 평소엔 화면 아래로 완전히 내려가 숨어 있다가, 재생바가 위로 미끄러질 때
-     같은 시간/이징으로 함께 밀려 올라온다 — 위아래가 한 덩어리로 움직이는
-     것처럼 보이게 한다(재생바는 .transport-bar.expanded 참고). */
-  transform: translateY(100%);
+  /* 위치 자체는 항상 고정(스택의 transform이 통째로 움직여준다) — 여기서는
+     접혀 있을 때 클릭/포커스가 안 닿도록 visibility/pointer-events만 늦게
+     전환한다. */
   visibility: hidden;
   pointer-events: none;
-  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s;
+  transition: visibility 0.32s;
 }
 .expanded-player-panel.active {
-  transform: translateY(0);
   visibility: visible;
   pointer-events: auto;
 }
@@ -2416,13 +2434,47 @@ textarea.file-content-body:disabled {
   color: var(--text-muted);
 }
 .expanded-player-stats-period {
-  background: var(--bg-elevated);
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%235c6076' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 10px;
   color: var(--text-muted);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 10px;
   font-size: 11px;
-  padding: 2px 4px;
+  height: 20px;
+  padding: 0 18px 0 8px;
+  line-height: 18px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.expanded-player-stats-period:hover {
+  background-color: var(--bg-elevated);
+}
+.expanded-player-stats-period:focus-visible {
+  outline: none;
+  border-color: var(--accent-muted);
+}
+/* select 자체는 appearance:none으로 직접 꾸밀 수 있지만, 펼쳐지는 옵션
+   목록(팝업)은 브라우저 네이티브 렌더러가 그려서 대부분의 스타일링이 안
+   먹는다 — Chromium 계열에서는 option의 background-color/color 정도는
+   반영되므로, 최소한 밝은 기본 배경 대신 앱 다크 테마와 어울리게 맞춘다. */
+.expanded-player-stats-period option {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+#expanded-player-stats-text {
+  /* select 옆의 span에 아이콘/글자를 그냥 appendChild로 이어붙이면 인라인이라
+     서로 딱 붙어 보인다 — select와의 간격(부모 gap)과 별개로 이 안의
+     아이콘-글자-아이콘-글자 사이 간격도 직접 줘야 한다. select와 높이를
+     맞추기 위해 flex로 세로 중앙 정렬한다. */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
 }
 #expanded-player-rating-slot {
   display: flex;
@@ -2438,7 +2490,11 @@ textarea.file-content-body:disabled {
 #expanded-player-queue .section-title {
   position: sticky;
   top: 0;
+  display: block;
+  padding: 10px 8px;
+  margin: 0 0 4px;
   background: var(--bg-elevated);
+  box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.4);
   z-index: 1;
 }
 .expanded-player-queue {
@@ -3023,7 +3079,7 @@ textarea.file-content-body:disabled {
     top: 0;
     left: 0;
     bottom: var(--transport-bar-height);
-    /* 재생바(z-index 10)보다 낮게 둬서, 재생바가 위로 확장된 상태에서 드로어를
+    /* 재생바(#transport-stack, z-index 40)보다 낮게 둬서, 재생바가 위로 확장된 상태에서 드로어를
        열어도 사이드바(배경+내용 전부)가 재생바 뒤로 가게 한다. */
     z-index: 9;
     width: min(80vw, 280px);

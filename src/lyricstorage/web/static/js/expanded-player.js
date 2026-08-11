@@ -42,7 +42,7 @@ function easeOutCubic(t) {
 export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist } = {}) {
   const btn = document.getElementById("btn-expand-player");
   const panel = document.getElementById("expanded-player-panel");
-  const transportBar = document.getElementById("transport-bar");
+  const transportStack = document.getElementById("transport-stack");
   const stageEl = document.getElementById("expanded-player-cd-stage");
   const highlightEl = stageEl.querySelector(".expanded-player-cd-highlight");
   const holeEl = stageEl.querySelector(".expanded-player-cd-hole");
@@ -140,12 +140,23 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
   // entries([{el, baseSlot}])를 offsetSlots(0 기준 상대 이동량) 하나로 한꺼번에
   // 그린다 — 드래그 미리보기와 자동 슬라이드 둘 다 이 함수 하나만 쓴다(요청:
   // "자동 애니메이션은 자동으로 수행되는 드래그와 거의 같다"). 지금 중앙에
-  // 가장 가까운 자리(baseSlot === round(-offsetSlots))를 맡은 엔트리를 찾아,
-  // 그 엔트리에 실제 곡이 있는지로 홀/하이라이트 표시 여부를 판단한다.
+  // 가장 가까운 자리를 맡은 엔트리를 찾아, 그 엔트리에 실제 곡이 있는지로
+  // 홀/하이라이트 표시 여부를 판단한다. baseSlot === round(-offsetSlots)로
+  // 정확히 일치하는 자리를 찾으면, 드래그 중 슬롯 경계에서 offsetSlots가
+  // 정확히 -0.5가 되는 순간 Math.round가 항상 위로 반올림해 실제 중앙(0)이
+  // 아닌 옆 칸(1)을 찾아버리는 동점 문제가 있었다 — 거리 기반으로 가장 가까운
+  // 엔트리를 찾으면 이 동점 문제 자체가 없어진다.
   function renderGroup(entries, offsetSlots, stageWidthPx) {
     entries.forEach((entry) => renderEntry(entry, offsetSlots));
-    const nearestBase = Math.round(-offsetSlots);
-    const nearestEntry = entries.find((entry) => entry.baseSlot === nearestBase);
+    let nearestEntry = null;
+    let nearestDist = Infinity;
+    for (const entry of entries) {
+      const dist = Math.abs(entry.baseSlot + offsetSlots);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestEntry = entry;
+      }
+    }
     applyShadingOffset(offsetSlots, stageWidthPx, !!(nearestEntry && nearestEntry.el._track));
   }
 
@@ -611,7 +622,7 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
   function setOpen(next) {
     open = next;
     panel.classList.toggle("active", open);
-    transportBar.classList.toggle("expanded", open);
+    transportStack.classList.toggle("expanded", open);
     if (open) {
       // 패널이 닫혀 있는 동안 곡이 여러 번 바뀌었을 수 있다 — 다시 열 때는
       // 그 변화를 슬라이드로 몰아서 보여줄 필요 없이 곧장 스냅해야 하므로,
