@@ -7,9 +7,6 @@ const REPEAT_ORDER = ["off", "all", "one"];
 // 초반 오디오가 씹히거나(특히 화면이 꺼져 백그라운드 상태일 때 네트워크가
 // 느려지면) 전환 자체가 멎는 문제가 있어, 끝나기 전에 미리 준비해 둔다.
 const PRELOAD_AHEAD_SEC = 15;
-// 이 간격(초)마다 재생 중에도 currentTime을 스스로 재-seek해 디코더 위치
-// 추적 오차를 보정한다.
-const POSITION_RESYNC_INTERVAL_SEC = 20;
 
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
@@ -43,11 +40,6 @@ export class PlayerEngine extends EventTarget {
     // 표시되는 위치가 조금씩 어긋날 수 있다. 재생이 실제로 재개되는 시점마다
     // 같은 위치로 한 번 더 seek해 브라우저가 스스로를 다시 맞추도록 유도한다.
     this._needsResyncOnPlay = false;
-    // 재생을 계속 이어가는 동안에도 VBR mp3 등에서 currentTime 추적이 조금씩
-    // 어긋날 수 있어(_needsResyncOnPlay 설명 참고), 일정 간격마다 같은 위치로
-    // 재-seek해 브라우저가 위치를 다시 정확히 맞추도록 한다. 재생 재개 시
-    // 보정(_needsResyncOnPlay)은 정지 중 쌓인 오차만 잡아주므로 별개로 필요하다.
-    this._lastPositionResyncSec = 0;
     // 새로 시작한 트랙이 실제로 소리가 나기 시작하는 시점(playing 이벤트)에
     // 0으로 한 번 더 seek해, 버퍼가 덜 찬 상태로 재생을 걸었을 때 브라우저가
     // 초반을 건너뛰는 경우를 바로잡는다. playIndex()/_swapToPreloaded()에서
@@ -74,10 +66,7 @@ export class PlayerEngine extends EventTarget {
   _bindAudioEvents(audio) {
     audio.addEventListener("timeupdate", () => {
       if (audio !== this.audio) return;
-      if (!this._seeking) {
-        this._emit("tick", { positionMs: this.position() });
-        this._maybeResyncPosition(audio);
-      }
+      if (!this._seeking) this._emit("tick", { positionMs: this.position() });
       this._maybePreloadNext();
     });
     audio.addEventListener("durationchange", () => {
@@ -216,7 +205,6 @@ export class PlayerEngine extends EventTarget {
     this._intentionalPause = false;
     this.audio.src = `/api/tracks/${track.track_id}/audio`;
     this._resetPositionOnPlay = true;
-    this._lastPositionResyncSec = 0;
     this._playWhenReady(this.audio);
     this._emit("trackchange", { track, index });
   }
@@ -340,13 +328,6 @@ export class PlayerEngine extends EventTarget {
     }
   }
 
-  _maybeResyncPosition(audio) {
-    const now = audio.currentTime;
-    if (now - this._lastPositionResyncSec < POSITION_RESYNC_INTERVAL_SEC) return;
-    this._lastPositionResyncSec = now;
-    this.seek(this.position());
-  }
-
   // 재생 중인 곡이 얼마 남지 않으면 다음 곡을 백그라운드 <audio>에 미리
   // 로드해 둔다. "one" 반복은 항상 같은 곡을 재시작하므로 대상이 아니다.
   _maybePreloadNext() {
@@ -408,7 +389,6 @@ export class PlayerEngine extends EventTarget {
 
     this._intentionalPause = false;
     this._resetPositionOnPlay = true;
-    this._lastPositionResyncSec = 0;
     this._playWhenReady(promoted);
     this._emit("trackchange", { track, index });
     // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는
