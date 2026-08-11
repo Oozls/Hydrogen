@@ -1304,6 +1304,18 @@ input[type="range"]:hover::-moz-range-thumb {
 .lyrics-format-help-body li + li {
   margin-top: 4px;
 }
+.lyrics-format-help-colors li {
+  display: flex;
+  align-items: center;
+}
+.lyrics-format-help-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
 .confirm-dialog {
   width: 360px;
 }
