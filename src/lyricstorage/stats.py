@@ -99,11 +99,17 @@ def recent_tracks(limit: int = 12, tracks: list[dict[str, Any]] | None = None) -
     return random.sample(pool, min(limit, len(pool)))
 
 
-def track_totals(track_id: str) -> dict[str, Any]:
-    """트랙 하나의 전체 기간(day/week/month 구분 없이) 누적 재생 횟수/감상 시간."""
+def track_totals(track_id: str, period: str = "all", offset: int = 0) -> dict[str, Any]:
+    """트랙 하나의 누적 재생 횟수/감상 시간. period가 "all"이면 전체 기간, 아니면
+    (day/week/month) 해당 구간만."""
+    if period == "all":
+        history = storage.load_play_history()
+    else:
+        start, end = _period_bounds(period, offset)
+        history = storage.load_play_history_range(start, end)
     count = 0
     listened_ms = 0
-    for entry in storage.load_play_history():
+    for entry in history:
         if entry.get("track_id") == track_id:
             count += 1
             listened_ms += entry.get("listened_ms") or 0
