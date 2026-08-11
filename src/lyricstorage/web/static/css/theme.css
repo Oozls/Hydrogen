@@ -822,6 +822,21 @@ select#today-limit-select {
   gap: 6px;
   margin-bottom: 8px;
 }
+.lyrics-sync-offset {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+.lyrics-sync-offset-value {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
 .lyrics-edit-scroll {
   flex: 1;
   min-width: 0;

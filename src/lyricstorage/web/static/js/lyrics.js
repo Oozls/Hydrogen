@@ -103,6 +103,9 @@ export function setupLyrics(player, onLyricsSaved) {
   const helpBtn = document.getElementById("btn-lyrics-help");
   const helpDialog = document.getElementById("lyrics-format-help-dialog");
   const helpCloseBtn = document.getElementById("lyrics-format-help-close");
+  const syncOffsetMinusBtn = document.getElementById("btn-lyrics-sync-offset-minus");
+  const syncOffsetPlusBtn = document.getElementById("btn-lyrics-sync-offset-plus");
+  const syncOffsetValueEl = document.getElementById("lyrics-sync-offset-value");
 
   const lyricsEditorApi = setupLyricsEditor(player);
 
@@ -112,6 +115,10 @@ export function setupLyrics(player, onLyricsSaved) {
   let lastHighlighted = -2;
   let selectedRow = null;
   let textModeOn = false;
+
+  const SYNC_OFFSET_STEP_MS = 50;
+  const SYNC_OFFSET_MAX_MS = 2000;
+  let syncOffsetMs = 0; // 재생 위치 하이라이트 계산에만 쓰이는 세션 한정 보정값. 저장되지 않는다.
 
   // 편집 탭이 display:none인 동안엔 scrollHeight가 0으로 읽혀 textarea 높이가
   // 찌그러진 채로 고정된다. 탭이 실제로 보이게 된 "다음" 프레임에 전부 재측정한다.
@@ -157,7 +164,7 @@ export function setupLyrics(player, onLyricsSaved) {
       viewList.appendChild(li);
     }
     lastHighlighted = -2;
-    applyHighlight(currentIndexForPosition(lines, player.position()));
+    applyHighlight(currentIndexForPosition(lines, player.position() + syncOffsetMs));
   }
 
   function applyHighlight(idx) {
@@ -169,9 +176,20 @@ export function setupLyrics(player, onLyricsSaved) {
     }
   }
 
+  // 가사 싱크 보정: 저장된 타임스탬프는 건드리지 않고, 하이라이트 계산에
+  // 쓰이는 재생 위치만 세션 동안 이 값만큼 밀어서 계산한다.
+  function setSyncOffset(ms) {
+    syncOffsetMs = Math.max(-SYNC_OFFSET_MAX_MS, Math.min(SYNC_OFFSET_MAX_MS, ms));
+    syncOffsetValueEl.textContent = `${syncOffsetMs > 0 ? "+" : ""}${syncOffsetMs}ms`;
+    lastHighlighted = -2;
+    applyHighlight(currentIndexForPosition(lines, player.position() + syncOffsetMs));
+  }
+  syncOffsetMinusBtn.addEventListener("click", () => setSyncOffset(syncOffsetMs - SYNC_OFFSET_STEP_MS));
+  syncOffsetPlusBtn.addEventListener("click", () => setSyncOffset(syncOffsetMs + SYNC_OFFSET_STEP_MS));
+
   player.addEventListener("tick", (e) => {
     if (!lines.length) return;
-    const idx = currentIndexForPosition(lines, e.detail.positionMs);
+    const idx = currentIndexForPosition(lines, e.detail.positionMs + syncOffsetMs);
     if (idx === lastHighlighted) return;
     lastHighlighted = idx;
     applyHighlight(idx);
