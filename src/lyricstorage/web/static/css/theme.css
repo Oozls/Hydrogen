@@ -2408,6 +2408,12 @@ textarea.file-content-body:disabled {
   font-size: 12px;
   color: var(--text-muted);
 }
+#expanded-player-queue .section-title {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  z-index: 1;
+}
 .expanded-player-queue {
   flex: 1 1 54%;
   /* .expanded-player-body의 기본 align-items:stretch를 끄고, 곡 수만큼만
