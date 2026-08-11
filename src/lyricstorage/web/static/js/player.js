@@ -7,6 +7,10 @@ const REPEAT_ORDER = ["off", "all", "one"];
 // 초반 오디오가 씹히거나(특히 화면이 꺼져 백그라운드 상태일 때 네트워크가
 // 느려지면) 전환 자체가 멎는 문제가 있어, 끝나기 전에 미리 준비해 둔다.
 const PRELOAD_AHEAD_SEC = 15;
+// 재생 시작 후 이 시간(초)이 지난 첫 timeupdate에서, 딱 한 번만 currentTime을
+// 스스로에게 재-seek해 디코더 위치 추적 오차를 보정한다(그 뒤로는 반복하지
+// 않는다 — 재생 중 계속 반복하면 매번 실제 seek이 걸려 끊김이 들린다).
+const INITIAL_RESYNC_AFTER_SEC = 2;
 
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
@@ -45,6 +49,10 @@ export class PlayerEngine extends EventTarget {
     // 초반을 건너뛰는 경우를 바로잡는다. playIndex()/_swapToPreloaded()에서
     // 세팅한다.
     this._resetPositionOnPlay = false;
+    // 새 트랙이 시작될 때마다 true로 세팅되고, 재생이 INITIAL_RESYNC_AFTER_SEC초
+    // 지난 시점에 한 번 자기 자신에게 재-seek해 VBR mp3 등의 currentTime 위치
+    // 추적 오차를 보정한 뒤 false로 되돌린다. 트랙당 딱 한 번만 실행된다.
+    this._needsInitialResync = false;
     // 가사 상세 편집(타이밍 태깅) 중에는 곡이 끝나도 다음 곡으로 자동
     // 전환되면 저장하지 않은 태깅 진행 상황이 날아가므로, 그 화면이 열려
     // 있는 동안은 이 플래그를 false로 두어 트랙 전환을 막는다.
@@ -66,7 +74,13 @@ export class PlayerEngine extends EventTarget {
   _bindAudioEvents(audio) {
     audio.addEventListener("timeupdate", () => {
       if (audio !== this.audio) return;
-      if (!this._seeking) this._emit("tick", { positionMs: this.position() });
+      if (!this._seeking) {
+        this._emit("tick", { positionMs: this.position() });
+        if (this._needsInitialResync && audio.currentTime >= INITIAL_RESYNC_AFTER_SEC) {
+          this._needsInitialResync = false;
+          this.seek(this.position());
+        }
+      }
       this._maybePreloadNext();
     });
     audio.addEventListener("durationchange", () => {
@@ -205,6 +219,7 @@ export class PlayerEngine extends EventTarget {
     this._intentionalPause = false;
     this.audio.src = `/api/tracks/${track.track_id}/audio`;
     this._resetPositionOnPlay = true;
+    this._needsInitialResync = true;
     this._playWhenReady(this.audio);
     this._emit("trackchange", { track, index });
   }
@@ -389,6 +404,7 @@ export class PlayerEngine extends EventTarget {
 
     this._intentionalPause = false;
     this._resetPositionOnPlay = true;
+    this._needsInitialResync = true;
     this._playWhenReady(promoted);
     this._emit("trackchange", { track, index });
     // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는
