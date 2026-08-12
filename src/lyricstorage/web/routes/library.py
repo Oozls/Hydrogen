@@ -15,6 +15,7 @@ from lyricstorage.models import (
     GLOBAL_PLAYLIST_NAME,
     SUPPORTED_EXTENSIONS,
     PlaylistModel,
+    Track,
     read_album_art,
     read_tags,
     write_tags,
@@ -118,13 +119,18 @@ def rebuild_global():
     skipped = []
     found = sorted(p for ext in SUPPORTED_EXTENSIONS for p in storage.songs_dir().glob(f"*{ext}"))
     for audio_path in found:
+        # add_file()은 내용 해시를 다시 계산해 "이미 라이브러리에 있는 파일인지"
+        # 확인하는데, 여기서 스캔하는 파일은 이미 그 해시 이름으로 songs_dir에
+        # 자리잡고 있어 매번 다시 해시할 필요가 없다(라이브러리가 크면 이 재해시
+        # 비용만으로 리버스 프록시 타임아웃(504)을 넘길 정도로 느려진다).
         try:
-            track = playlist.add_file(str(audio_path))
-        except (ValueError, OSError) as exc:
+            track = Track.from_file(str(audio_path))
+        except OSError as exc:
             skipped.append({"filename": audio_path.name, "reason": str(exc)})
             continue
         if track.path in old_ratings:
             track.rating = old_ratings[track.path]
+        playlist.tracks.append(track)
 
     # 스캔 순서(해시 파일명)는 사실상 무작위라, 서클(앨범 아티스트) -> 앨범 ->
     # 곡 제목 순으로 다시 정렬해 브라우즈 화면의 그룹핑과 결이 맞게 만든다.
