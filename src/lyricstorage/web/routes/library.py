@@ -209,7 +209,9 @@ def _run_rebuild() -> None:
                     deduped.append(sub[0])
                     distinct_despite_same_tags += 1
                     continue
-                kept = next((t for t in sub if t.path in old_ratings), sub[0])
+                # 레이팅은 이미 위에서 old_ratings 기준으로 각 트랙에 채워진 상태이므로,
+                # 후보 중 레이팅이 가장 높은 파일을 남겨야 실수로 레이팅을 잃지 않는다.
+                kept = max(sub, key=lambda t: t.rating)
                 deduped.append(kept)
                 removed = [t for t in sub if t is not kept]
                 moved_files = []

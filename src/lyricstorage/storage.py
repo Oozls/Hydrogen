@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import tempfile
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -316,9 +318,25 @@ def _retry_on_windows_lock(fn, attempts: int = 5, delay: float = 0.05) -> None:
 def write_json_atomic(path: Path, data: Any) -> None:
     """쓰다가 프로세스가 죽어도(OOM, 워커 재시작 등) 기존 파일이 반쯤 잘린 채로
     남지 않도록, 임시 파일에 다 쓴 뒤 원자적으로 교체한다."""
-    tmp_path = path.with_name(path.name + ".tmp")
-    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    _retry_on_windows_lock(lambda: tmp_path.replace(path))
+    write_text_atomic(path, json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    """write_json_atomic과 동일한 임시파일+교체 방식의 텍스트 버전. 임시파일명은
+    호출마다 고유해야 한다 — 이름을 공유하면(예전엔 path+".tmp" 고정) 같은 파일을
+    거의 동시에 저장하는 두 요청(디바운스 자동저장 + blur 등)이 서로의 임시파일을
+    지우거나 빈 내용 위에 쓰게 되어, 있어야 할 요청 하나가 지고 잘린/빈 파일만
+    남을 수 있다. mkstemp로 매번 새 임시파일을 받으면 각 쓰기가 완전히 독립적이고,
+    마지막에 이기는 replace()만 원자적으로 순서를 정한다."""
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        _retry_on_windows_lock(lambda: tmp_path.replace(path))
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def unlink_retrying(path: Path, missing_ok: bool = False) -> None:

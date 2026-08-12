@@ -143,7 +143,7 @@ def restore_backup(track_path: str, name: str) -> Path:
     lines = read_backup(track_path, name)
     _maybe_backup_current(track_path, force=True)
     target = lyrics_path(track_path)
-    target.write_text(to_lrc(lines), encoding="utf-8")
+    storage.write_text_atomic(target, to_lrc(lines))
     return target
 
 
@@ -166,7 +166,7 @@ def save_lyrics(track_path: str, lines: list[tuple[int, str]]) -> Path | None:
 
     _maybe_backup_current(track_path)
     target = lyrics_path(track_path)
-    target.write_text(to_lrc(lines), encoding="utf-8")
+    storage.write_text_atomic(target, to_lrc(lines))
     for legacy in _legacy_paths(track_path):
         try:
             legacy.unlink(missing_ok=True)

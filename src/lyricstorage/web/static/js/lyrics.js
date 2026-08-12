@@ -302,8 +302,11 @@ export function setupLyrics(player, onLyricsSaved) {
   player.addEventListener("trackchange", (e) => setTrack(e.detail.track));
 
   let autoSaveTimer = null;
-  let saving = false;
-  let saveAgainAfter = false;
+  // 모든 저장 요청(자동저장 디바운스, blur, 곡 전환 시 flush)이 이 체인을 타고
+  // 순서대로 실행된다. 각 요청은 예약되는 "시점"의 trackId/가사 내용을 미리
+  // 캡처해두므로, 저장이 실제로 서버에 도착하는 시점에 트랙이 이미 바뀌어
+  // 있어도 엉뚱한(새) 트랙에 이전 곡 가사가 저장되는 일이 없다.
+  let saveChain = Promise.resolve();
 
   function collectTableLines() {
     const rows = Array.from(editBody.querySelectorAll("tr"));
@@ -324,24 +327,21 @@ export function setupLyrics(player, onLyricsSaved) {
   // 편집 테이블을 다시 그리지 않는다. 시간 형식이 잘못된 줄은 조용히 건너뛴다.
   async function performSave() {
     if (!trackId) return;
-    if (saving) {
-      saveAgainAfter = true;
-      return;
-    }
-    saving = true;
-    try {
-      const validLines = textModeOn ? parseLrcText(textArea.value) : collectTableLines();
-      const result = await api.saveLyrics(trackId, validLines);
-      lines = result.lines;
-      renderView();
-      if (onLyricsSaved) onLyricsSaved(trackId);
-    } finally {
-      saving = false;
-      if (saveAgainAfter) {
-        saveAgainAfter = false;
-        performSave();
+    // trackId와 저장할 가사는 반드시 "지금" 동기적으로 캡처한다 — 아래 체인이
+    // 실제로 실행될 때까지 기다렸다가 읽으면 그 사이 다른 곡으로 넘어가 있을 수 있다.
+    const targetTrackId = trackId;
+    const validLines = textModeOn ? parseLrcText(textArea.value) : collectTableLines();
+    const run = async () => {
+      const result = await api.saveLyrics(targetTrackId, validLines);
+      if (trackId === targetTrackId) {
+        lines = result.lines;
+        renderView();
       }
-    }
+      if (onLyricsSaved) onLyricsSaved(targetTrackId);
+    };
+    const next = saveChain.then(run, run);
+    saveChain = next;
+    await next;
   }
 
   // 필드에 오래 머무르며 타이핑하는 경우를 대비한 배경 안전장치. 실제 저장은
