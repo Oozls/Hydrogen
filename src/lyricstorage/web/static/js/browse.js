@@ -11,6 +11,7 @@ import { showArtSpinner } from "./artspinner.js";
 import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { setupRebuildResultDialog } from "./rebuildResultDialog.js";
+import { setupTrashCompareDialog } from "./trashCompareDialog.js";
 import { fillArtistArt } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { splitArtists, buildArtistNameResolver, buildCircleNameFinder, buildArtistCell } from "./songArtist.js";
@@ -110,6 +111,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const addFolderBtn = document.getElementById("browse-manage-add-folder");
   const reimportArtistsBtn = document.getElementById("browse-manage-reimport-artists");
   const rebuildBtn = document.getElementById("browse-manage-rebuild");
+  const trashCompareBtn = document.getElementById("browse-manage-trash-compare");
   const fileInput = document.getElementById("browse-file-input");
   const folderInput = document.getElementById("browse-folder-input");
   const reimportArtistsInput = document.getElementById("browse-reimport-artists-input");
@@ -141,6 +143,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const albumArtPromptApi = setupAlbumArtPrompt();
   const albumArtistPromptApi = setupAlbumArtistPrompt();
   const rebuildResultDialogApi = setupRebuildResultDialog();
+  const trashCompareDialogApi = setupTrashCompareDialog();
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -1407,6 +1410,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   rebuildBtn.addEventListener("click", async () => {
     manageDialog.close();
     await handleRebuildGlobal();
+  });
+  trashCompareBtn.addEventListener("click", () => {
+    manageDialog.close();
+    trashCompareDialogApi.open();
   });
 
   // 재생 곡이 바뀔 때마다 현재 보이는 목록(곡 목록 또는 앨범 상세)을 다시 그려

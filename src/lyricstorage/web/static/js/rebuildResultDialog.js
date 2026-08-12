@@ -1,22 +1,5 @@
 import { api } from "./api.js";
-
-function fmtDuration(ms) {
-  const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-
-function fmtBytes(bytes) {
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes || 0;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024;
-    i++;
-  }
-  return `${value.toFixed(i === 0 ? 0 : 1)}${units[i]}`;
-}
+import { fmtDuration, fmtBytes } from "./formatters.js";
 
 // 글로벌 플레이리스트 재작성 결과(중복 정리/스킵 내역)를 보여주는 다이얼로그.
 // 여기 나오는 중복은 태그뿐 아니라 파일 내용 해시까지 같다고 서버가 이미

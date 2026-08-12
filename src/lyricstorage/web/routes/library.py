@@ -30,6 +30,12 @@ from lyricstorage.web.serialize import playlist_to_json, track_to_json
 bp = Blueprint("library", __name__, url_prefix="/api/library")
 
 
+def _circle_name_for(track: Track, album_by_id: dict, circle_resolver: dict) -> str:
+    album = album_by_id.get(track.album_id)
+    artist = album.artist if album else track.artist
+    return circle_resolver.get(artist, artist)
+
+
 @bp.get("")
 def get_library():
     playlist = playlist_repo.load_or_create_global()
@@ -168,9 +174,7 @@ def _run_rebuild() -> None:
         album_by_id = {a.id: a for a in albums_repo.load_albums()}
 
         def circle_for(track: Track) -> str:
-            album = album_by_id.get(track.album_id)
-            artist = album.artist if album else track.artist
-            return circle_resolver.get(artist, artist)
+            return _circle_name_for(track, album_by_id, circle_resolver)
 
         # 제목/아티스트/서클/앨범이 전부 같은 곡이 여러 파일로 있으면 일단 "의심"
         # 후보로 묶는다. 태그만으로는 진짜 같은 파일인지 알 수 없으므로(예: 우연히
@@ -306,6 +310,48 @@ def _resolve_song_path(filename: str) -> Path:
         if path.resolve().parent == base.resolve() and path.is_file():
             return path
     abort(404)
+
+
+@bp.get("/trash")
+def list_trash():
+    """휴지통(data/trash)의 파일들을, 현재 라이브러리에 남아있는 대응 곡과 나란히
+    비교해볼 수 있게 목록으로 돌려준다. 재작성 중 자동 확정된 중복 정리가 맞는지
+    사용자가 직접 들어보고 확인하고 싶을 때 쓴다."""
+    playlist = playlist_repo.load_or_create_global()
+    by_key: dict[tuple[str, str, str], Track] = {}
+    for t in playlist.tracks:
+        by_key.setdefault((t.title, t.artist, t.album), t)
+
+    circle_resolver = circles_repo.name_resolver()
+    album_by_id = {a.id: a for a in albums_repo.load_albums()}
+
+    trash_files = sorted(p for ext in SUPPORTED_EXTENSIONS for p in storage.trash_dir().glob(f"*{ext}"))
+    items = []
+    for path in trash_files:
+        tags = read_tags(str(path))
+        match = by_key.get((tags["title"], tags["artist"], tags["album"]))
+        kept_file = None
+        if match is not None and Path(match.path).is_file():
+            kept_file = {
+                "filename": Path(match.path).name,
+                "size_bytes": Path(match.path).stat().st_size,
+                "duration_ms": match.duration_ms,
+                "circle": _circle_name_for(match, album_by_id, circle_resolver),
+            }
+        items.append(
+            {
+                "trash_file": {
+                    "filename": path.name,
+                    "size_bytes": path.stat().st_size,
+                    "duration_ms": tags["duration_ms"],
+                    "title": tags["title"],
+                    "artist": tags["artist"],
+                    "album": tags["album"],
+                },
+                "kept_file": kept_file,
+            }
+        )
+    return jsonify({"items": items})
 
 
 @bp.get("/songs/<filename>/audio")

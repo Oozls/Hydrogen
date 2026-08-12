@@ -639,6 +639,10 @@
         <span class="icon" style="--icon: url(/static/icons/repeat.svg)"></span>
         글로벌 플레이리스트 재작성
       </button>
+      <button id="browse-manage-trash-compare" class="browse-manage-item" type="button">
+        <span class="icon" style="--icon: url(/static/icons/list.svg)"></span>
+        휴지통 곡 비교
+      </button>
     </div>
   </dialog>
 
@@ -655,6 +659,18 @@
       <div id="rebuild-result-duplicates"></div>
       <div id="rebuild-result-skipped"></div>
     </div>
+  </dialog>
+
+  <dialog id="trash-compare-dialog" class="library-picker-dialog rebuild-result-dialog trash-compare-dialog">
+    <div class="library-picker-header">
+      <h3>휴지통 곡 비교</h3>
+      <div class="spacer"></div>
+      <button id="trash-compare-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <p class="rebuild-result-summary">data/trash로 옮겨진 파일과 현재 라이브러리에 남은 곡을 나란히 들어볼 수 있습니다.</p>
+    <div id="trash-compare-list" class="rebuild-result-body"></div>
   </dialog>
 
   <dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">

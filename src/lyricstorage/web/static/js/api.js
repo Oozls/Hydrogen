@@ -120,6 +120,8 @@ export const api = {
   // 재작성 결과의 중복 파일 미리듣기용 — 아직 어느 플레이리스트에도 없어
   // track_id로 찾을 수 없는 파일도 파일명(내용 해시)만으로 바로 스트리밍한다.
   songFileAudioUrl: (filename) => `/api/library/songs/${encodeURIComponent(filename)}/audio`,
+  // 휴지통(data/trash) 파일들을 현재 라이브러리의 대응 곡과 나란히 비교하기 위한 목록.
+  getTrashComparisons: () => request("GET", "/api/library/trash"),
   getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
   getDataSize: () => request("GET", "/api/settings/data-size"),
