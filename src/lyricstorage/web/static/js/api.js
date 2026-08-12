@@ -112,6 +112,9 @@ export const api = {
       xhr.send(formData);
     });
   },
+  // data/songs 폴더를 재스캔해 글로벌 플레이리스트 인덱스를 통째로 다시 만드는
+  // 복구용 기능(인덱스 파일 유실/손상 시 사용).
+  rebuildGlobalLibrary: () => request("POST", "/api/library/rebuild"),
   getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
   getDataSize: () => request("GET", "/api/settings/data-size"),

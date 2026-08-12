@@ -1,7 +1,7 @@
 import { api } from "./api.js";
 import { store } from "./store.js";
 import { iconSpan } from "./icons.js";
-import { alertDialog } from "./dialog.js";
+import { alertDialog, confirmDialog } from "./dialog.js";
 import { showProgress, setProgress, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
@@ -102,10 +102,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const btnAlbumDetailBack = document.getElementById("btn-album-detail-back");
   const btnAlbumDetailDownload = document.getElementById("btn-album-detail-download");
   const btnAlbumDetailEdit = document.getElementById("btn-album-detail-edit");
-  const clearSelectionBtn = document.getElementById("btn-browse-clear-selection");
-  const addFileBtn = document.getElementById("btn-browse-add-file");
-  const addFolderBtn = document.getElementById("btn-browse-add-folder");
-  const reimportArtistsBtn = document.getElementById("btn-browse-reimport-artists");
+  const manageBtn = document.getElementById("btn-browse-manage");
+  const manageDialog = document.getElementById("browse-manage-dialog");
+  const manageCloseBtn = document.getElementById("browse-manage-close");
+  const addFileBtn = document.getElementById("browse-manage-add-file");
+  const addFolderBtn = document.getElementById("browse-manage-add-folder");
+  const reimportArtistsBtn = document.getElementById("browse-manage-reimport-artists");
+  const rebuildBtn = document.getElementById("browse-manage-rebuild");
   const fileInput = document.getElementById("browse-file-input");
   const folderInput = document.getElementById("browse-folder-input");
   const reimportArtistsInput = document.getElementById("browse-reimport-artists-input");
@@ -153,7 +156,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     songArtistDetailListEl
       .querySelectorAll(".playlist-list")
       .forEach((ul) => ul.classList.toggle("selecting", selecting));
-    clearSelectionBtn.hidden = !selecting;
   }
 
   // 더블클릭한 곡이 속한 목록(검색된 곡 목록이든 특정 앨범이든) 전체를 재생목록으로
@@ -290,6 +292,30 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       const lines = [`${result.updated.length}곡의 아티스트를 되돌렸습니다.`];
       if (result.ambiguous.length) lines.push(`같은 제목+앨범의 곡이 여럿이라 건너뛴 파일: ${result.ambiguous.length}개`);
       if (result.unmatched.length) lines.push(`일치하는 곡을 찾지 못한 파일: ${result.unmatched.length}개`);
+      await alertDialog(lines.join("\n"));
+    } catch (err) {
+      await alertDialog(err.message);
+    } finally {
+      hideProgress();
+    }
+  }
+
+  // 글로벌 플레이리스트 인덱스 파일이 유실/손상됐을 때 쓰는 복구용 기능: 음원
+  // 실 파일이 저장된 폴더(data/songs)를 다시 스캔해 인덱스를 통째로 재구성한다.
+  // 레이팅은 되살리지만, 파일 태그에 없는 값(재생목록 구성 등)은 복구되지 않는다.
+  async function handleRebuildGlobal() {
+    const ok = await confirmDialog(
+      "글로벌 플레이리스트를 음원 폴더 기준으로 다시 만듭니다.\n" +
+        "레이팅은 유지되지만 그 외 정보는 파일 태그로 재계산됩니다. 계속할까요?"
+    );
+    if (!ok) return;
+    showProgress("글로벌 플레이리스트 재작성 중...");
+    try {
+      const result = await api.rebuildGlobalLibrary();
+      await loadLibraryAndAlbums();
+      render();
+      const lines = [`${result.track_count}곡으로 재작성했습니다.`];
+      if (result.skipped.length) lines.push(`읽지 못해 건너뛴 파일: ${result.skipped.length}개`);
       await alertDialog(lines.join("\n"));
     } catch (err) {
       await alertDialog(err.message);
@@ -1292,12 +1318,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     switchMode(btn.dataset.mode);
   });
 
-  clearSelectionBtn.addEventListener("click", () => {
-    selectedTrackIds.clear();
-    lastClickedIndex = null;
-    render();
-  });
-
   albumDetailArt.classList.add("art-clickable");
   albumDetailArt.addEventListener("click", () => openImageLightbox(albumDetailArt.src));
 
@@ -1333,8 +1353,17 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     });
   });
 
-  addFileBtn.addEventListener("click", () => fileInput.click());
-  addFolderBtn.addEventListener("click", () => folderInput.click());
+  manageBtn.addEventListener("click", () => manageDialog.showModal());
+  manageCloseBtn.addEventListener("click", () => manageDialog.close());
+
+  addFileBtn.addEventListener("click", () => {
+    manageDialog.close();
+    fileInput.click();
+  });
+  addFolderBtn.addEventListener("click", () => {
+    manageDialog.close();
+    folderInput.click();
+  });
   fileInput.addEventListener("change", async () => {
     await handleUpload(fileInput.files);
     fileInput.value = "";
@@ -1343,10 +1372,17 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     await handleUpload(folderInput.files);
     folderInput.value = "";
   });
-  reimportArtistsBtn.addEventListener("click", () => reimportArtistsInput.click());
+  reimportArtistsBtn.addEventListener("click", () => {
+    manageDialog.close();
+    reimportArtistsInput.click();
+  });
   reimportArtistsInput.addEventListener("change", async () => {
     await handleReimportArtists(reimportArtistsInput.files);
     reimportArtistsInput.value = "";
+  });
+  rebuildBtn.addEventListener("click", async () => {
+    manageDialog.close();
+    await handleRebuildGlobal();
   });
 
   // 재생 곡이 바뀔 때마다 현재 보이는 목록(곡 목록 또는 앨범 상세)을 다시 그려

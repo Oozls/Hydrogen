@@ -15,7 +15,7 @@ from mutagen.mp4 import MP4, MP4Cover
 from mutagen.wave import WAVE
 
 from lyricstorage import albums as albums_repo
-from lyricstorage import lyrics_io, storage
+from lyricstorage import applog, lyrics_io, storage
 
 GLOBAL_PLAYLIST_NAME = "글로벌 플레이리스트"
 SUPPORTED_EXTENSIONS = (".mp3", ".wav", ".m4a")
@@ -240,9 +240,13 @@ class PlaylistModel:
 
     def save(self) -> Path:
         path = storage.playlists_dir() / f"{self._slug()}.json"
-        path.write_text(
+        # 쓰다가 프로세스가 죽어도(OOM, 워커 재시작 등) 기존 파일이 반쯤 잘린 채로
+        # 남지 않도록, 임시 파일에 다 쓴 뒤 원자적으로 교체한다.
+        tmp_path = path.with_name(path.name + ".tmp")
+        tmp_path.write_text(
             json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        tmp_path.replace(path)
         return path
 
     @classmethod
@@ -261,7 +265,10 @@ class PlaylistModel:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 result.append((data.get("name", path.stem), path))
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError) as exc:
+                # 손상된 파일을 "없는 파일"로 조용히 취급하면 곧바로 빈 플레이리스트로
+                # 덮어써지는 사고가 재발한다(글로벌 플레이리스트 유실 사고 참고).
+                applog.log_error("PLAYLIST", f"플레이리스트 파일을 읽지 못했습니다: {path} ({exc})")
                 continue
         return result
 

@@ -9,10 +9,12 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 from lyricstorage import albums as albums_repo
-from lyricstorage import applog
+from lyricstorage import applog, storage
+from lyricstorage import circles as circles_repo
 from lyricstorage.models import (
     GLOBAL_PLAYLIST_NAME,
     SUPPORTED_EXTENSIONS,
+    PlaylistModel,
     read_album_art,
     read_tags,
     write_tags,
@@ -100,6 +102,51 @@ def upload_files():
             "albums_missing_art": albums_missing_art,
             "new_albums": new_albums,
         }
+    )
+
+
+@bp.post("/rebuild")
+def rebuild_global():
+    """data/songs 폴더(음원 실 파일)를 다시 스캔해 글로벌 플레이리스트 인덱스를
+    통째로 재구성한다. 인덱스 파일이 유실/손상됐을 때 쓰는 복구용 기능이라, 파일
+    태그에 없는 레이팅만 기존 값에서 되살리고 나머지(재생목록 구성 등)는 각자
+    다시 정리해야 한다."""
+    old_playlist = playlist_repo.load_playlist(GLOBAL_PLAYLIST_NAME)
+    old_ratings = {t.path: t.rating for t in old_playlist.tracks} if old_playlist else {}
+
+    playlist = PlaylistModel(GLOBAL_PLAYLIST_NAME)
+    skipped = []
+    found = sorted(p for ext in SUPPORTED_EXTENSIONS for p in storage.songs_dir().glob(f"*{ext}"))
+    for audio_path in found:
+        try:
+            track = playlist.add_file(str(audio_path))
+        except (ValueError, OSError) as exc:
+            skipped.append({"filename": audio_path.name, "reason": str(exc)})
+            continue
+        if track.path in old_ratings:
+            track.rating = old_ratings[track.path]
+
+    # 스캔 순서(해시 파일명)는 사실상 무작위라, 서클(앨범 아티스트) -> 앨범 ->
+    # 곡 제목 순으로 다시 정렬해 브라우즈 화면의 그룹핑과 결이 맞게 만든다.
+    circle_resolver = circles_repo.name_resolver()
+    album_by_id = {a.id: a for a in albums_repo.load_albums()}
+
+    def sort_key(track):
+        album = album_by_id.get(track.album_id)
+        artist = album.artist if album else track.artist
+        album_name = album.name if album else track.album
+        circle = circle_resolver.get(artist, artist)
+        return (circle, album_name, track.title)
+
+    playlist.tracks.sort(key=sort_key)
+    playlist.save()
+
+    applog.log_info(
+        "ACTION",
+        f"글로벌 플레이리스트 재작성: {len(playlist.tracks)}곡, 스킵 {len(skipped)}개",
+    )
+    return jsonify(
+        {"playlist": playlist_to_json(playlist), "track_count": len(playlist.tracks), "skipped": skipped}
     )
 
 

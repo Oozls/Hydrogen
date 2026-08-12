@@ -1281,6 +1281,28 @@ input[type="range"]:hover::-moz-range-thumb {
 .lyrics-backup-row:hover {
   background: #1f2330;
 }
+.browse-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.browse-manage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.browse-manage-item:hover {
+  background: #1f2330;
+}
 .lyrics-backups-empty {
   color: var(--text-secondary);
   font-size: 13px;
