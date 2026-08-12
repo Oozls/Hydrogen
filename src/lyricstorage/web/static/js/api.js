@@ -113,8 +113,13 @@ export const api = {
     });
   },
   // data/songs 폴더를 재스캔해 글로벌 플레이리스트 인덱스를 통째로 다시 만드는
-  // 복구용 기능(인덱스 파일 유실/손상 시 사용).
+  // 복구용 기능(인덱스 파일 유실/손상 시 사용). 백그라운드에서 돌아가므로
+  // 시작만 시키고, 진행 상황은 getRebuildStatus로 폴링한다.
   rebuildGlobalLibrary: () => request("POST", "/api/library/rebuild"),
+  getRebuildStatus: () => request("GET", "/api/library/rebuild/status"),
+  // 재작성 결과의 중복 파일 미리듣기용 — 아직 어느 플레이리스트에도 없어
+  // track_id로 찾을 수 없는 파일도 파일명(내용 해시)만으로 바로 스트리밍한다.
+  songFileAudioUrl: (filename) => `/api/library/songs/${encodeURIComponent(filename)}/audio`,
   getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
   getDataSize: () => request("GET", "/api/settings/data-size"),

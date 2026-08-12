@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -36,20 +37,29 @@ def _wave_frame_text(tags, frame_id: str, default: str) -> str:
     return str(frame.text[0]) if frame is not None and frame.text else default
 
 
+def _parse_track_no(text: str) -> int:
+    """"3", "3/12" 같은 트랙 번호 태그에서 앞의 숫자만 뽑는다. 없거나 형식이
+    이상하면 0(=번호 없음)."""
+    match = re.match(r"\s*(\d+)", text or "")
+    return int(match.group(1)) if match else 0
+
+
 def read_tags(path: str) -> dict:
     title = Path(path).stem
     artist = ""
     album = ""
     duration_ms = 0
+    track_no = 0
     try:
         # WAV엔 mutagen의 "easy" 태그 래퍼가 없어(File(easy=True)가 조용히 raw
         # WAVE를 반환) title/artist/album 이지키 읽기가 항상 실패하고 파일명으로
-        # 폴백한다. raw ID3 프레임(TIT2/TPE1/TALB)으로 직접 읽어야 한다.
+        # 폴백한다. raw ID3 프레임(TIT2/TPE1/TALB/TRCK)으로 직접 읽어야 한다.
         if Path(path).suffix.lower() == ".wav":
             audio = WAVE(path)
             title = _wave_frame_text(audio.tags, "TIT2", title)
             artist = _wave_frame_text(audio.tags, "TPE1", artist)
             album = _wave_frame_text(audio.tags, "TALB", album)
+            track_no = _parse_track_no(_wave_frame_text(audio.tags, "TRCK", ""))
             if audio.info is not None:
                 duration_ms = int(audio.info.length * 1000)
         else:
@@ -59,11 +69,12 @@ def read_tags(path: str) -> dict:
                     title = (audio.tags.get("title") or [title])[0]
                     artist = (audio.tags.get("artist") or [""])[0]
                     album = (audio.tags.get("album") or [""])[0]
+                    track_no = _parse_track_no((audio.tags.get("tracknumber") or [""])[0])
                 if audio.info is not None:
                     duration_ms = int(audio.info.length * 1000)
     except Exception:
         pass
-    return {"title": title, "artist": artist, "album": album, "duration_ms": duration_ms}
+    return {"title": title, "artist": artist, "album": album, "duration_ms": duration_ms, "track_no": track_no}
 
 
 def read_album_art(path: str) -> Optional[bytes]:
@@ -146,6 +157,7 @@ class Track:
     duration_ms: int = 0
     rating: float = 0.0
     added_at: str = ""  # 라이브러리에 추가된 시각(ISO) — "최근 추가" 발견용, 과거 데이터엔 빈 문자열
+    track_no: int = 0  # 앨범 내 트랙 번호(태그의 tracknumber) — 없으면 0
 
     @classmethod
     def from_file(cls, path: str) -> "Track":
@@ -175,6 +187,7 @@ class Track:
             duration_ms=data.get("duration_ms", 0),
             rating=float(data.get("rating", 0) or 0),
             added_at=data.get("added_at", ""),
+            track_no=int(data.get("track_no", 0) or 0),
         )
 
 
@@ -240,13 +253,7 @@ class PlaylistModel:
 
     def save(self) -> Path:
         path = storage.playlists_dir() / f"{self._slug()}.json"
-        # 쓰다가 프로세스가 죽어도(OOM, 워커 재시작 등) 기존 파일이 반쯤 잘린 채로
-        # 남지 않도록, 임시 파일에 다 쓴 뒤 원자적으로 교체한다.
-        tmp_path = path.with_name(path.name + ".tmp")
-        tmp_path.write_text(
-            json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        tmp_path.replace(path)
+        storage.write_json_atomic(path, self.to_dict())
         return path
 
     @classmethod

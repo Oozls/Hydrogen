@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
@@ -56,6 +58,22 @@ def songs_dir() -> Path:
     path = app_data_dir() / "songs"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def trash_dir() -> Path:
+    path = app_data_dir() / "trash"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def move_to_trash(path: Path) -> Path:
+    """곡 파일을 완전히 지우지 않고 복구 가능하게 data/trash로 옮긴다(예: 재작성
+    중 내용이 완전히 같다고 확인된 중복 파일 정리용)."""
+    target = trash_dir() / path.name
+    if target.exists():
+        target = trash_dir() / f"{path.stem}_{int(time.time() * 1000)}{path.suffix}"
+    shutil.move(str(path), str(target))
+    return target
 
 
 def logs_dir() -> Path:
@@ -279,6 +297,39 @@ def save_settings(settings: dict[str, Any]) -> None:
     settings_path().write_text(
         json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+
+def _retry_on_windows_lock(fn, attempts: int = 5, delay: float = 0.05) -> None:
+    """Windows는 다른 스레드/커넥션이 파일을 마침 열어보고 있으면(방금 스트리밍한
+    직후 등) 쓰기/삭제가 일시적으로 PermissionError를 낼 수 있다(POSIX에는 없는
+    문제) — 잠깐 재시도한다."""
+    for attempt in range(attempts):
+        try:
+            fn()
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delay)
+
+
+def write_json_atomic(path: Path, data: Any) -> None:
+    """쓰다가 프로세스가 죽어도(OOM, 워커 재시작 등) 기존 파일이 반쯤 잘린 채로
+    남지 않도록, 임시 파일에 다 쓴 뒤 원자적으로 교체한다."""
+    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _retry_on_windows_lock(lambda: tmp_path.replace(path))
+
+
+def unlink_retrying(path: Path, missing_ok: bool = False) -> None:
+    """방금 send_file로 스트리밍한 음원 파일처럼, 다른 스레드/커넥션이 아직
+    핸들을 들고 있을 수 있는 파일을 지울 때 쓴다(오디오 미리듣기 직후 삭제
+    시나리오). 브라우저가 커넥션을 닫는 데도 시간이 걸릴 수 있어 넉넉하게 잡는다."""
+    _retry_on_windows_lock(lambda: path.unlink(missing_ok=missing_ok), attempts=20, delay=0.15)
+
+
+def rebuild_status_path() -> Path:
+    return app_data_dir() / "rebuild_status.json"
 
 
 def path_hash(path: str) -> str:

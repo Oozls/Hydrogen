@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { store } from "./store.js";
 import { iconSpan } from "./icons.js";
 import { alertDialog, confirmDialog } from "./dialog.js";
-import { showProgress, setProgress, hideProgress } from "./progress.js";
+import { showProgress, setProgress, setProgressLabel, setProgressLog, hideProgress } from "./progress.js";
 import { setupRowContextMenu } from "./rowContextMenu.js";
 import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.js";
 import { openImageLightbox } from "./imageLightbox.js";
@@ -10,6 +10,7 @@ import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
 import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
+import { setupRebuildResultDialog } from "./rebuildResultDialog.js";
 import { fillArtistArt } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { splitArtists, buildArtistNameResolver, buildCircleNameFinder, buildArtistCell } from "./songArtist.js";
@@ -139,6 +140,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   const albumArtPromptApi = setupAlbumArtPrompt();
   const albumArtistPromptApi = setupAlbumArtistPrompt();
+  const rebuildResultDialogApi = setupRebuildResultDialog();
 
   const rowMenu = setupRowContextMenu({
     onEditTrack: (track) => onEditTrack(track),
@@ -300,6 +302,29 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     }
   }
 
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // 재작성은 서버 백그라운드 스레드에서 돌아간다(요청 하나로 다 처리하면
+  // 곡이 많을 때 리버스 프록시 타임아웃을 넘길 수 있어서). 끝날 때까지
+  // 상태 엔드포인트를 주기적으로 조회하며 진행 로그를 그대로 화면에 반영한다.
+  async function pollRebuildUntilDone() {
+    for (;;) {
+      const status = await api.getRebuildStatus();
+      if (status.log && status.log.length) {
+        setProgressLabel(status.log[status.log.length - 1]);
+        setProgressLog(status.log);
+      }
+      setProgress(status.total ? status.processed / status.total : null);
+      if (status.done) {
+        if (status.result && status.result.error) throw new Error(status.result.error);
+        return status.result;
+      }
+      await sleep(700);
+    }
+  }
+
   // 글로벌 플레이리스트 인덱스 파일이 유실/손상됐을 때 쓰는 복구용 기능: 음원
   // 실 파일이 저장된 폴더(data/songs)를 다시 스캔해 인덱스를 통째로 재구성한다.
   // 레이팅은 되살리지만, 파일 태그에 없는 값(재생목록 구성 등)은 복구되지 않는다.
@@ -309,14 +334,13 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
         "레이팅은 유지되지만 그 외 정보는 파일 태그로 재계산됩니다. 계속할까요?"
     );
     if (!ok) return;
-    showProgress("글로벌 플레이리스트 재작성 중...");
+    showProgress("재작성을 시작합니다...");
     try {
-      const result = await api.rebuildGlobalLibrary();
+      await api.rebuildGlobalLibrary();
+      const result = await pollRebuildUntilDone();
       await loadLibraryAndAlbums();
       render();
-      const lines = [`${result.track_count}곡으로 재작성했습니다.`];
-      if (result.skipped.length) lines.push(`읽지 못해 건너뛴 파일: ${result.skipped.length}개`);
-      await alertDialog(lines.join("\n"));
+      rebuildResultDialogApi.open(result);
     } catch (err) {
       await alertDialog(err.message);
     } finally {

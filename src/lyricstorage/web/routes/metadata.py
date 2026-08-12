@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 from lyricstorage import albums as albums_repo
-from lyricstorage import applog
+from lyricstorage import applog, storage
 from lyricstorage.models import write_album_art, write_tags
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
@@ -129,7 +129,7 @@ def delete_tracks_batch():
             errors.append({"track_id": track_id, "reason": "트랙을 찾을 수 없습니다."})
             continue
         playlist_repo.remove_track_from_all_playlists(track.path)
-        Path(track.path).unlink(missing_ok=True)
+        storage.unlink_retrying(Path(track.path), missing_ok=True)
         deleted.append(track_id)
     applog.log_info("ACTION", f"곡 일괄 삭제: {len(deleted)}곡 성공, {len(errors)}곡 실패")
     return jsonify({"deleted": deleted, "errors": errors})
@@ -166,6 +166,6 @@ def delete_track(track_id: str):
         return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
 
     playlist_repo.remove_track_from_all_playlists(track.path)
-    Path(track.path).unlink(missing_ok=True)
+    storage.unlink_retrying(Path(track.path), missing_ok=True)
     applog.log_info("ACTION", f"곡 완전 삭제(파일 포함): {track_id} ({track.title})")
     return jsonify({"ok": True})

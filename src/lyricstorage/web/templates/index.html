@@ -642,6 +642,21 @@
     </div>
   </dialog>
 
+  <dialog id="rebuild-result-dialog" class="library-picker-dialog rebuild-result-dialog">
+    <div class="library-picker-header">
+      <h3>글로벌 플레이리스트 재작성 완료</h3>
+      <div class="spacer"></div>
+      <button id="rebuild-result-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <p id="rebuild-result-summary" class="rebuild-result-summary"></p>
+    <div id="rebuild-result-body" class="rebuild-result-body">
+      <div id="rebuild-result-duplicates"></div>
+      <div id="rebuild-result-skipped"></div>
+    </div>
+  </dialog>
+
   <dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">
     <p id="confirm-dialog-message"></p>
     <input type="text" id="confirm-dialog-input" class="dialog-input" hidden />
@@ -841,6 +856,7 @@
         <div id="progress-fill" class="progress-fill"></div>
       </div>
       <div id="progress-percent" class="progress-percent"></div>
+      <pre id="progress-log" class="progress-log" hidden></pre>
     </div>
   </div>
 

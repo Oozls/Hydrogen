@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
+import threading
 from dataclasses import replace
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, abort, jsonify, request, send_file
 
 from lyricstorage import albums as albums_repo
 from lyricstorage import applog, storage
@@ -22,6 +24,7 @@ from lyricstorage.models import (
 )
 from lyricstorage.web import library as library_adapter
 from lyricstorage.web import playlist_repo
+from lyricstorage.web.routes.media import _MIME_BY_EXT
 from lyricstorage.web.serialize import playlist_to_json, track_to_json
 
 bp = Blueprint("library", __name__, url_prefix="/api/library")
@@ -106,54 +109,213 @@ def upload_files():
     )
 
 
+_REBUILD_LOG_LIMIT = 200
+
+
+def _write_rebuild_status(data: dict) -> None:
+    storage.write_json_atomic(storage.rebuild_status_path(), data)
+
+
+def _read_rebuild_status() -> dict:
+    path = storage.rebuild_status_path()
+    if not path.exists():
+        return {"running": False, "done": False, "processed": 0, "total": 0, "log": [], "result": None}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return {"running": False, "done": False, "processed": 0, "total": 0, "log": [], "result": None}
+
+
+def _run_rebuild() -> None:
+    """백그라운드 스레드에서 실제 재작성을 수행하며, 진행 중에도 다른 요청(상태
+    폴링)이 값을 읽을 수 있도록 status 파일에 계속 진행 상황을 기록한다."""
+    log: list[str] = []
+
+    def emit(line: str, processed: int, total: int, done: bool = False, result=None) -> None:
+        log.append(line)
+        del log[:-_REBUILD_LOG_LIMIT]
+        _write_rebuild_status(
+            {"running": not done, "done": done, "processed": processed, "total": total, "log": list(log), "result": result}
+        )
+
+    try:
+        old_playlist = playlist_repo.load_playlist(GLOBAL_PLAYLIST_NAME)
+        old_ratings = {t.path: t.rating for t in old_playlist.tracks} if old_playlist else {}
+
+        found = sorted(p for ext in SUPPORTED_EXTENSIONS for p in storage.songs_dir().glob(f"*{ext}"))
+        total = len(found)
+        emit(f"음원 파일 {total}개 발견, 태그 읽는 중...", 0, total)
+
+        playlist = PlaylistModel(GLOBAL_PLAYLIST_NAME)
+        skipped = []
+        for i, audio_path in enumerate(found, start=1):
+            # add_file()은 내용 해시를 다시 계산해 "이미 라이브러리에 있는 파일인지"
+            # 확인하는데, 여기서 스캔하는 파일은 이미 그 해시 이름으로 songs_dir에
+            # 자리잡고 있어 매번 다시 해시할 필요가 없다.
+            try:
+                track = Track.from_file(str(audio_path))
+            except OSError as exc:
+                skipped.append({"filename": audio_path.name, "reason": str(exc)})
+                emit(f"[스킵] {audio_path.name}: {exc}", i, total)
+                continue
+            if track.path in old_ratings:
+                track.rating = old_ratings[track.path]
+            playlist.tracks.append(track)
+            if i % 10 == 0 or i == total:
+                emit(f"태그 읽는 중... ({i}/{total})", i, total)
+
+        circle_resolver = circles_repo.name_resolver()
+        album_by_id = {a.id: a for a in albums_repo.load_albums()}
+
+        def circle_for(track: Track) -> str:
+            album = album_by_id.get(track.album_id)
+            artist = album.artist if album else track.artist
+            return circle_resolver.get(artist, artist)
+
+        # 제목/아티스트/서클/앨범이 전부 같은 곡이 여러 파일로 있으면 일단 "의심"
+        # 후보로 묶는다. 태그만으로는 진짜 같은 파일인지 알 수 없으므로(예: 우연히
+        # 태그가 겹치는 다른 곡), 후보 안에서만 내용 해시를 비교해 실제로 바이트가
+        # 완전히 같은 것끼리만 진짜 중복으로 확정한다. 확정된 중복은 하나만 남기고
+        # 나머지는 지우지 않고 data/trash로 옮긴다(복구 가능하게).
+        by_key: dict[tuple[str, str, str, str], list[Track]] = {}
+        for track in playlist.tracks:
+            by_key.setdefault((track.title, track.artist, circle_for(track), track.album), []).append(track)
+
+        tag_matched_groups = [g for g in by_key.values() if len(g) > 1]
+        if tag_matched_groups:
+            emit(
+                f"제목/아티스트/서클/앨범이 같은 곡 {len(tag_matched_groups)}건 발견, "
+                "실제 파일 내용이 같은지 확인 중...",
+                total,
+                total,
+            )
+
+        deduped: list[Track] = []
+        duplicates = []
+        distinct_despite_same_tags = 0
+        for group in by_key.values():
+            if len(group) == 1:
+                deduped.append(group[0])
+                continue
+            by_hash: dict[str, list[Track]] = {}
+            for t in group:
+                by_hash.setdefault(storage.file_content_hash(t.path), []).append(t)
+            for file_hash, sub in by_hash.items():
+                if len(sub) == 1:
+                    deduped.append(sub[0])
+                    distinct_despite_same_tags += 1
+                    continue
+                kept = next((t for t in sub if t.path in old_ratings), sub[0])
+                deduped.append(kept)
+                removed = [t for t in sub if t is not kept]
+                moved_files = []
+                for t in removed:
+                    size_bytes = Path(t.path).stat().st_size
+                    storage.move_to_trash(Path(t.path))
+                    moved_files.append({"filename": Path(t.path).name, "size_bytes": size_bytes, "duration_ms": t.duration_ms})
+                emit(
+                    f"[중복 확정] {kept.title} — 내용까지 동일한 파일 {len(sub)}개 중 "
+                    f"{len(removed)}개를 data/trash로 이동",
+                    total,
+                    total,
+                )
+                duplicates.append(
+                    {
+                        "title": kept.title,
+                        "artist": kept.artist,
+                        "album": kept.album,
+                        "circle": circle_for(kept),
+                        "kept_file": {
+                            "filename": Path(kept.path).name,
+                            "size_bytes": Path(kept.path).stat().st_size,
+                            "duration_ms": kept.duration_ms,
+                        },
+                        "moved_files": moved_files,
+                    }
+                )
+        if distinct_despite_same_tags:
+            emit(
+                f"태그는 같지만 실제 파일 내용은 달라 그대로 둔 곡: {distinct_despite_same_tags}개",
+                total,
+                total,
+            )
+        if duplicates:
+            emit(f"중복 확정 및 정리: {len(duplicates)}곡", total, total)
+        playlist.tracks = deduped
+
+        # 스캔 순서(해시 파일명)는 사실상 무작위라, 서클(앨범 아티스트) -> 앨범 ->
+        # 곡 제목 순으로 다시 정렬해 브라우즈 화면의 그룹핑과 결이 맞게 만든다.
+        emit("서클/앨범 순으로 정렬 중...", total, total)
+
+        def sort_key(track):
+            album = album_by_id.get(track.album_id)
+            album_name = album.name if album else track.album
+            # 태그에 트랙 번호가 있으면 그 순서를 따르고, 없거나(0) 같으면
+            # 제목으로 묶어 정렬한다.
+            return (circle_for(track), album_name, track.track_no, track.title)
+
+        playlist.tracks.sort(key=sort_key)
+
+        emit("저장 중...", total, total)
+        playlist.save()
+
+        applog.log_info(
+            "ACTION",
+            f"글로벌 플레이리스트 재작성: {len(playlist.tracks)}곡, 스킵 {len(skipped)}개, "
+            f"중복 제거 {len(duplicates)}곡",
+        )
+        result = {"track_count": len(playlist.tracks), "skipped": skipped, "duplicates": duplicates}
+        emit(f"완료: {len(playlist.tracks)}곡", total, total, done=True, result=result)
+    except Exception as exc:  # noqa: BLE001 - 백그라운드 스레드라 예외를 그냥 두면 조용히 사라진다.
+        applog.log_error("ACTION", f"글로벌 플레이리스트 재작성 실패: {exc}")
+        emit(f"오류로 중단됨: {exc}", 0, 0, done=True, result={"error": str(exc)})
+
+
 @bp.post("/rebuild")
 def rebuild_global():
     """data/songs 폴더(음원 실 파일)를 다시 스캔해 글로벌 플레이리스트 인덱스를
     통째로 재구성한다. 인덱스 파일이 유실/손상됐을 때 쓰는 복구용 기능이라, 파일
     태그에 없는 레이팅만 기존 값에서 되살리고 나머지(재생목록 구성 등)는 각자
-    다시 정리해야 한다."""
-    old_playlist = playlist_repo.load_playlist(GLOBAL_PLAYLIST_NAME)
-    old_ratings = {t.path: t.rating for t in old_playlist.tracks} if old_playlist else {}
+    다시 정리해야 한다.
 
-    playlist = PlaylistModel(GLOBAL_PLAYLIST_NAME)
-    skipped = []
-    found = sorted(p for ext in SUPPORTED_EXTENSIONS for p in storage.songs_dir().glob(f"*{ext}"))
-    for audio_path in found:
-        # add_file()은 내용 해시를 다시 계산해 "이미 라이브러리에 있는 파일인지"
-        # 확인하는데, 여기서 스캔하는 파일은 이미 그 해시 이름으로 songs_dir에
-        # 자리잡고 있어 매번 다시 해시할 필요가 없다(라이브러리가 크면 이 재해시
-        # 비용만으로 리버스 프록시 타임아웃(504)을 넘길 정도로 느려진다).
-        try:
-            track = Track.from_file(str(audio_path))
-        except OSError as exc:
-            skipped.append({"filename": audio_path.name, "reason": str(exc)})
-            continue
-        if track.path in old_ratings:
-            track.rating = old_ratings[track.path]
-        playlist.tracks.append(track)
+    라이브러리가 크면 태그를 전부 다시 읽는 데 리버스 프록시 타임아웃을 넘길
+    만큼 걸릴 수 있어(예전 504 원인), 백그라운드 스레드에서 돌리고 이 요청은
+    바로 응답한다. 진행 상황은 GET /api/library/rebuild/status로 폴링한다."""
+    current = _read_rebuild_status()
+    if current.get("running"):
+        return jsonify({**current, "error": "이미 재작성이 진행 중입니다."}), 409
 
-    # 스캔 순서(해시 파일명)는 사실상 무작위라, 서클(앨범 아티스트) -> 앨범 ->
-    # 곡 제목 순으로 다시 정렬해 브라우즈 화면의 그룹핑과 결이 맞게 만든다.
-    circle_resolver = circles_repo.name_resolver()
-    album_by_id = {a.id: a for a in albums_repo.load_albums()}
-
-    def sort_key(track):
-        album = album_by_id.get(track.album_id)
-        artist = album.artist if album else track.artist
-        album_name = album.name if album else track.album
-        circle = circle_resolver.get(artist, artist)
-        return (circle, album_name, track.title)
-
-    playlist.tracks.sort(key=sort_key)
-    playlist.save()
-
-    applog.log_info(
-        "ACTION",
-        f"글로벌 플레이리스트 재작성: {len(playlist.tracks)}곡, 스킵 {len(skipped)}개",
+    _write_rebuild_status(
+        {"running": True, "done": False, "processed": 0, "total": 0, "log": ["재작성을 시작합니다..."], "result": None}
     )
-    return jsonify(
-        {"playlist": playlist_to_json(playlist), "track_count": len(playlist.tracks), "skipped": skipped}
-    )
+    threading.Thread(target=_run_rebuild, daemon=True).start()
+    return jsonify(_read_rebuild_status()), 202
+
+
+@bp.get("/rebuild/status")
+def rebuild_status():
+    return jsonify(_read_rebuild_status())
+
+
+def _resolve_song_path(filename: str) -> Path:
+    """data/songs 또는 data/trash 밖으로 못 나가게 막고, 실제 존재하는 파일만
+    돌려준다(없으면 404). trash도 뒤지는 이유는 재작성이 중복 확정 파일을 거기로
+    옮기는데, 결과 다이얼로그에서 그 파일도 미리듣기할 수 있어야 하기 때문."""
+    for base in (storage.songs_dir(), storage.trash_dir()):
+        path = base / filename
+        if path.resolve().parent == base.resolve() and path.is_file():
+            return path
+    abort(404)
+
+
+@bp.get("/songs/<filename>/audio")
+def get_song_file_audio(filename: str):
+    """data/songs 안의 파일을 파일명(내용 해시)만으로 바로 스트리밍한다. 재작성
+    중복 검토처럼, 아직 어느 플레이리스트에도 속하지 않은(그래서 track_id로는
+    못 찾는) 파일을 미리듣기할 때 쓴다."""
+    path = _resolve_song_path(filename)
+    mimetype = _MIME_BY_EXT.get(path.suffix.lower(), "application/octet-stream")
+    return send_file(path, mimetype=mimetype, conditional=True)
 
 
 @bp.post("/reimport-artists")
