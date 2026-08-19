@@ -183,8 +183,13 @@ export class PlayerEngine extends EventTarget {
   // avoidFirstIndex를 주면, 새로 섞은 순서의 첫 곡이 그 인덱스와 겹칠 때 0번과
   // 1번을 맞바꿔 피한다 — 셔플+전곡반복으로 목록 끝에서 처음으로 되돌아갈 때,
   // 방금 끝난 마지막 곡이 곧바로 다시 나오지 않게 하는 용도.
-  _rebuildShuffleOrder(avoidFirstIndex = null) {
+  _rebuildShuffleOrder(avoidFirstIndex = null, pinFirstIndex = null) {
     const count = this.playlist ? this.playlist.tracks.length : 0;
+    if (pinFirstIndex !== null && pinFirstIndex >= 0) {
+      const rest = shuffledIndices(count).filter((i) => i !== pinFirstIndex);
+      this.shuffleOrder = [pinFirstIndex, ...rest];
+      return;
+    }
     const order = shuffledIndices(count);
     if (avoidFirstIndex !== null && count > 1 && order[0] === avoidFirstIndex) {
       [order[0], order[1]] = [order[1], order[0]];
@@ -192,10 +197,13 @@ export class PlayerEngine extends EventTarget {
     this.shuffleOrder = order;
   }
 
+  // 셔플을 켜는 순간에는 지금 재생 중이던 곡을 그대로 새 순서의 첫 곡으로 고정하고
+  // 나머지만 섞는다 — 꺼졌다 켜졌을 뿐인데 지금 듣던 곡이 순서상 뒤로 밀려나
+  // 재생이 갑자기 다른 곡으로 튀는 것처럼 느껴지지 않도록.
   setShuffle(enabled) {
     this.shuffle = enabled;
     this._resetPreload();
-    if (enabled) this._rebuildShuffleOrder();
+    if (enabled) this._rebuildShuffleOrder(null, this.currentIndex);
     this._emit("shufflechange", { shuffle: enabled });
   }
 

@@ -651,6 +651,7 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
     renderAll();
   });
   player.addEventListener("queuechange", renderAll);
+  player.addEventListener("shufflechange", renderQueue);
   updateButtonAvailability();
 
   return {
