@@ -17,6 +17,7 @@ import { setupSidebar } from "./sidebar.js";
 import { setupRouter } from "./router.js";
 import { setupRating } from "./rating.js";
 import { setupArtistIdentityDialog } from "./artistIdentityDialog.js";
+import { setupUsageTracking } from "./usageTracking.js";
 
 function readBootstrap() {
   const el = document.getElementById("bootstrap-data");
@@ -29,6 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 뜨자마자 한 번 미리 데워둔다 — 첫 라우팅 진입 시점에 이미 캐시가 있으면
   // 그만큼 fetch 대기가 줄어든다(완전히 없어지는 건 3단계 라우팅 개편에서).
   store.refresh();
+  setupUsageTracking();
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
 
@@ -58,6 +60,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!name) return;
     expandedPlayerApi.hide();
     refs.router.goSongArtistDetail(name);
+  }
+
+  // "만들어진 플레이리스트" 카드를 누르면, 새 화면을 따로 만드는 대신 이미 있는
+  // 재생목록 화면에 이 임시 목록을 그대로 띄운다(playlistApi.showAutoPlaylist).
+  // 사이드바에 저장된 실제 플레이리스트가 아니므로 URL 라우팅은 따로 두지 않는다
+  // — 다이얼로그처럼 그 순간에만 존재하는 화면이라 새로고침하면 홈으로 돌아가도 된다.
+  function openAutoPlaylist(autoId) {
+    homeApi.hide();
+    browseApi.hide();
+    statsApi.hide();
+    todaySongsApi.hide();
+    playlistApi.show();
+    playlistApi.showAutoPlaylist(autoId);
+    sidebarApi.setActive(null);
   }
 
   const nowPlayingApi = setupNowPlaying(player, openAlbumFromTrack, openArtistFromTrack);
@@ -115,7 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
     onOpenArtist: openArtistFromTrack,
   });
   const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistFromTrack, refs);
-  const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack);
+  const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack, openAutoPlaylist);
   const todaySongsApi = setupTodaySongs(
     bootstrap,
     player,

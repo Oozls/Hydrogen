@@ -73,6 +73,12 @@
           </div>
           <div id="home-quickpicks-grid" class="home-quickpicks-grid"></div>
         </section>
+        <section id="home-auto-playlists-section" class="home-section" hidden>
+          <div class="panel-header-row">
+            <span class="section-title">만들어진 플레이리스트</span>
+          </div>
+          <div id="home-auto-playlists-row" class="home-recent-row scroll-autohide"></div>
+        </section>
       </div>
 
       <section id="playlist-panel" class="panel playlist-panel page-panel">
@@ -91,6 +97,9 @@
             <option value="duration">길이순</option>
           </select>
           <div class="spacer"></div>
+          <button id="btn-save-auto-playlist" class="icon-btn" title="사이드바에 재생목록으로 저장" hidden>
+            <span class="icon" style="--icon: url(/static/icons/save.svg)"></span>
+          </button>
           <button id="btn-add-file" class="icon-btn" title="파일 추가">
             <span class="icon" style="--icon: url(/static/icons/upload.svg)"></span>
           </button>
@@ -220,6 +229,7 @@
       <div id="stats-panel" class="panel stats-panel page-panel">
         <div class="overlay-header">
           <span class="section-title">재생 통계</span>
+          <span id="stats-total-usage" class="stats-total-usage" title="총 사용 시간"></span>
         </div>
         <div class="stats-controls-row">
           <div class="tabs" id="stats-period-tabs">
@@ -236,6 +246,7 @@
               <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
             </button>
           </div>
+          <span id="stats-period-usage" class="stats-period-usage"></span>
           <div class="tabs" id="stats-group-tabs">
             <button class="tab-btn active" data-group="track" type="button">곡</button>
             <button class="tab-btn" data-group="circle" type="button">서클</button>
@@ -635,6 +646,10 @@
         <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
         원본 폴더에서 아티스트 다시 가져오기
       </button>
+      <button id="browse-manage-normalize-artists" class="browse-manage-item" type="button">
+        <span class="icon" style="--icon: url(/static/icons/edit-3.svg)"></span>
+        아티스트 구분자 쉼표로 정리
+      </button>
       <button id="browse-manage-rebuild" class="browse-manage-item" type="button">
         <span class="icon" style="--icon: url(/static/icons/repeat.svg)"></span>
         글로벌 플레이리스트 재작성
@@ -673,7 +688,7 @@
     <div id="trash-compare-list" class="rebuild-result-body"></div>
   </dialog>
 
-  <dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">
+<dialog id="confirm-dialog" class="library-picker-dialog confirm-dialog">
     <p id="confirm-dialog-message"></p>
     <input type="text" id="confirm-dialog-input" class="dialog-input" hidden />
     <div class="dialog-actions">

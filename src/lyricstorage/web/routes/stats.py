@@ -33,6 +33,36 @@ def log_play_event():
     return jsonify(entry), 201
 
 
+@bp.post("/usage-ping")
+def usage_ping():
+    data = request.get_json(silent=True) or {}
+    try:
+        duration_ms = int(data.get("duration_ms") or 0)
+    except (TypeError, ValueError):
+        duration_ms = 0
+    duration_ms = max(0, min(duration_ms, stats.USAGE_PING_MAX_MS))
+    if duration_ms > 0:
+        stats.log_usage(duration_ms)
+    return jsonify({"ok": True}), 201
+
+
+@bp.get("/usage")
+def get_usage():
+    period = request.args.get("period", "day")
+    if period not in stats.PERIODS:
+        return jsonify({"error": "period는 day/week/month 중 하나여야 합니다."}), 400
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except ValueError:
+        offset = 0
+    return jsonify(
+        {
+            "period_seconds": stats.usage_seconds(period, offset),
+            "total_seconds": stats.usage_seconds_total(),
+        }
+    )
+
+
 @bp.get("/recent")
 def get_recent():
     try:

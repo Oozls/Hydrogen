@@ -44,6 +44,20 @@ def _parse_track_no(text: str) -> int:
     return int(match.group(1)) if match else 0
 
 
+# 일본 서클 음반 태그에 흔한 전각 쉼표(，)/모점(、)과 세미콜론(;)까지, 아티스트
+# 여러 명을 나누는 구분자로 흔히 쓰이는 것들을 전부 반각 쉼표 + 공백 한 칸으로
+# 통일한다. split_artists()가 ","만 인식하므로, 여기서 미리 정규화해두지 않으면
+# 저 구분자를 쓴 곡만 여러 아티스트로 안 나뉘고 통째로 한 이름 취급된다.
+_ARTIST_SEPARATOR_RE = re.compile(r"\s*[,，、;]\s*")
+
+
+def normalize_artist_text(artist: str) -> str:
+    text = (artist or "").strip()
+    if not text:
+        return text
+    return _ARTIST_SEPARATOR_RE.sub(", ", text)
+
+
 def read_tags(path: str) -> dict:
     title = Path(path).stem
     artist = ""
@@ -74,7 +88,13 @@ def read_tags(path: str) -> dict:
                     duration_ms = int(audio.info.length * 1000)
     except Exception:
         pass
-    return {"title": title, "artist": artist, "album": album, "duration_ms": duration_ms, "track_no": track_no}
+    return {
+        "title": title,
+        "artist": normalize_artist_text(artist),
+        "album": album,
+        "duration_ms": duration_ms,
+        "track_no": track_no,
+    }
 
 
 def read_album_art(path: str) -> Optional[bytes]:

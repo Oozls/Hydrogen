@@ -25,6 +25,9 @@ import random
 from datetime import date, datetime
 from typing import Any
 
+from lyricstorage import albums as albums_repo
+from lyricstorage import artists as artists_repo
+from lyricstorage import circles as circles_repo
 from lyricstorage import storage
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 from lyricstorage.stats import split_artists
@@ -453,6 +456,121 @@ def pick_today_songs(
             }
         )
     return result
+
+
+# -- 자동 생성 플레이리스트 -----------------------------------------------------
+# 홈 화면 "빠른 선곡" 아래에서, 사이드바에는 노출되지 않는(저장되지도 않는)
+# 테마별 플레이리스트를 보여준다. 현재 라이브러리 + 재생 기록만으로 매 요청마다
+# 즉석 계산되는 가상 목록이라, 곡이 추가/삭제되거나 새로 재생될 때마다 저절로
+# 최신 상태를 반영한다(별도 저장/무효화 로직이 필요 없다).
+
+AUTO_PLAYLIST_MIN_PLAYS = 2  # 아티스트/서클 테마는 이만큼은 들어야 의미가 있다고 보고 후보에 넣는다
+AUTO_PLAYLIST_MAX_PER_KIND = 3  # 아티스트/서클 테마는 최대 이 개수까지만 보여준다(취향 상위 몇 명)
+AUTO_PLAYLIST_MAX_TOTAL = 8  # 홈 화면 카드 전체 개수 상한 — 서클/아티스트가 아무리 많아도 이 이상 나열하지 않는다
+AUTO_PLAYLIST_TRACK_CAP = 60  # 테마 하나에 담기는 곡 수 상한(서클/전곡 재생이 지나치게 커지지 않도록)
+
+
+def _auto_playlist_context(tracks: list[dict[str, Any]]) -> dict[str, Any]:
+    """list_auto_playlists()/get_auto_playlist()가 공유하는 준비 단계. 아티스트/
+    서클별 트랙 목록(pool)은 여기서 만들지 않는다 — 카드 목록엔 몇 곡인지 보여줄
+    필요가 없어졌으니(홈 화면은 순위만 알면 됨), 실제 트랙 목록은 사용자가 카드를
+    눌러 get_auto_playlist를 부를 때만 그 테마 하나에 대해서만 계산한다."""
+    play_counts = _play_counts(storage.load_play_history())
+    artist_resolver = artists_repo.name_resolver()
+    circle_resolver = circles_repo.name_resolver()
+    circle_by_album_id = {a.id: a.artist for a in albums_repo.load_albums() if a.artist}
+
+    def play_count(track: dict[str, Any]) -> int:
+        return play_counts.get(track.get("track_id") or "", 0)
+
+    def artist_names(track: dict[str, Any]) -> list[str]:
+        raw = split_artists(track.get("artist") or "")
+        return list(dict.fromkeys(artist_resolver.get(n, n) for n in raw))
+
+    def circle_name(track: dict[str, Any]) -> str | None:
+        raw = circle_by_album_id.get(track.get("album_id") or "")
+        return circle_resolver.get(raw, raw) if raw else None
+
+    has_unheard = False
+    has_frequent = False
+    artist_totals: dict[str, int] = {}
+    circle_totals: dict[str, int] = {}
+    for t in tracks:
+        pc = play_count(t)
+        if pc == 0:
+            has_unheard = True
+            continue
+        has_frequent = True
+        for name in artist_names(t):
+            artist_totals[name] = artist_totals.get(name, 0) + pc
+        c_name = circle_name(t)
+        if c_name:
+            circle_totals[c_name] = circle_totals.get(c_name, 0) + pc
+
+    return {
+        "play_count": play_count,
+        "artist_names": artist_names,
+        "circle_name": circle_name,
+        "has_unheard": has_unheard,
+        "has_frequent": has_frequent,
+        "artist_totals": artist_totals,
+        "circle_totals": circle_totals,
+    }
+
+
+def list_auto_playlists(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """홈 화면 카드 나열용 — {id, title}만. 실제 트랙 목록/개수는 카드를 눌러
+    get_auto_playlist를 부를 때 계산한다."""
+    if not tracks:
+        return []
+    ctx = _auto_playlist_context(tracks)
+    themes: list[dict[str, Any]] = []
+
+    if ctx["has_unheard"]:
+        themes.append({"id": "unheard", "title": "안 들어본 곡"})
+    if ctx["has_frequent"]:
+        themes.append({"id": "frequent", "title": "자주 듣는 곡"})
+
+    ranked_artists = sorted(ctx["artist_totals"].items(), key=lambda kv: kv[1], reverse=True)
+    for name, total in ranked_artists[:AUTO_PLAYLIST_MAX_PER_KIND]:
+        if total < AUTO_PLAYLIST_MIN_PLAYS:
+            break
+        themes.append({"id": f"artist:{name}", "title": f"아티스트 · {name}"})
+
+    ranked_circles = sorted(ctx["circle_totals"].items(), key=lambda kv: kv[1], reverse=True)
+    for name, total in ranked_circles[:AUTO_PLAYLIST_MAX_PER_KIND]:
+        if total < AUTO_PLAYLIST_MIN_PLAYS:
+            break
+        themes.append({"id": f"circle:{name}", "title": f"서클 · {name}"})
+
+    return themes[:AUTO_PLAYLIST_MAX_TOTAL]
+
+
+def get_auto_playlist(auto_id: str, tracks: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """카드를 눌러 미리보기/재생/저장할 때만 그 테마 하나의 실제 트랙 목록을 계산한다."""
+    if not tracks:
+        return None
+    kind, _, key = auto_id.partition(":")
+    ctx = _auto_playlist_context(tracks)
+
+    if kind == "unheard":
+        pool = [t for t in tracks if ctx["play_count"](t) == 0]
+        title = "안 들어본 곡"
+    elif kind == "frequent":
+        pool = sorted((t for t in tracks if ctx["play_count"](t) > 0), key=ctx["play_count"], reverse=True)
+        title = "자주 듣는 곡"
+    elif kind == "artist" and key:
+        pool = [t for t in tracks if key in ctx["artist_names"](t)]
+        title = f"아티스트 · {key}"
+    elif kind == "circle" and key:
+        pool = [t for t in tracks if ctx["circle_name"](t) == key]
+        title = f"서클 · {key}"
+    else:
+        return None
+
+    if not pool:
+        return None
+    return {"id": auto_id, "title": title, "tracks": pool[:AUTO_PLAYLIST_TRACK_CAP]}
 
 
 # -- 재생 대기 목록(큐) -------------------------------------------------------

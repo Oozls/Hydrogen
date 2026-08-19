@@ -115,6 +115,7 @@ export const api = {
   // data/songs 폴더를 재스캔해 글로벌 플레이리스트 인덱스를 통째로 다시 만드는
   // 복구용 기능(인덱스 파일 유실/손상 시 사용). 백그라운드에서 돌아가므로
   // 시작만 시키고, 진행 상황은 getRebuildStatus로 폴링한다.
+  normalizeArtists: () => request("POST", "/api/library/normalize-artists"),
   rebuildGlobalLibrary: () => request("POST", "/api/library/rebuild"),
   getRebuildStatus: () => request("GET", "/api/library/rebuild/status"),
   // 재작성 결과의 중복 파일 미리듣기용 — 아직 어느 플레이리스트에도 없어
@@ -181,6 +182,17 @@ export const api = {
       json: { track_id: trackId, title, artist, album, listened_ms: listenedMs },
     }),
   getRecentPlays: (limit) => request("GET", `/api/stats/recent?limit=${limit || 12}`),
+  getUsageStats: (period, offset) => request("GET", `/api/stats/usage?period=${period}&offset=${offset || 0}`),
+  // 페이지가 백그라운드로 넘어가거나(sendBeacon) 닫히는 순간에도 요청이 끊기지
+  // 않고 나가야 하므로, 가능하면 fetch 대신 sendBeacon을 쓴다(실패해도 조용히
+  // 넘어간다 — 사용 시간 집계 하나 놓치는 건 치명적이지 않다).
+  pingUsage: (durationMs) => {
+    const body = JSON.stringify({ duration_ms: durationMs });
+    if (navigator.sendBeacon && navigator.sendBeacon("/api/stats/usage-ping", new Blob([body], { type: "application/json" }))) {
+      return;
+    }
+    request("POST", "/api/stats/usage-ping", { json: { duration_ms: durationMs } }).catch(() => {});
+  },
   getTrackTotals: (trackId, period, offset) =>
     request(
       "GET",
@@ -206,5 +218,11 @@ export const api = {
         (excludeIds && excludeIds.length ? `&exclude=${excludeIds.map(encodeURIComponent).join(",")}` : "")
     ),
   getTodayWeights: () => request("GET", "/api/recommendations/weights"),
+  // 사이드바에 없는, 매 요청마다 즉석 계산되는 테마별(안 들어본 곡/자주 듣는
+  // 곡/아티스트/서클) 자동 플레이리스트 — 홈 화면 "빠른 선곡" 아래 카드용.
+  getAutoPlaylists: () => request("GET", "/api/recommendations/auto-playlists"),
+  getAutoPlaylist: (id) => request("GET", `/api/recommendations/auto-playlists/${encodeURIComponent(id)}`),
+  saveAutoPlaylist: (id, name) =>
+    request("POST", `/api/recommendations/auto-playlists/${encodeURIComponent(id)}/save`, { json: { name } }),
   updateTodayWeights: (patch) => request("PUT", "/api/recommendations/weights", { json: patch }),
 };

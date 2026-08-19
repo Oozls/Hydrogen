@@ -9,8 +9,11 @@ const REPEAT_ORDER = ["off", "all", "one"];
 const PRELOAD_AHEAD_SEC = 15;
 // 재생 시작 후 이 시간(초)이 지난 첫 timeupdate에서, 딱 한 번만 currentTime을
 // 스스로에게 재-seek해 디코더 위치 추적 오차를 보정한다(그 뒤로는 반복하지
-// 않는다 — 재생 중 계속 반복하면 매번 실제 seek이 걸려 끊김이 들린다).
-const INITIAL_RESYNC_AFTER_SEC = 2;
+// 않는다 — 재생 중 계속 반복하면 매번 실제 seek이 걸려 끊김이 들린다). 너무
+// 늦게 하면(예전 2초) 한창 듣고 있는 도중 눈에 띄게 끊기므로, 값을 0에
+// 가깝게 둬서 "실제 디코딩이 시작된 뒤 첫 timeupdate" 시점에 최대한 앞당긴다
+// — 그 시점엔 아직 곡 초반이라 재-seek이 나도 거의 안 들린다.
+const INITIAL_RESYNC_AFTER_SEC = 0;
 
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
@@ -215,6 +218,12 @@ export class PlayerEngine extends EventTarget {
     if (!this.playlist || index < 0 || index >= this.playlist.tracks.length) return;
     this._resetPreload();
     this.currentIndex = index;
+    // queue.js의 getDisplayQueue()가 여기서 앵커를 정한다 — 대기열 패널을 아직
+    // 한 번도 안 열어본 상태로 곡이 여러 번 넘어가면(예: 자동재생), 패널을 열 때
+    // 가서야 그 시점의 currentIndex로 뒤늦게 앵커가 잡혀 이미 지나간 곡들이
+    // 목록에서 통째로 빠져 보인다. 재생이 실제로 시작되는 지금 이 시점에 한
+    // 번만(플레이리스트당) 앵커를 확정해 그 문제를 막는다.
+    if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
     const track = this.playlist.tracks[index];
     this._intentionalPause = false;
     this.audio.src = `/api/tracks/${track.track_id}/audio`;
@@ -400,6 +409,7 @@ export class PlayerEngine extends EventTarget {
 
     this.audio = promoted;
     this.currentIndex = index;
+    if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
     const track = this.playlist.tracks[index];
 
     this._intentionalPause = false;

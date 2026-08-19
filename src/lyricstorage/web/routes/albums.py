@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, jsonify, request, send_file
@@ -27,7 +28,13 @@ def _track_count(album_id: str) -> int:
 @bp.get("")
 def list_albums():
     albums = albums_repo.load_albums()
-    return jsonify({"albums": [album_to_json(a, _track_count(a.id)) for a in albums]})
+    # _track_count(a.id)를 앨범마다 부르면 find_tracks_by_album_id가 매번 글로벌
+    # 플레이리스트 JSON을 통째로 다시 읽어 앨범 수만큼 디스크 I/O가 반복된다
+    # (라이브러리가 크면 이게 접속 시 로딩이 느려지는 주범이었다). 여기선 한 번만
+    # 불러와 앨범당 트랙 수를 세어 재사용한다.
+    playlist = playlist_repo.load_or_create_global()
+    counts = Counter(t.album_id for t in playlist.tracks)
+    return jsonify({"albums": [album_to_json(a, counts.get(a.id, 0)) for a in albums]})
 
 
 @bp.get("/<album_id>")

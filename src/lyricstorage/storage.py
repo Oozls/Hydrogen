@@ -222,6 +222,48 @@ def load_play_history_range(start: datetime, end: datetime) -> list[dict[str, An
     return entries
 
 
+def usage_pings_dir() -> Path:
+    path = app_data_dir() / "usage_pings"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _usage_ping_file_for(day: date) -> Path:
+    return usage_pings_dir() / f"{day.isoformat()}.jsonl"
+
+
+def append_usage_ping(entry: dict[str, Any]) -> None:
+    """게임 플레이타임처럼, 웹앱이 열려 있던 시간을 재생 기록과 같은 방식(날짜별
+    jsonl, 한 줄 추가)으로 쌓는다. entry는 play_history와 동일하게 "played_at"
+    키를 쓴다 — _entry_day/_append_jsonl/_read_jsonl을 그대로 재사용하기 위함."""
+    _append_jsonl(_usage_ping_file_for(_entry_day(entry)), [entry])
+
+
+def load_usage_pings() -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for path in sorted(usage_pings_dir().glob("*.jsonl")):
+        entries.extend(_read_jsonl(path))
+    return entries
+
+
+def load_usage_pings_range(start: datetime, end: datetime) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    if end <= start:
+        return entries
+    day = start.date()
+    last_day = (end - timedelta(microseconds=1)).date()
+    while day <= last_day:
+        for raw in _read_jsonl(_usage_ping_file_for(day)):
+            try:
+                played_at = datetime.fromisoformat(raw.get("played_at") or "")
+            except ValueError:
+                continue
+            if start <= played_at < end:
+                entries.append(raw)
+        day += timedelta(days=1)
+    return entries
+
+
 def recommend_exposures_path() -> Path:
     return app_data_dir() / "recommend_exposures.json"
 

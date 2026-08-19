@@ -11,16 +11,19 @@ const RECENT_LIMIT = 12;
 const QUICKPICK_LIMIT = 18;
 const NEWLY_ADDED_LIMIT = 12;
 
-export function setupHome(player, onOpenAlbum, onOpenArtist) {
+export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist) {
   const panelEl = document.getElementById("home-panel");
   const recentRowEl = document.getElementById("home-recent-row");
   const quickpicksGridEl = document.getElementById("home-quickpicks-grid");
   const newlyAddedSectionEl = document.getElementById("home-newlyadded-section");
   const newlyAddedRowEl = document.getElementById("home-newlyadded-row");
+  const autoPlaylistsSectionEl = document.getElementById("home-auto-playlists-section");
+  const autoPlaylistsRowEl = document.getElementById("home-auto-playlists-row");
 
   let recentItems = [];
   let quickpickItems = [];
   let newlyAddedItems = [];
+  let autoPlaylistItems = [];
 
   function buildRecentCard(item) {
     const card = document.createElement("div");
@@ -139,8 +142,37 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
     requestAnimationFrame(() => applyMarquee(quickpicksGridEl));
   }
 
+  // 안 들어본 곡/자주 듣는 곡/특정 아티스트·서클 위주로 서버가 즉석에서 골라주는,
+  // 사이드바에는 남지 않는 테마별 플레이리스트. 곡 하나짜리 카드가 아니라 목록
+  // 자체를 대표하는 카드라 앨범 아트 대신 고정 아이콘을 쓰고, 다시 듣기 카드처럼
+  // 가로로 나열한다(개수가 곡 카드보다 적어 세로 그리드로 채우면 휑해 보인다).
+  function buildAutoPlaylistCard(item) {
+    const card = document.createElement("div");
+    card.className = "home-recent-card home-auto-playlist-card";
+    card.title = item.title;
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "home-recent-card-art-wrap";
+    iconWrap.appendChild(iconSpan("list", "icon-lg"));
+    card.appendChild(iconWrap);
+
+    card.appendChild(createMarqueeClip("home-recent-card-title", "", item.title));
+
+    card.addEventListener("click", () => onOpenAutoPlaylist(item.id));
+    return card;
+  }
+
+  function renderAutoPlaylists() {
+    autoPlaylistsRowEl.innerHTML = "";
+    autoPlaylistsSectionEl.hidden = !autoPlaylistItems.length;
+    if (!autoPlaylistItems.length) return;
+    autoPlaylistItems.forEach((item) => autoPlaylistsRowEl.appendChild(buildAutoPlaylistCard(item)));
+    requestAnimationFrame(() => applyMarquee(autoPlaylistsRowEl));
+  }
+
   attachScrollAutoHide(recentRowEl);
   attachScrollAutoHide(newlyAddedRowEl);
+  attachScrollAutoHide(autoPlaylistsRowEl);
   attachScrollAutoHide(panelEl);
 
   // 패널 폭이 바뀌면(사이드바 토글, 창 크기 조절 등) 마퀴가 필요한지 다시 재야 한다.
@@ -151,6 +183,7 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
       applyMarquee(recentRowEl);
       applyMarquee(newlyAddedRowEl);
       applyMarquee(quickpicksGridEl);
+      applyMarquee(autoPlaylistsRowEl);
     }, 150);
   });
 
@@ -166,17 +199,20 @@ export function setupHome(player, onOpenAlbum, onOpenArtist) {
     // reroll에 매번 새 무작위 토큰을 넘겨서, "오늘의 곡"처럼 하루 종일 고정되지
     // 않고 홈 화면을 새로 볼 때마다(새로고침 포함) 빠른 선곡 구성이 바뀌게 한다.
     const reroll = Math.random().toString(36).slice(2);
-    const [recentResult, quickpicksResult] = await Promise.all([
+    const [recentResult, quickpicksResult, autoPlaylistsResult] = await Promise.all([
       api.getRecentPlays(RECENT_LIMIT).catch(() => ({ items: [] })),
       api.getTodaySongs(QUICKPICK_LIMIT, reroll, false).catch(() => ({ items: [] })),
+      api.getAutoPlaylists().catch(() => ({ playlists: [] })),
       store.ensureLoaded().catch(() => null),
     ]);
     recentItems = recentResult.items;
     quickpickItems = quickpicksResult.items;
+    autoPlaylistItems = autoPlaylistsResult.playlists;
     loadNewlyAdded();
     renderRecent();
     renderNewlyAdded();
     renderQuickpicks();
+    renderAutoPlaylists();
   }
 
   return {

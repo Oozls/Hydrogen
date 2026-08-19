@@ -33,6 +33,18 @@ function fmtDuration(ms) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+// 게임 플레이타임처럼 "N시간 M분" 형태로 사용 시간을 보여준다(1시간 미만이면
+// 분만, 1분 미만이면 초만 — 곡 재생 시간(fmtDuration)과 달리 mm:ss로 뭉개면
+// 며칠치 총합 같은 큰 값이 안 읽힌다).
+function fmtHM(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(totalSeconds || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}시간 ${minutes}분`;
+  if (minutes > 0) return `${minutes}분`;
+  return `${seconds}초`;
+}
+
 // "마지막 재생" 표시용 — 최근이면 상대 시간, 오래됐으면(1주 이상) 절대 날짜로 보여준다.
 function fmtRelativeTime(iso) {
   if (!iso) return "-";
@@ -69,6 +81,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
   const prevBtn = document.getElementById("btn-stats-prev");
   const nextBtn = document.getElementById("btn-stats-next");
   const periodLabel = document.getElementById("stats-period-label");
+  const periodUsageEl = document.getElementById("stats-period-usage");
+  const totalUsageEl = document.getElementById("stats-total-usage");
   const listEl = document.getElementById("stats-list");
   const trackBodyEl = document.getElementById("stats-track-body");
   const trackListEl = document.getElementById("stats-track-list");
@@ -144,9 +158,23 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
     container.appendChild(loading);
   }
 
+  // 곡/서클/아티스트/앨범 어느 그룹을 보고 있든 항상 같이 갱신되어야 하므로,
+  // group에 따라 갈라지는 refresh() 본문과 분리해 독립적으로 부른다(실패해도
+  // 나머지 통계 화면에 영향 없게 await하지 않는다).
+  async function refreshUsage() {
+    try {
+      const usage = await api.getUsageStats(period, offset);
+      periodUsageEl.textContent = `이 기간 사용 ${fmtHM(usage.period_seconds)}`;
+      totalUsageEl.textContent = `총 사용 ${fmtHM(usage.total_seconds)}`;
+    } catch (_err) {
+      /* 사용 시간 집계 실패는 조용히 무시 */
+    }
+  }
+
   async function refresh() {
     closeArtistDetail();
     closeCircleDetail();
+    refreshUsage();
     const isCatalog = group === "circle";
     const isTrack = group === "track";
     // 기간/분류 탭을 바꾸는 동안 이전 화면이 잠깐 그대로 멈춰 있는 것처럼 보이는

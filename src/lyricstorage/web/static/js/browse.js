@@ -110,6 +110,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const addFileBtn = document.getElementById("browse-manage-add-file");
   const addFolderBtn = document.getElementById("browse-manage-add-folder");
   const reimportArtistsBtn = document.getElementById("browse-manage-reimport-artists");
+  const normalizeArtistsBtn = document.getElementById("browse-manage-normalize-artists");
   const rebuildBtn = document.getElementById("browse-manage-rebuild");
   const trashCompareBtn = document.getElementById("browse-manage-trash-compare");
   const fileInput = document.getElementById("browse-file-input");
@@ -297,6 +298,25 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       const lines = [`${result.updated.length}곡의 아티스트를 되돌렸습니다.`];
       if (result.ambiguous.length) lines.push(`같은 제목+앨범의 곡이 여럿이라 건너뛴 파일: ${result.ambiguous.length}개`);
       if (result.unmatched.length) lines.push(`일치하는 곡을 찾지 못한 파일: ${result.unmatched.length}개`);
+      await alertDialog(lines.join("\n"));
+    } catch (err) {
+      await alertDialog(err.message);
+    } finally {
+      hideProgress();
+    }
+  }
+
+  // 、，;로 아티스트를 나눈 (예전에 등록된) 곡들을 일반 쉼표로 한 번에 고쳐준다.
+  // 새로 등록되는 곡은 read_tags()가 이미 자동으로 정리하므로(models.py), 이건
+  // 그 전에 이미 들어와 있던 곡들을 위한 일회성 정리 도구다.
+  async function handleNormalizeArtists() {
+    showProgress("아티스트 구분자 정리 중...");
+    try {
+      const result = await api.normalizeArtists();
+      await loadLibraryAndAlbums();
+      render();
+      const lines = [`${result.updated.length}곡의 아티스트 구분자를 쉼표로 정리했습니다.`];
+      if (result.failed.length) lines.push(`파일 쓰기에 실패해 건너뛴 곡: ${result.failed.length}개`);
       await alertDialog(lines.join("\n"));
     } catch (err) {
       await alertDialog(err.message);
@@ -1406,6 +1426,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   reimportArtistsInput.addEventListener("change", async () => {
     await handleReimportArtists(reimportArtistsInput.files);
     reimportArtistsInput.value = "";
+  });
+  normalizeArtistsBtn.addEventListener("click", async () => {
+    manageDialog.close();
+    await handleNormalizeArtists();
   });
   rebuildBtn.addEventListener("click", async () => {
     manageDialog.close();

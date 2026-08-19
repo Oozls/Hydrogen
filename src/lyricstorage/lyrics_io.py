@@ -55,6 +55,14 @@ def lyrics_path(track_path: str) -> Path:
     return storage.lyrics_dir() / f"{Path(track_path).stem}.lrc"
 
 
+def lyrics_stems() -> set[str]:
+    """정본 위치(data/lyrics/)에 가사 파일이 있는 트랙들의 스템(파일명, 확장자
+    제외) 집합. 트랙 목록 전체를 직렬화할 때(track.has_lyrics를 트랙마다 호출해
+    매번 파일 존재 여부를 stat()하면 트랙 수만큼 디스크 I/O가 반복된다) 디렉터리를
+    한 번만 읽어 메모리에서 조회하기 위해 쓴다."""
+    return {p.stem for p in storage.lyrics_dir().glob("*.lrc")}
+
+
 def _legacy_paths(track_path: str) -> list[Path]:
     """구버전 저장 위치(음원 옆 사이드카, 쓰기 실패 시 캐시 폴백). 마이그레이션과
     과거 데이터 호환 조회용으로만 남겨둔다."""

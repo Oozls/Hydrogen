@@ -18,6 +18,7 @@ from lyricstorage.models import (
     SUPPORTED_EXTENSIONS,
     PlaylistModel,
     Track,
+    normalize_artist_text,
     read_album_art,
     read_tags,
     write_tags,
@@ -431,3 +432,29 @@ def reimport_artists():
         f"곡 아티스트 재가져오기: {len(updated)}곡 갱신, 매칭 실패 {len(unmatched)}개, 모호 {len(ambiguous)}개",
     )
     return jsonify({"updated": updated, "unmatched": unmatched, "ambiguous": ambiguous})
+
+
+@bp.post("/normalize-artists")
+def normalize_artists():
+    """이미 등록된 곡 중 아티스트 구분자가 전각 쉼표(，)/모점(、)/세미콜론(;)으로
+    되어 있는 곡을 일반 쉼표(, )로 고쳐 파일 태그와 모든 플레이리스트 캐시에
+    반영한다. 새로 등록되는 곡은 read_tags()가 이미 자동으로 정규화하므로
+    (models.py), 이 도구는 그 전에 들어와 있던 곡들을 위한 일회성 정리용이다."""
+    playlist = playlist_repo.load_or_create_global()
+    updated = []
+    failed = []
+    for track in playlist.tracks:
+        normalized = normalize_artist_text(track.artist)
+        if normalized == track.artist:
+            continue
+        try:
+            write_tags(track.path, title=track.title, artist=normalized, album=track.album)
+        except OSError as exc:
+            failed.append({"title": track.title, "artist": track.artist, "reason": str(exc)})
+            continue
+        playlist_repo.update_track_in_all_playlists(track.path, artist=normalized)
+        updated.append({"title": track.title, "before": track.artist, "after": normalized})
+        track.artist = normalized
+
+    applog.log_info("ACTION", f"아티스트 구분자 정리: {len(updated)}곡 갱신, 실패 {len(failed)}개")
+    return jsonify({"updated": updated, "failed": failed})

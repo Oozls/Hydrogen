@@ -49,6 +49,7 @@ export function setupPlaylist(
   const addFolderBtn = document.getElementById("btn-add-folder");
   const addFromLibraryBtn = document.getElementById("btn-add-from-library");
   const removeBtn = document.getElementById("btn-remove-selected");
+  const saveAutoBtn = document.getElementById("btn-save-auto-playlist");
   const fileInput = document.getElementById("file-input");
   const folderInput = document.getElementById("folder-input");
   const listEl = document.getElementById("playlist-list");
@@ -70,6 +71,11 @@ export function setupPlaylist(
   let lastClickedIndex = null;
   let sortable = null;
   let sortMode = "default";
+  // 홈 화면 "만들어진 플레이리스트" 카드를 누르면 이 화면을 재사용해서 보여준다
+  // (showAutoPlaylist). 사이드바에 저장된 진짜 플레이리스트가 아니라서 이름 변경/
+  // 삭제/곡 추가/드래그 순서 변경/설정에 last_playlist로 기록하는 것 모두
+  // 의미가 없다 — 이 값이 켜져 있는 동안은 그런 조작을 막고 "저장" 버튼만 보여준다.
+  let autoPlaylistId = null;
 
   async function addTrackToPlaylist(track, playlistName) {
     if (!playlistName) return;
@@ -92,8 +98,14 @@ export function setupPlaylist(
   });
 
   function updateToolbarMode() {
-    deleteBtn.style.display = currentPlaylist.name ? "" : "none";
-    renameBtn.style.display = currentPlaylist.name ? "" : "none";
+    const isAuto = !!autoPlaylistId;
+    deleteBtn.style.display = currentPlaylist.name && !isAuto ? "" : "none";
+    renameBtn.style.display = currentPlaylist.name && !isAuto ? "" : "none";
+    addFileBtn.style.display = isAuto ? "none" : "";
+    addFolderBtn.style.display = isAuto ? "none" : "";
+    addFromLibraryBtn.style.display = isAuto ? "none" : "";
+    removeBtn.style.display = isAuto ? "none" : "";
+    saveAutoBtn.hidden = !isAuto;
     pageTitleEl.textContent = currentPlaylist.name || "";
   }
 
@@ -272,7 +284,7 @@ export function setupPlaylist(
       animation: 150,
       forceFallback: true,
       handle: ".playlist-row-drag-handle",
-      disabled: sortMode !== "default",
+      disabled: sortMode !== "default" || !!autoPlaylistId,
       onEnd: async (evt) => {
         if (evt.oldIndex === evt.newIndex) return;
         sortable.option("disabled", true);
@@ -291,7 +303,7 @@ export function setupPlaylist(
 
   sortSelect.addEventListener("change", () => {
     sortMode = sortSelect.value;
-    if (sortable) sortable.option("disabled", sortMode !== "default");
+    if (sortable) sortable.option("disabled", sortMode !== "default" || !!autoPlaylistId);
     renderList();
   });
 
@@ -307,6 +319,7 @@ export function setupPlaylist(
       refs.router.goBrowse();
       return;
     }
+    autoPlaylistId = null;
     selectedIndices.clear();
     updateToolbarMode();
     renderList();
@@ -317,11 +330,52 @@ export function setupPlaylist(
     await api.updateSettings({ last_playlist: name });
   }
 
+  // 홈 화면 "만들어진 플레이리스트" 카드용 — 사이드바에 없는 가상 목록을 이
+  // 화면에 그대로 띄운다. loadPlaylist와 달리 last_playlist에 기록하지 않는다
+  // (이름이 실제 저장 파일이 아니라서, 다음 접속 때 그 이름으로 열면 404가 난다).
+  async function showAutoPlaylist(autoId) {
+    listEl.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "list-loading";
+    loading.textContent = "불러오는 중...";
+    listEl.appendChild(loading);
+    try {
+      const data = await api.getAutoPlaylist(autoId);
+      currentPlaylist = { name: data.title, is_global: false, tracks: data.tracks };
+      autoPlaylistId = autoId;
+    } catch (err) {
+      currentPlaylist = EMPTY_PLAYLIST;
+      autoPlaylistId = null;
+      await alertDialog(err.message);
+    }
+    selectedIndices.clear();
+    updateToolbarMode();
+    renderList();
+  }
+
+  saveAutoBtn.addEventListener("click", async () => {
+    if (!autoPlaylistId) return;
+    const name = await promptDialog("사이드바에 저장할 이름:", currentPlaylist.name);
+    if (!name || !name.trim()) return;
+    try {
+      const saved = await api.saveAutoPlaylist(autoPlaylistId, name.trim());
+      await sidebarApi.refreshNames();
+      autoPlaylistId = null;
+      currentPlaylist = saved;
+      updateToolbarMode();
+      renderList();
+      refs.router.goPlaylist(saved.name);
+    } catch (err) {
+      await alertDialog(err.message);
+    }
+  });
+
   newBtn.addEventListener("click", async () => {
     const name = await promptDialog("새 플레이리스트 이름:");
     if (!name || !name.trim()) return;
     try {
       currentPlaylist = await api.createPlaylist(name.trim());
+      autoPlaylistId = null;
       await sidebarApi.refreshNames();
       selectedIndices.clear();
       updateToolbarMode();
@@ -694,8 +748,11 @@ export function setupPlaylist(
 
   return {
     loadPlaylist,
+    showAutoPlaylist,
     async refreshCurrent() {
-      if (currentPlaylist.name) await loadPlaylist(currentPlaylist.name);
+      // 자동 플레이리스트는 이름이 실제 저장 파일이 아니라 loadPlaylist(name)로
+      // 다시 불러올 수 없다 — 어차피 그 순간의 스냅샷이라 조용히 넘어간다.
+      if (currentPlaylist.name && !autoPlaylistId) await loadPlaylist(currentPlaylist.name);
     },
     show() {
       panelEl.classList.add("active");
@@ -741,7 +798,7 @@ export function setupPlaylist(
       if (changed) renderList();
     },
     applyExternalUpdate(updatedPlaylist) {
-      if (currentPlaylist.name && updatedPlaylist.name === currentPlaylist.name) {
+      if (!autoPlaylistId && currentPlaylist.name && updatedPlaylist.name === currentPlaylist.name) {
         applyUpdatedPlaylist(updatedPlaylist);
         renderList();
       }

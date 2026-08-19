@@ -40,6 +40,31 @@ def log_play(
     return entry
 
 
+# 프론트(usageTracking.js)는 30초마다 하트비트를 보낸다 — 그 두 배를 넘는
+# duration_ms는 탭을 여러 개 띄워 뒀거나 조작된 값으로 보고 잘라낸다(게임
+# 플레이타임처럼 "웹앱이 실제로 열려 있던 시간"의 대략치면 충분하다).
+USAGE_PING_MAX_MS = 60_000
+
+
+def log_usage(duration_ms: int) -> None:
+    storage.append_usage_ping(
+        {"played_at": datetime.now().isoformat(timespec="seconds"), "duration_ms": duration_ms}
+    )
+
+
+def usage_seconds(period: str, offset: int = 0) -> int:
+    if period not in PERIODS:
+        raise ValueError(f"unknown period: {period}")
+    start, end = _period_bounds(period, offset)
+    entries = storage.load_usage_pings_range(start, end)
+    return sum(e.get("duration_ms") or 0 for e in entries) // 1000
+
+
+def usage_seconds_total() -> int:
+    entries = storage.load_usage_pings()
+    return sum(e.get("duration_ms") or 0 for e in entries) // 1000
+
+
 def _period_bounds(period: str, offset: int, *, now: datetime | None = None) -> tuple[datetime, datetime]:
     now = now or datetime.now()
     if period == "day":
