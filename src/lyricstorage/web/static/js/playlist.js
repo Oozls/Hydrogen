@@ -31,6 +31,9 @@ function createRatingBadge(rating) {
 
 const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
+// 브라우즈 곡 목록과 동일한 롱프레스 선택 기준(browse.js).
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_TOLERANCE = 10;
 
 export function setupPlaylist(
   player,
@@ -244,7 +247,47 @@ export function setupPlaylist(
       dragHandle.addEventListener("click", (e) => e.stopPropagation());
       li.appendChild(dragHandle);
 
-      li.addEventListener("click", (e) => onRowClick(e, index, track));
+      // 브라우즈 곡 목록과 동일하게, 홀드해야 선택 모드에 들어간다(짧은 클릭은
+      // 선택 모드 중일 때만 토글, 아니면 아무 동작 없음 — onRowClick 참고).
+      let longPressTimer = null;
+      let longPressStart = null;
+      let longPressFired = false;
+
+      li.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button, input")) return;
+        longPressFired = false;
+        longPressStart = { x: e.clientX, y: e.clientY };
+        clearTimeout(longPressTimer);
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          longPressFired = true;
+          selectedIndices.add(index);
+          lastClickedIndex = index;
+          renderList();
+        }, LONG_PRESS_MS);
+      });
+      const cancelLongPress = () => {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        longPressStart = null;
+      };
+      li.addEventListener("pointerup", cancelLongPress);
+      li.addEventListener("pointerleave", cancelLongPress);
+      li.addEventListener("pointercancel", cancelLongPress);
+      li.addEventListener("pointermove", (e) => {
+        if (!longPressStart) return;
+        const dx = e.clientX - longPressStart.x;
+        const dy = e.clientY - longPressStart.y;
+        if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE) cancelLongPress();
+      });
+
+      li.addEventListener("click", (e) => {
+        if (longPressFired) {
+          longPressFired = false;
+          return;
+        }
+        onRowClick(e, index, track);
+      });
       li.addEventListener("dblclick", () => onTrackActivated(index));
 
       listEl.appendChild(li);
@@ -266,9 +309,14 @@ export function setupPlaylist(
       if (selectedIndices.has(index)) selectedIndices.delete(index);
       else selectedIndices.add(index);
       lastClickedIndex = index;
-    } else {
-      selectedIndices = new Set([index]);
+    } else if (selectedIndices.size > 0) {
+      // 선택 모드 중에는 수정자 키 없는 일반 클릭도 체크박스처럼 토글된다
+      // (브라우즈 곡 목록과 동일).
+      if (selectedIndices.has(index)) selectedIndices.delete(index);
+      else selectedIndices.add(index);
       lastClickedIndex = index;
+    } else {
+      return; // 선택 모드가 아니면 짧은 클릭은 아무 동작도 하지 않는다(롱프레스로 진입).
     }
     renderList();
   }
