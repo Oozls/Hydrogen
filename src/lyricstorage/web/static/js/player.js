@@ -173,6 +173,10 @@ export class PlayerEngine extends EventTarget {
   syncTracks(playlist) {
     const playingTrackId = this.currentTrack ? this.currentTrack.track_id : null;
     this.playlist = playlist;
+    // syncTracks는 고정된(사이드바) 재생목록에만 쓰인다 — 이전에 홈 화면
+    // 추천 큐(queueMode "recommend")를 듣고 있다가 여기로 넘어온 경우에도
+    // 셔플/반복 버튼이 계속 비활성 상태로 남지 않도록 "list"로 되돌린다.
+    this.queueMode = "list";
     this._resetPreload();
     this._rebuildShuffleOrder();
     if (playingTrackId) {
