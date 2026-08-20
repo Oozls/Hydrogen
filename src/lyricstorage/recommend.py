@@ -467,7 +467,8 @@ def pick_today_songs(
 AUTO_PLAYLIST_MIN_PLAYS = 2  # 아티스트/서클 테마는 이만큼은 들어야 의미가 있다고 보고 후보에 넣는다
 AUTO_PLAYLIST_MAX_PER_KIND = 3  # 아티스트/서클 테마는 최대 이 개수까지만 보여준다(취향 상위 몇 명)
 AUTO_PLAYLIST_MAX_TOTAL = 8  # 홈 화면 카드 전체 개수 상한 — 서클/아티스트가 아무리 많아도 이 이상 나열하지 않는다
-AUTO_PLAYLIST_TRACK_CAP = 60  # 테마 하나에 담기는 곡 수 상한(서클/전곡 재생이 지나치게 커지지 않도록)
+AUTO_PLAYLIST_TRACK_CAP = 20  # 테마 하나에 담기는 곡 수 상한(임시 조치 — 추후 조정 예정)
+AUTO_PLAYLIST_CANDIDATE_CAP = AUTO_PLAYLIST_TRACK_CAP * 3  # "자주 듣는 곡"은 이 개수만큼 상위 후보를 추린 뒤 그 안에서만 무작위로 뽑는다
 
 
 def _auto_playlist_context(tracks: list[dict[str, Any]]) -> dict[str, Any]:
@@ -557,7 +558,10 @@ def get_auto_playlist(auto_id: str, tracks: list[dict[str, Any]]) -> dict[str, A
         pool = [t for t in tracks if ctx["play_count"](t) == 0]
         title = "안 들어본 곡"
     elif kind == "frequent":
-        pool = sorted((t for t in tracks if ctx["play_count"](t) > 0), key=ctx["play_count"], reverse=True)
+        # 순위(재생 횟수)는 후보를 추리는 데만 쓰고, 그 후보 안에서는 무작위로 뽑아
+        # 매번 다른 구성/순서가 나오게 한다.
+        ranked = sorted((t for t in tracks if ctx["play_count"](t) > 0), key=ctx["play_count"], reverse=True)
+        pool = ranked[:AUTO_PLAYLIST_CANDIDATE_CAP]
         title = "자주 듣는 곡"
     elif kind == "artist" and key:
         pool = [t for t in tracks if key in ctx["artist_names"](t)]
@@ -570,6 +574,7 @@ def get_auto_playlist(auto_id: str, tracks: list[dict[str, Any]]) -> dict[str, A
 
     if not pool:
         return None
+    random.shuffle(pool)
     return {"id": auto_id, "title": title, "tracks": pool[:AUTO_PLAYLIST_TRACK_CAP]}
 
 
