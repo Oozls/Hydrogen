@@ -325,12 +325,18 @@ export function setupLyrics(player, onLyricsSaved) {
 
   // 편집 중인 textarea/시간칸의 포커스·커서 위치가 날아가지 않도록, 저장은
   // 편집 테이블을 다시 그리지 않는다. 시간 형식이 잘못된 줄은 조용히 건너뛴다.
-  async function performSave() {
+  //
+  // force가 아닌 한 결과가 빈 가사면 저장 자체를 하지 않는다 — 곡을 그냥
+  // 재생/전환하기만 해도(편집 없이) blur/트랙전환 시 flush가 매번 걸리는데,
+  // 이때 가사가 원래 없던 곡까지 빈 가사로 "저장"되어 버리는 문제가 있었다.
+  // 의도적으로 전체를 지우는 경우(clearBtn)는 force=true로 호출해 우회한다.
+  async function performSave(force = false) {
     if (!trackId) return;
     // trackId와 저장할 가사는 반드시 "지금" 동기적으로 캡처한다 — 아래 체인이
     // 실제로 실행될 때까지 기다렸다가 읽으면 그 사이 다른 곡으로 넘어가 있을 수 있다.
     const targetTrackId = trackId;
     const validLines = textModeOn ? parseLrcText(textArea.value) : collectTableLines();
+    if (!validLines.length && !force) return;
     const run = async () => {
       const result = await api.saveLyrics(targetTrackId, validLines);
       if (trackId === targetTrackId) {
@@ -486,7 +492,7 @@ export function setupLyrics(player, onLyricsSaved) {
     editBody.innerHTML = "";
     textArea.value = "";
     selectedRow = null;
-    performSave();
+    performSave(true);
   });
 
   // 탭을 닫거나 새로고침하는 순간의 마지막 안전장치(best-effort, 완료 보장은 없음).
