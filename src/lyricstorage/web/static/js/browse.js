@@ -461,16 +461,20 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       );
       label.appendChild(titleClip);
 
-      const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
-      if (track.album) {
-        albumSpan.classList.add("playlist-row-album-link");
-        albumSpan.title = "앨범 보기";
-        albumSpan.addEventListener("click", (e) => {
-          e.stopPropagation();
-          openAlbumFromRow(track);
-        });
+      // 앨범 상세 페이지에서는 이미 그 앨범 안이라 앨범명 컬럼이 항상
+      // 똑같은 값만 반복해 불필요하다.
+      if (container !== albumDetailList) {
+        const albumSpan = createMarqueeClip("playlist-row-album", "", track.album || "");
+        if (track.album) {
+          albumSpan.classList.add("playlist-row-album-link");
+          albumSpan.title = "앨범 보기";
+          albumSpan.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openAlbumFromRow(track);
+          });
+        }
+        label.appendChild(albumSpan);
       }
-      label.appendChild(albumSpan);
 
       label.appendChild(buildArtistCell("playlist-row-artist", track.artist, openArtistFromRow));
 
