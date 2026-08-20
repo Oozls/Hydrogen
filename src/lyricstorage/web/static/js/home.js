@@ -9,20 +9,16 @@ import { buildArtistCell } from "./songArtist.js";
 
 const RECENT_LIMIT = 12;
 const QUICKPICK_LIMIT = 18;
-const NEWLY_ADDED_LIMIT = 12;
 
 export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist) {
   const panelEl = document.getElementById("home-panel");
   const recentRowEl = document.getElementById("home-recent-row");
   const quickpicksGridEl = document.getElementById("home-quickpicks-grid");
-  const newlyAddedSectionEl = document.getElementById("home-newlyadded-section");
-  const newlyAddedRowEl = document.getElementById("home-newlyadded-row");
   const autoPlaylistsSectionEl = document.getElementById("home-auto-playlists-section");
   const autoPlaylistsRowEl = document.getElementById("home-auto-playlists-row");
 
   let recentItems = [];
   let quickpickItems = [];
-  let newlyAddedItems = [];
   let autoPlaylistItems = [];
 
   function buildRecentCard(item) {
@@ -88,18 +84,6 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
     requestAnimationFrame(() => applyMarquee(recentRowEl));
   }
 
-  // 라이브러리에 새로 들어온 곡을 발견할 방법이 없었다("오늘의 곡" 추천은
-  // 안 들어본 곡 위주라 결과적으로 겹치긴 하지만, "새로 추가됨" 자체를 보여주진
-  // 않는다). added_at(라이브러리 추가 시각)이 있는 곡만 최신순으로 몇 곡 보여준다
-  // — 이 필드가 생기기 전에 추가된 기존 곡은 added_at이 비어 있어 여기 안 뜬다.
-  function renderNewlyAdded() {
-    newlyAddedRowEl.innerHTML = "";
-    newlyAddedSectionEl.hidden = !newlyAddedItems.length;
-    if (!newlyAddedItems.length) return;
-    newlyAddedItems.forEach((item) => newlyAddedRowEl.appendChild(buildRecentCard(item)));
-    requestAnimationFrame(() => applyMarquee(newlyAddedRowEl));
-  }
-
   function buildQuickpickRow(item) {
     const row = document.createElement("div");
     row.className = "home-quickpick-row";
@@ -144,17 +128,23 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
 
   // 안 들어본 곡/자주 듣는 곡/특정 아티스트·서클 위주로 서버가 즉석에서 골라주는,
   // 사이드바에는 남지 않는 테마별 플레이리스트. 곡 하나짜리 카드가 아니라 목록
-  // 자체를 대표하는 카드라 앨범 아트 대신 고정 아이콘을 쓰고, 다시 듣기 카드처럼
-  // 가로로 나열한다(개수가 곡 카드보다 적어 세로 그리드로 채우면 휑해 보인다).
+  // 자체를 대표하는 카드다. 아티스트/서클 테마는 대표 곡의 앨범 아트를 보여주고
+  // (item.track_id가 있을 때만 — 안 들어본 곡/자주 듣는 곡은 대표 곡이 하나로
+  // 고정되지 않으므로 고정 아이콘을 그대로 쓴다), 다시 듣기 카드처럼 가로로
+  // 나열한다(개수가 곡 카드보다 적어 세로 그리드로 채우면 휑해 보인다).
   function buildAutoPlaylistCard(item) {
     const card = document.createElement("div");
     card.className = "home-recent-card home-auto-playlist-card";
     card.title = item.title;
 
-    const iconWrap = document.createElement("div");
-    iconWrap.className = "home-recent-card-art-wrap";
-    iconWrap.appendChild(iconSpan("list", "icon-lg"));
-    card.appendChild(iconWrap);
+    if (item.track_id) {
+      card.appendChild(buildArtEl(item.track_id, "home-recent-card-art-wrap"));
+    } else {
+      const iconWrap = document.createElement("div");
+      iconWrap.className = "home-recent-card-art-wrap";
+      iconWrap.appendChild(iconSpan("list", "icon-lg"));
+      card.appendChild(iconWrap);
+    }
 
     card.appendChild(createMarqueeClip("home-recent-card-title", "", item.title));
 
@@ -171,7 +161,6 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
   }
 
   attachScrollAutoHide(recentRowEl);
-  attachScrollAutoHide(newlyAddedRowEl);
   attachScrollAutoHide(autoPlaylistsRowEl);
   attachScrollAutoHide(panelEl);
 
@@ -181,19 +170,10 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
     clearTimeout(marqueeResizeTimer);
     marqueeResizeTimer = setTimeout(() => {
       applyMarquee(recentRowEl);
-      applyMarquee(newlyAddedRowEl);
       applyMarquee(quickpicksGridEl);
       applyMarquee(autoPlaylistsRowEl);
     }, 150);
   });
-
-  function loadNewlyAdded() {
-    newlyAddedItems = store
-      .getTracks()
-      .filter((t) => t.added_at)
-      .sort((a, b) => (a.added_at < b.added_at ? 1 : -1))
-      .slice(0, NEWLY_ADDED_LIMIT);
-  }
 
   async function load() {
     // reroll에 매번 새 무작위 토큰을 넘겨서, "오늘의 곡"처럼 하루 종일 고정되지
@@ -208,9 +188,7 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
     recentItems = recentResult.items;
     quickpickItems = quickpicksResult.items;
     autoPlaylistItems = autoPlaylistsResult.playlists;
-    loadNewlyAdded();
     renderRecent();
-    renderNewlyAdded();
     renderQuickpicks();
     renderAutoPlaylists();
   }

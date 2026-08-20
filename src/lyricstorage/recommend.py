@@ -496,17 +496,25 @@ def _auto_playlist_context(tracks: list[dict[str, Any]]) -> dict[str, Any]:
     has_frequent = False
     artist_totals: dict[str, int] = {}
     circle_totals: dict[str, int] = {}
+    # 홈 화면 카드에 앨범 커버를 보여주기 위한, 아티스트/서클별 대표 곡 하나.
+    artist_sample_track: dict[str, str] = {}
+    circle_sample_track: dict[str, str] = {}
     for t in tracks:
         pc = play_count(t)
         if pc == 0:
             has_unheard = True
             continue
         has_frequent = True
+        track_id = t.get("track_id") or ""
         for name in artist_names(t):
             artist_totals[name] = artist_totals.get(name, 0) + pc
+            artist_sample_track.setdefault(name, track_id)
         c_name = circle_name(t)
         if c_name:
             circle_totals[c_name] = circle_totals.get(c_name, 0) + pc
+            circle_sample_track.setdefault(c_name, track_id)
+
+    all_circle_names = {circle_resolver.get(raw, raw) for raw in circle_by_album_id.values()}
 
     return {
         "play_count": play_count,
@@ -516,6 +524,9 @@ def _auto_playlist_context(tracks: list[dict[str, Any]]) -> dict[str, Any]:
         "has_frequent": has_frequent,
         "artist_totals": artist_totals,
         "circle_totals": circle_totals,
+        "all_circle_names": all_circle_names,
+        "artist_sample_track": artist_sample_track,
+        "circle_sample_track": circle_sample_track,
     }
 
 
@@ -532,17 +543,35 @@ def list_auto_playlists(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if ctx["has_frequent"]:
         themes.append({"id": "frequent", "title": "자주 듣는 곡"})
 
-    ranked_artists = sorted(ctx["artist_totals"].items(), key=lambda kv: kv[1], reverse=True)
-    for name, total in ranked_artists[:AUTO_PLAYLIST_MAX_PER_KIND]:
-        if total < AUTO_PLAYLIST_MIN_PLAYS:
-            break
-        themes.append({"id": f"artist:{name}", "title": f"아티스트 · {name}"})
+    # 아티스트/서클 후보가 늘 몇 명(재생 횟수 상위)으로 고정되지 않도록, 기준을
+    # 넘는 후보 전체 중에서 이번엔 누구를 보여줄지 매번 무작위로 뽑는다.
+    # 서클명과 이름이 같은 아티스트는 별도 아티스트 테마를 만들지 않는다 — 서클
+    # 테마가 사실상 동일한 곡을 이미 대표하므로 카드가 중복된다.
+    artist_candidates = [
+        name
+        for name, total in ctx["artist_totals"].items()
+        if total >= AUTO_PLAYLIST_MIN_PLAYS and name not in ctx["all_circle_names"]
+    ]
+    random.shuffle(artist_candidates)
+    for name in artist_candidates[:AUTO_PLAYLIST_MAX_PER_KIND]:
+        themes.append(
+            {
+                "id": f"artist:{name}",
+                "title": f"아티스트 · {name}",
+                "track_id": ctx["artist_sample_track"].get(name),
+            }
+        )
 
-    ranked_circles = sorted(ctx["circle_totals"].items(), key=lambda kv: kv[1], reverse=True)
-    for name, total in ranked_circles[:AUTO_PLAYLIST_MAX_PER_KIND]:
-        if total < AUTO_PLAYLIST_MIN_PLAYS:
-            break
-        themes.append({"id": f"circle:{name}", "title": f"서클 · {name}"})
+    circle_candidates = [name for name, total in ctx["circle_totals"].items() if total >= AUTO_PLAYLIST_MIN_PLAYS]
+    random.shuffle(circle_candidates)
+    for name in circle_candidates[:AUTO_PLAYLIST_MAX_PER_KIND]:
+        themes.append(
+            {
+                "id": f"circle:{name}",
+                "title": f"서클 · {name}",
+                "track_id": ctx["circle_sample_track"].get(name),
+            }
+        )
 
     return themes[:AUTO_PLAYLIST_MAX_TOTAL]
 
