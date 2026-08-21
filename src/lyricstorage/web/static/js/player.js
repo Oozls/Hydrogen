@@ -2,11 +2,12 @@
 // 셔플/반복/이전-다음 계산 로직은 원본과 동일하게 유지한다.
 
 const REPEAT_ORDER = ["off", "all", "one"];
-// 다음 곡 종료 이 시간(초) 전부터 미리 다음 곡을 백그라운드로 불러 둔다.
-// 모바일에서 트랙 전환 시점에 그제서야 네트워크 요청/디코더 초기화를 시작하면
-// 초반 오디오가 씹히거나(특히 화면이 꺼져 백그라운드 상태일 때 네트워크가
-// 느려지면) 전환 자체가 멎는 문제가 있어, 끝나기 전에 미리 준비해 둔다.
-const PRELOAD_AHEAD_SEC = 15;
+// 다음 곡 종료 이 시간(초) 전부터 미리 다음 곡을 백그라운드로 불러 둔다 —
+// 연결이 넉넉해서 다운로드가 재생 속도를 따라잡고 있을 때 쓰는 기본 여유분
+// (디코더 초기화 등). 연결이 느려 다운로드가 재생을 못 따라가는 중이면
+// _estimatedPreloadLeadSec가 실측 배속을 기반으로 이보다 훨씬 이른 시점을
+// 계산해 대신 쓴다.
+const PRELOAD_MIN_SEC = 15;
 // 재생 시작 후 이 시간(초)이 지난 첫 timeupdate에서, 딱 한 번만 currentTime을
 // 스스로에게 재-seek해 디코더 위치 추적 오차를 보정한다(그 뒤로는 반복하지
 // 않는다 — 재생 중 계속 반복하면 매번 실제 seek이 걸려 끊김이 들린다). 너무
@@ -65,6 +66,9 @@ export class PlayerEngine extends EventTarget {
     // index는 그 엘리먼트에 로드해 둔 트랙이 playlist 상 몇 번째인지를 뜻한다.
     this._preloadAudio = null;
     this._preloadIndex = -1;
+    // 현재 곡 재생이 시작된 시각(performance.now()) — 다운로드가 실제로
+    // 재생 속도를 따라잡고 있는지(버퍼링된 초 / 경과한 실제 초) 재는 기준점.
+    this._trackStartWallMs = null;
 
     this._bindAudioEvents(this.audio);
   }
@@ -241,6 +245,7 @@ export class PlayerEngine extends EventTarget {
     this.audio.src = `/api/tracks/${track.track_id}/audio`;
     this._resetPositionOnPlay = true;
     this._needsInitialResync = true;
+    this._trackStartWallMs = performance.now();
     this._playWhenReady(this.audio);
     this._emit("trackchange", { track, index });
   }
@@ -370,7 +375,7 @@ export class PlayerEngine extends EventTarget {
     if (this.repeatMode === "one") return;
     const dur = this.audio.duration;
     if (!Number.isFinite(dur) || dur <= 0) return;
-    if (dur - this.audio.currentTime > PRELOAD_AHEAD_SEC) return;
+    if (dur - this.audio.currentTime > this._estimatedPreloadLeadSec(dur)) return;
     const nextIndex = this._computeNextIndex();
     if (nextIndex === null || nextIndex === this.currentIndex) return;
     if (this._preloadIndex === nextIndex) return;
@@ -380,6 +385,30 @@ export class PlayerEngine extends EventTarget {
     this._preloadIndex = nextIndex;
     el.src = `/api/tracks/${track.track_id}/audio`;
     el.load();
+  }
+
+  // 지금 곡이 실제로 받아지는 속도(=재생 1초당 몇 초 분량이 버퍼링되는지)를
+  // 재서, 그 속도로 다음 곡(길이는 지금 곡으로 추정)을 다 받는 데 필요한
+  // 시간을 계산한다. 다운로드가 재생보다 빠르면(1배 이상) 여유가 있다는
+  // 뜻이므로 기본값만 쓴다 — 다운로드가 재생을 못 따라가는 중일 때(1배 미만)만
+  // 이르게 시작한다. 그런 경우는 지금 곡 자체가 이미 대역폭 부족으로 버벅이고
+  // 있다는 뜻이라, 다음 곡까지 같은 대역폭을 두고 경쟁시키면 지금 곡이 더
+  // 나빠질 수 있지만, 어차피 지금 곡은 이미 끊기는 중이므로 다음 곡이라도
+  // 미리 받아두는 쪽이 낫다는 판단이다.
+  _estimatedPreloadLeadSec(dur) {
+    if (!this._trackStartWallMs) return PRELOAD_MIN_SEC;
+    const buffered = this.audio.buffered;
+    if (!buffered.length) return PRELOAD_MIN_SEC;
+    const elapsedSec = (performance.now() - this._trackStartWallMs) / 1000;
+    // 재생 시작 직후엔 초기 버퍼링이 순간적으로 몰려 배속이 튀어 보이므로,
+    // 어느 정도 실제 재생 시간이 쌓인 뒤의 값만 신뢰한다.
+    if (elapsedSec < 5) return PRELOAD_MIN_SEC;
+    const bufferedSec = buffered.end(buffered.length - 1);
+    const rate = bufferedSec / elapsedSec;
+    if (rate >= 1) return PRELOAD_MIN_SEC;
+    // rate < 1이면 dur / rate는 항상 dur보다 크므로, 남은 시간과 비교하는
+    // 호출부 입장에선 "지금 곡 안에서 언제 만나든 즉시 시작"과 같은 뜻이다.
+    return dur;
   }
 
   _ensurePreloadElement() {
@@ -427,6 +456,7 @@ export class PlayerEngine extends EventTarget {
     this._intentionalPause = false;
     this._resetPositionOnPlay = true;
     this._needsInitialResync = true;
+    this._trackStartWallMs = performance.now();
     this._playWhenReady(promoted);
     this._emit("trackchange", { track, index });
     // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는
