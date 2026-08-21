@@ -7,7 +7,7 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 
-from flask import Blueprint, Response, abort, jsonify, request, send_file
+from flask import Blueprint, abort, jsonify, request, send_file
 
 from lyricstorage import albums as albums_repo
 from lyricstorage import applog
@@ -134,12 +134,16 @@ def use_track_art_for_album(album_id: str):
 @bp.get("/<album_id>/art")
 def get_album_art(album_id: str):
     album = albums_repo.find_album_by_id(album_id)
-    if album is None:
+    if album is None or not album.art_ext:
         abort(404)
-    art_bytes = albums_repo.read_album_cover(album)
-    if not art_bytes:
+    path = albums_repo.album_art_path(album.id, album.art_ext)
+    if not path.exists():
         abort(404)
-    return Response(art_bytes, mimetype=_sniff_image_mimetype(art_bytes))
+    mimetype = "image/png" if album.art_ext == "png" else "image/jpeg"
+    # conditional=True -> 파일이 안 바뀌었으면 304로 응답해 매번 다시 안 받게 한다.
+    # 느린 네트워크에서 목록을 오갈 때마다 표지를 재다운로드하던 게 체감 지연의
+    # 큰 부분이었다.
+    return send_file(path, mimetype=mimetype, conditional=True, max_age=604800)
 
 
 @bp.get("/<album_id>/download")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from flask import Blueprint, Response, abort, send_file
+from flask import Blueprint, Response, abort, request, send_file
 
 from lyricstorage.models import read_album_art
 from lyricstorage.web.lookup import find_track_by_id
@@ -42,8 +42,9 @@ def get_audio(track_id: str):
         abort(404)
     mimetype = _MIME_BY_EXT.get(path.suffix.lower(), "application/octet-stream")
     # conditional=True -> Werkzeug가 Range 요청/206 Partial Content를 자동 처리한다.
-    # <audio> 탐색바가 정상 동작하려면 필수.
-    return send_file(path, mimetype=mimetype, conditional=True)
+    # <audio> 탐색바가 정상 동작하려면 필수. max_age를 줘서 같은 곡을 다시 재생할
+    # 때(반복재생 등) 매번 새로 안 받고 캐시에서 바로 재생되게 한다.
+    return send_file(path, mimetype=mimetype, conditional=True, max_age=3600)
 
 
 @bp.get("/<track_id>/art")
@@ -51,10 +52,23 @@ def get_art(track_id: str):
     track = find_track_by_id(track_id)
     if track is None:
         abort(404)
+    path = Path(track.path)
+    try:
+        etag = f'"{track_id}-{path.stat().st_mtime_ns}"'
+    except OSError:
+        abort(404)
+    # 목록 화면 하나에 표지 요청이 수십 개씩 걸리는데, 태그를 매번 다시 읽지
+    # 않고도(=디스크 IO 없이) 안 바뀌었으면 304로 끝낼 수 있어 저사양 VM/느린
+    # 네트워크 양쪽에 다 도움이 된다.
+    if request.headers.get("If-None-Match") == etag:
+        return Response(status=304)
     art_bytes = read_album_art(track.path)
     if not art_bytes:
         abort(404)
-    return Response(art_bytes, mimetype=_sniff_image_mimetype(art_bytes))
+    resp = Response(art_bytes, mimetype=_sniff_image_mimetype(art_bytes))
+    resp.headers["Cache-Control"] = "public, max-age=604800"
+    resp.headers["ETag"] = etag
+    return resp
 
 
 @bp.get("/<track_id>/download")
