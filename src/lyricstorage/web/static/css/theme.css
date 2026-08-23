@@ -2802,12 +2802,18 @@ textarea.file-content-body:disabled {
 #expanded-player-rating-slot .track-rating {
   margin-right: 0;
 }
+/* sticky 오프셋은 스크롤 컨테이너(.expanded-player-queue)의 padding(12px)
+   안쪽을 기준으로 붙어서, top:0이어도 컨테이너 맨 위에서 12px 아래로 붙는다
+   — 그 12px 틈은 어느 요소의 배경도 덮지 않아 스크롤된 목록 행이 그 틈으로
+   그대로 비쳐 보였다. margin-top을 padding만큼 음수로 줘 배경을 그 틈까지
+   끌어올리고(top도 같은 만큼 당겨 붙는 위치를 맞추고), padding-top을 그만큼
+   더 줘 글자 위치는 원래와 똑같이 보이게 한다. */
 #expanded-player-queue .section-title {
   position: sticky;
-  top: 0;
+  top: -12px;
   display: block;
-  padding: 10px 8px;
-  margin: 0 0 4px;
+  padding: 22px 8px 10px;
+  margin: -12px 0 4px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   z-index: 1;
