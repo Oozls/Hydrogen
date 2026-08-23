@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import applog, lyrics_io
+from lyricstorage import albums as albums_repo
+from lyricstorage import applog, circles, lyrics_io, lyrics_providers, translation
 from lyricstorage.markdown_render import to_html
 from lyricstorage.models import LyricLine, LyricTrack
 from lyricstorage.web.lookup import find_track_by_id
@@ -56,6 +57,85 @@ def save_lyrics(track_id: str):
             "saved_count": len(lines),
             "path": str(saved_path) if saved_path else None,
             "lines": [_line_json(line) for line in lines],
+        }
+    )
+
+
+@bp.post("/<track_id>/lyrics/external")
+def fetch_external_lyrics(track_id: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+
+    album = albums_repo.find_album_by_id(track.album_id) if track.album_id else None
+    circle = circles.name_resolver().get(album.artist, album.artist) if album and album.artist else ""
+
+    result = lyrics_providers.fetch_lyrics(track.title, track.artist, circle)
+    if result is None:
+        return jsonify({"error": "가사를 찾지 못했습니다."}), 404
+
+    lyric_track = LyricTrack(track.path, [LyricLine(ms, text) for ms, text in result["lines"]])
+    saved_path = lyric_track.save()
+    applog.log_info(
+        "ACTION",
+        f"외부 가사 가져오기: {track_id} (source={result['source']}, synced={result['synced']})",
+    )
+    return jsonify(
+        {
+            "source": result["source"],
+            "synced": result["synced"],
+            "saved_count": len(lyric_track.lines),
+            "path": str(saved_path) if saved_path else None,
+            "lines": [_line_json(line) for line in lyric_track.lines],
+        }
+    )
+
+
+@bp.post("/<track_id>/lyrics/translate")
+def translate_lyrics(track_id: str):
+    track = find_track_by_id(track_id)
+    if track is None:
+        return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
+
+    lyric_track = LyricTrack.load_for_track(track.path)
+    if not lyric_track.lines:
+        return jsonify({"error": "번역할 가사가 없습니다."}), 400
+
+    # 저장된 한 줄(LyricLine)이 항상 실제 가사 한 줄인 건 아니다 — 타임스탬프
+    # 없이 통째로 받아온 가사(TouhouDB 등)는 여러 실제 줄이 \n으로만 구분된
+    # 채 "하나의 타임스탬프(00:00.00)"에 전부 들어 있다(그 저장 규칙 자체는
+    # 그대로 유지한다 — 번역 후에도 LyricLine 개수·타임스탬프는 바뀌지 않는다).
+    # 번역만 실제 가사 줄 단위로 해야 하므로, LyricLine 안에서만 펼쳐 번역하고
+    # 결과는 그 LyricLine 하나에 다시 합쳐 넣는다. split_original_lines가
+    # 발음/번역 줄은 표시 문자로 걸러내고 원문만 돌려주므로(빈 줄은 None),
+    # 이미 번역된 가사에 다시 돌려도 항상 원문만 정확히 다시 뽑아 재번역한다.
+    groups: list[tuple[int, list[str | None]]] = [
+        (line.timestamp_ms, translation.split_original_lines(line.text)) for line in lyric_track.lines
+    ]
+
+    flat_originals = [text for _, items in groups for text in items if text is not None]
+    try:
+        translated = translation.translate_lines(flat_originals)
+    except translation.TranslationError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    translated_iter = iter(translated)
+    new_lines = []
+    for ts, items in groups:
+        rebuilt = []
+        for text in items:
+            if text is None:
+                rebuilt.append("")
+            else:
+                rebuilt.append(translation.format_translated_line(text, next(translated_iter)))
+        new_lines.append(LyricLine(ts, "\n".join(rebuilt)))
+    saved_path = LyricTrack(track.path, new_lines).save()
+    applog.log_info("ACTION", f"AI 가사 번역: {track_id} ({len(new_lines)}줄)")
+    return jsonify(
+        {
+            "saved_count": len(new_lines),
+            "path": str(saved_path) if saved_path else None,
+            "lines": [_line_json(line) for line in new_lines],
         }
     )
 

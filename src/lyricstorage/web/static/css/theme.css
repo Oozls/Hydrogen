@@ -798,6 +798,18 @@ select#today-limit-select {
 }
 
 /* -- 가사 보기 -------------------------------------------------------------- */
+#lyrics-view-panel {
+  position: relative;
+}
+/* 목록 흐름 밖으로 빼서 오른쪽 위 구석에 고정한다 — .lyrics-view-list가
+   실제 스크롤 컨테이너(overflow-y:auto)라 이 형제 요소는 스크롤과 무관하게
+   항상 같은 자리에 떠 있는다. */
+.lyrics-view-toolbar {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+}
 .lyrics-view-list {
   list-style: none;
   margin: 0;

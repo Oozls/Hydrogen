@@ -449,6 +449,14 @@
 
           <div id="lyrics-content-row" class="lyrics-content-row">
             <div id="lyrics-view-panel" class="tab-panel active">
+              <div class="lyrics-view-toolbar">
+                <button id="btn-lyrics-fetch-external" class="icon-btn" type="button" title="인터넷에서 가사 가져오기">
+                  <span class="icon" style="--icon: url(/static/icons/download.svg)"></span>
+                </button>
+                <button id="btn-lyrics-translate" class="icon-btn" type="button" title="AI로 발음·번역 추가 (Gemini)">
+                  <span class="icon" style="--icon: url(/static/icons/globe.svg)"></span>
+                </button>
+              </div>
               <ul id="lyrics-view-list" class="lyrics-view-list"></ul>
             </div>
 

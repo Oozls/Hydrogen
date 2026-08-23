@@ -30,9 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // 뜨자마자 한 번 미리 데워둔다 — 첫 라우팅 진입 시점에 이미 캐시가 있으면
   // 그만큼 fetch 대기가 줄어든다(완전히 없어지는 건 3단계 라우팅 개편에서).
   store.refresh();
-  setupUsageTracking();
   const audioEl = document.getElementById("audio-element");
   const player = new PlayerEngine(audioEl);
+  setupUsageTracking(player);
 
   const refs = { router: null, pendingAlbumFocus: null };
   const identityDialogApi = setupArtistIdentityDialog();

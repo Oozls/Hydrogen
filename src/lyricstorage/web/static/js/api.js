@@ -129,6 +129,8 @@ export const api = {
   getLyrics: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics`),
   saveLyrics: (trackId, lines) =>
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
+  fetchExternalLyrics: (trackId) => request("POST", `/api/tracks/${trackId}/lyrics/external`),
+  translateLyrics: (trackId) => request("POST", `/api/tracks/${trackId}/lyrics/translate`),
   getLyricsBackups: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics/backups`),
   getLyricsBackup: (trackId, name) =>
     request("GET", `/api/tracks/${trackId}/lyrics/backups/${encodeURIComponent(name)}`),

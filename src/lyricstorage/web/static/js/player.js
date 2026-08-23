@@ -482,5 +482,12 @@ export class PlayerEngine extends EventTarget {
     // 네이티브 durationchange가 다시 발생하지 않으므로, 재생바 길이 표시가
     // 새 트랙 값으로 갱신되도록 수동으로 다시 emit한다.
     this._emit("durationchange", { durationMs: this.duration() });
+    // 같은 이유로 progress도 다시 발생하지 않는다 — promoted는 이미 프리로드
+    // 단계에서 대부분(또는 전부) 받아둔 상태라 승격 후에는 새로 받을 데이터가
+    // 거의 없어서 네이티브 progress가 아예 안 오는 경우가 흔하다(그래서 특히
+    // 자동으로 다음 곡으로 넘어갈 때 재생바에 미리 받은 구간이 안 보였다).
+    // durationchange 핸들러(UI 쪽)가 방금 버퍼 표시를 0%로 리셋했으므로, 그 뒤에
+    // 지금 실제 버퍼 상태를 다시 emit해 덮어쓴다.
+    this._emit("buffered", { bufferedMs: this.bufferedMs() });
   }
 }

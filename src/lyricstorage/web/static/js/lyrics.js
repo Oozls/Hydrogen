@@ -78,6 +78,8 @@ export function setupLyrics(player, onLyricsSaved) {
   const editPanel = document.getElementById("lyrics-edit-panel");
 
   const viewList = document.getElementById("lyrics-view-list");
+  const fetchExternalBtn = document.getElementById("btn-lyrics-fetch-external");
+  const translateBtn = document.getElementById("btn-lyrics-translate");
 
   const editScroll = document.getElementById("lyrics-edit-scroll");
   const editBody = document.getElementById("lyrics-edit-body");
@@ -276,7 +278,16 @@ export function setupLyrics(player, onLyricsSaved) {
     if (textModeOn) textArea.value = linesToLrcText(lines);
   }
 
+  // 곡이 빠르게 연달아 바뀌면(연타로 스킵, 셔플 등) setTrack이 겹쳐 호출될 수
+  // 있다. 매번 await(이전 곡 저장, 가사 조회)를 거치므로, 먼저 시작된 호출이
+  // 나중에 시작된 호출보다 늦게 끝나면 trackId/lines를 이미 지난 트랙 값으로
+  // 덮어써버린다(재생 중인 곡과 안 맞는 엉뚱한 가사가 뜨는 원인). 매 호출마다
+  // 토큰을 새로 발급해, 그 사이 더 최신 호출이 시작됐으면 조용히 멈춘다
+  // (expanded-player.js의 animationToken과 같은 패턴).
+  let setTrackToken = 0;
+
   async function setTrack(track) {
+    const myToken = ++setTrackToken;
     // 곡을 바꾸기 전, 이전 곡에 대해 대기 중이던 저장을 반드시 먼저 끝낸다.
     // 그렇지 않으면 디바운스 타이머가 나중에 엉뚱한(새) 트랙 상태에 대해
     // 발동하거나, 이전 트랙의 편집 내용이 그대로 유실된다.
@@ -285,6 +296,7 @@ export function setupLyrics(player, onLyricsSaved) {
       autoSaveTimer = null;
       await performSave();
     }
+    if (myToken !== setTrackToken) return; // 그 사이 더 최신 트랙 전환이 시작됨
     trackId = track ? track.track_id : null;
     trackLabel = track ? [track.title, track.artist].filter(Boolean).join(" - ") : "";
     if (!trackId) {
@@ -294,6 +306,7 @@ export function setupLyrics(player, onLyricsSaved) {
       return;
     }
     const data = await api.getLyrics(trackId);
+    if (myToken !== setTrackToken) return; // 응답 오는 사이 더 최신 트랙 전환이 시작됨
     lines = data.lines;
     renderView();
     renderEdit();
@@ -421,6 +434,55 @@ export function setupLyrics(player, onLyricsSaved) {
       renderEdit();
       if (onLyricsSaved) onLyricsSaved(trackId);
     });
+  });
+
+  fetchExternalBtn.addEventListener("click", async () => {
+    if (!trackId) {
+      await alertDialog("먼저 곡을 재생하거나 선택하세요.");
+      return;
+    }
+    if (lines.length && !(await confirmDialog("인터넷에서 가사를 가져와 지금 가사를 덮어쓸까요? 기존 가사는 자동으로 백업됩니다.")))
+      return;
+    fetchExternalBtn.disabled = true;
+    try {
+      const result = await api.fetchExternalLyrics(trackId);
+      lines = result.lines;
+      renderView();
+      renderEdit();
+      if (onLyricsSaved) onLyricsSaved(trackId);
+      await alertDialog(
+        result.synced
+          ? `${result.source}에서 동기화된 가사를 가져왔습니다.`
+          : `${result.source}에서 가사를 가져왔습니다 (타이밍 정보 없음 — '가사 편집' 탭에서 직접 맞춰주세요).`
+      );
+    } catch (err) {
+      await alertDialog(err.message || "가사를 가져오지 못했습니다.");
+    } finally {
+      fetchExternalBtn.disabled = false;
+    }
+  });
+
+  translateBtn.addEventListener("click", async () => {
+    if (!trackId) {
+      await alertDialog("먼저 곡을 재생하거나 선택하세요.");
+      return;
+    }
+    if (!lines.length) {
+      await alertDialog("번역할 가사가 없습니다. 먼저 가사를 추가하세요.");
+      return;
+    }
+    translateBtn.disabled = true;
+    try {
+      const result = await api.translateLyrics(trackId);
+      lines = result.lines;
+      renderView();
+      renderEdit();
+      if (onLyricsSaved) onLyricsSaved(trackId);
+    } catch (err) {
+      await alertDialog(err.message || "번역에 실패했습니다.");
+    } finally {
+      translateBtn.disabled = false;
+    }
   });
 
   function formatBackupTimestamp(iso) {
