@@ -69,7 +69,18 @@ def _resolve_touhoudb_artist_id(name: str) -> int | None:
     return items[0]["id"] if items else None
 
 
+def _extract_lyrics(item: dict) -> str | None:
+    entries = item.get("lyrics") or []
+    if not entries:
+        return None
+    chosen = next((e for e in entries if e.get("translationType") == "Original"), entries[0])
+    value = (chosen.get("value") or "").strip()
+    return value or None
+
+
 def _search_touhoudb_songs(title: str, artist_ids: list[int]) -> dict | None:
+    """artist_ids로 서버 쪽에서 이미 걸러진 검색 — 결과는 신뢰하고 첫 번째로 가사가
+    있는 곡을 그대로 쓴다(요청자가 이미 특정 아티스트로 좁혀 보냈으므로)."""
     params = [("query", title), ("maxResults", 10), ("fields", "Lyrics"), ("nameMatchMode", "Words")]
     for aid in artist_ids:
         params.append(("artistId[]", aid))
@@ -79,11 +90,33 @@ def _search_touhoudb_songs(title: str, artist_ids: list[int]) -> dict | None:
     except (urllib.error.URLError, ValueError, OSError, TimeoutError):
         return None
     for item in data.get("items") or []:
-        entries = item.get("lyrics") or []
-        if not entries:
+        value = _extract_lyrics(item)
+        if value:
+            return {"source": "TouhouDB", "synced": False, "lines": [(0, value)]}
+    return None
+
+
+def _search_touhoudb_songs_verified(title: str, artist: str, circle: str) -> dict | None:
+    """artist/circle 중 어느 것도 TouhouDB에 정확매칭 등록돼 있지 않을 때(표기
+    차이 등)만 쓰는 마지막 수단. 서버 쪽 필터 없이 제목만으로 후보를 여러 개
+    모은 뒤, 후보의 크레딧 문자열에 로컬 아티스트/서클 이름이 조금이라도
+    겹치는지 직접 대조해서 통과한 것만 쓴다 — 동방 원곡명은 완전히 다른
+    서클/보컬의 곡과 흔히 겹치므로, 겹치는 게 하나도 없으면 그냥 못 찾은
+    걸로 친다(엉뚱한 곡의 가사를 가져오는 것보다 낫다)."""
+    needles = [n.strip().lower() for n in (artist, circle) if n and n.strip()]
+    if not needles:
+        return None
+    params = [("query", title), ("maxResults", 20), ("fields", "Lyrics"), ("nameMatchMode", "Words")]
+    url = "https://touhoudb.com/api/songs?" + urllib.parse.urlencode(params)
+    try:
+        data = _get_json(url)
+    except (urllib.error.URLError, ValueError, OSError, TimeoutError):
+        return None
+    for item in data.get("items") or []:
+        haystack = (item.get("artistString") or "").lower()
+        if not any(needle in haystack or haystack in needle for needle in needles if haystack):
             continue
-        chosen = next((e for e in entries if e.get("translationType") == "Original"), entries[0])
-        value = (chosen.get("value") or "").strip()
+        value = _extract_lyrics(item)
         if value:
             return {"source": "TouhouDB", "synced": False, "lines": [(0, value)]}
     return None
@@ -105,8 +138,13 @@ def fetch_touhoudb(title: str, artist: str, circle: str = "") -> dict | None:
     — VocaDB는 여러 값을 OR가 아니라 AND로 묶어서 "둘 다 참여한 곡"만 찾는데,
     실제로는 개별 곡이 서클 전체가 아니라 멤버 개인(예: "岸田교団" 대신
     "岸田")으로만 크레딧되는 경우가 흔해 서클 id를 같이 넣으면 오히려 못 찾게
-    된다. 대신 아티스트 → 서클 → 무필터(제목만) 순서로 하나씩 따로 시도해
-    먼저 찾히는 걸 쓴다."""
+    된다. 대신 아티스트 → 서클 순서로 하나씩 따로 시도해 먼저 찾히는 걸 쓴다.
+
+    둘 다 TouhouDB에 정확매칭되는 아티스트가 없으면(표기 차이로 못 찾은
+    것뿐일 수 있다) 제목만으로 무필터 검색하되, 후보의 크레딧과 로컬
+    아티스트/서클 이름이 하나도 안 겹치면 포기한다 — 동방 원곡명은 완전히
+    다른 곡과 흔히 겹쳐서, 검증 없이 그냥 1등 후보를 썼다가는 아티스트·서클·
+    보컬·프로듀서 어느 것도 안 겹치는 완전히 다른 곡의 가사를 가져오게 된다."""
     if not title:
         return None
     for name in (artist, circle):
@@ -116,7 +154,7 @@ def fetch_touhoudb(title: str, artist: str, circle: str = "") -> dict | None:
         result = _search_touhoudb_songs(title, [artist_id])
         if result is not None:
             return result
-    return _search_touhoudb_songs(title, [])
+    return _search_touhoudb_songs_verified(title, artist, circle)
 
 
 def fetch_lyrics(title: str, artist: str, circle: str = "") -> dict | None:
