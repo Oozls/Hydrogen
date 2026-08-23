@@ -1182,13 +1182,20 @@ input[type="range"]#volume-slider {
   flex: none;
   width: 100px;
 }
+/* --range-buffered(재생바 전용, volume-slider는 안 씀)는 지금까지 내려받아
+   재생 가능한 지점까지를 가리킨다 — 재생된 구간(accent)과 아직 못 받은
+   구간(border) 사이에 한 단계(muted) 끼워 넣는다. 지정 안 된 슬라이더는
+   기본값 0%가 바로 앞 stop(range-progress)보다 작아 자동으로 폭 0이 되므로
+   volume-slider에는 아무 영향이 없다. */
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
   background: linear-gradient(
     to right,
     var(--accent) var(--range-progress, 0%),
-    var(--border) var(--range-progress, 0%)
+    var(--text-muted) var(--range-progress, 0%),
+    var(--text-muted) var(--range-buffered, 0%),
+    var(--border) var(--range-buffered, 0%)
   );
 }
 input[type="range"]::-webkit-slider-thumb {
@@ -1210,7 +1217,9 @@ input[type="range"]::-moz-range-track {
   background: linear-gradient(
     to right,
     var(--accent) var(--range-progress, 0%),
-    var(--border) var(--range-progress, 0%)
+    var(--text-muted) var(--range-progress, 0%),
+    var(--text-muted) var(--range-buffered, 0%),
+    var(--border) var(--range-buffered, 0%)
   );
 }
 input[type="range"]::-moz-range-thumb {

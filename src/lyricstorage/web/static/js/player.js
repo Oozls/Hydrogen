@@ -131,6 +131,24 @@ export class PlayerEngine extends EventTarget {
       if (audio !== this.audio) return;
       this._emit("buffering", { buffering: false });
     });
+    // 브라우저가 데이터를 내려받을 때마다(스펙상 다운로드 중 주기적으로) 발생 —
+    // 재생바에 "어디까지 미리 받아졌는지" 표시하는 용도.
+    audio.addEventListener("progress", () => {
+      if (audio !== this.audio) return;
+      this._emit("buffered", { bufferedMs: this.bufferedMs() });
+    });
+  }
+
+  // 지금 재생 위치가 속한 버퍼 구간의 끝(ms) — 그 구간에 없으면(탐색 등)
+  // 마지막 버퍼 구간의 끝을 대신 쓴다.
+  bufferedMs() {
+    const buffered = this.audio.buffered;
+    if (!buffered.length) return 0;
+    const t = this.audio.currentTime;
+    for (let i = 0; i < buffered.length; i++) {
+      if (t <= buffered.end(i)) return Math.round(buffered.end(i) * 1000);
+    }
+    return Math.round(buffered.end(buffered.length - 1) * 1000);
   }
 
   _emit(name, detail) {

@@ -202,24 +202,57 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     }
   }
 
-  player.addEventListener("tick", (e) => {
-    if (seeking) return;
-    seekSlider.value = String(e.detail.positionMs);
-    elapsedLabel.textContent = fmtTime(e.detail.positionMs);
+  // 재생 위치 표시는 네이티브 timeupdate(브라우저마다 다르지만 대략 초당
+  // 4번 정도로 성글다) 대신 rAF로 매 프레임 audio.currentTime을 직접 읽어
+  // 갱신한다 — timeupdate 빈도 그대로 슬라이더를 움직이면 눈에 띄게
+  // 계단식으로 보인다. "tick"(timeupdate 기반) 이벤트는 미디어 세션(OS
+  // 잠금화면 등) 위치 갱신처럼 그 정도 빈도로도 충분한 용도에만 남겨둔다.
+  function updateProgressUI() {
+    const posMs = player.position();
+    seekSlider.value = String(posMs);
+    elapsedLabel.textContent = fmtTime(posMs);
     updateRangeFill(seekSlider);
+  }
+  let progressRafId = null;
+  function progressStep() {
+    if (!seeking) updateProgressUI();
+    progressRafId = requestAnimationFrame(progressStep);
+  }
+  function startProgressLoop() {
+    if (progressRafId == null) progressRafId = requestAnimationFrame(progressStep);
+  }
+  function stopProgressLoop() {
+    if (progressRafId != null) {
+      cancelAnimationFrame(progressRafId);
+      progressRafId = null;
+    }
+  }
+
+  function updateBufferedFill(bufferedMs) {
+    const max = Number(seekSlider.max) || 0;
+    const pct = max <= 0 ? 0 : Math.max(0, Math.min(100, (bufferedMs / max) * 100));
+    seekSlider.style.setProperty("--range-buffered", `${pct}%`);
+  }
+
+  player.addEventListener("tick", (e) => {
     updateMediaSessionPosition(e.detail.positionMs, player.duration());
   });
+
+  player.addEventListener("buffered", (e) => updateBufferedFill(e.detail.bufferedMs));
 
   player.addEventListener("durationchange", (e) => {
     seekSlider.max = String(Math.max(0, e.detail.durationMs));
     durationLabel.textContent = fmtTime(e.detail.durationMs);
     updateRangeFill(seekSlider);
+    updateBufferedFill(0);
     updateMediaSessionPosition(player.position(), e.detail.durationMs);
   });
 
   player.addEventListener("playstate", (e) => {
     setIcon(playPauseBtn.querySelector(".icon"), e.detail.playing ? "pause" : "play");
     if (hasMediaSession) navigator.mediaSession.playbackState = e.detail.playing ? "playing" : "paused";
+    if (e.detail.playing) startProgressLoop();
+    else stopProgressLoop();
   });
 
   // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.
@@ -263,6 +296,9 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     seeking = false;
     player.setSeeking(false);
     player.seek(Number(seekSlider.value));
+    // 일시정지 중엔 rAF 루프가 안 돌아서(startProgressLoop이 playstate에만
+    // 걸려 있음) tick도 안 오므로, 커밋한 위치를 여기서 직접 한 번 반영한다.
+    updateProgressUI();
   });
   seekSlider.addEventListener("input", () => {
     elapsedLabel.textContent = fmtTime(Number(seekSlider.value));
