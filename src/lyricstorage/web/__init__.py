@@ -50,7 +50,9 @@ def create_app() -> Flask:
         tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         applog.log_error("ERROR", f"{request.method} {request.path} 처리 중 예외 발생\n{tb}")
 
+    from lyricstorage.web.auth import init_auth
     from lyricstorage.web.routes import register_routes
 
     register_routes(app)
+    init_auth(app)
     return app
