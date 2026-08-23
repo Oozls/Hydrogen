@@ -32,14 +32,13 @@ class TranslationError(Exception):
 
 
 def format_translated_line(original: str, translated: LineTranslation) -> str:
-    """가사 한 줄을 (원문/발음/번역) 4줄로 합친다. 발음 줄만 markdown_render.py가
-    이미 지원하는 "> 텍스트"(보조 줄, 작게 표시) 문법으로 시작해 원가사보다
-    작게 보이게 한다 — 번역은 원문과 같은 크기로 둔다. 마크다운 blockquote는
-    바로 다음 줄이 "> "로 안 시작해도(lazy continuation) 빈 줄을 만나기 전까진
-    같은 블록에 묶어버리므로, 번역 줄을 blockquote 밖(원문 크기)으로 빼내려면
-    둘 사이에 실제 빈 줄이 하나 필요하다 — split_original_lines()가 이 빈
-    줄을 "원문 사이 문단 구분"과 헷갈리지 않도록 구분해서 걸러낸다."""
-    return f"{original}\n> {_MARKER}{translated.reading}\n\n{_MARKER}{translated.translation}"
+    """가사 한 줄을 (원문/발음/번역) 3줄로 합치고, 다음 원가사와의 사이에 빈
+    줄 두 개를 둔다. 발음·번역 줄 모두 markdown_render.py가 지원하는
+    "> 텍스트"(보조 줄, 작게 표시) 문법으로 시작해 원가사보다 작게 보인다.
+    끝의 "\n\n"는 이 줄 자체가 아니라 다음 그룹과의 간격이므로, 여러 그룹을
+    "\n"로 이어붙이면(호출부) 실제로는 빈 줄 두 개(개행 세 번)가 된다 —
+    split_original_lines()가 이 빈 줄들을 스페이서로 인식해 걸러낸다."""
+    return f"{original}\n> {_MARKER}{translated.reading}\n> {_MARKER}{translated.translation}\n\n"
 
 
 def _is_marked(part: str) -> bool:
@@ -49,20 +48,23 @@ def _is_marked(part: str) -> bool:
 
 def split_original_lines(text: str) -> list[str | None]:
     """LyricLine 텍스트에서 실제 가사 원문만 순서대로 뽑는다(빈 줄은 None).
-    이미 붙어있는 발음/번역 줄(_MARKER로 시작 — 발음 줄은 "> " 뒤에 옴)과 그
-    둘 사이의 빈 줄(format_translated_line이 blockquote를 끊으려고 넣은 것)은
-    건너뛴다 — 그래서 한 번도 번역 안 된 줄이든 이미 번역된 줄이든 항상
-    원문(그리고 원문 사이의 진짜 문단 구분 빈 줄)만 정확히 되찾는다."""
+    이미 붙어있는 발음/번역 줄(_MARKER로 시작, "> " 뒤에 옴)과 그 뒤에 붙는
+    스페이서 빈 줄(최대 2개, format_translated_line이 다음 원가사와의 간격으로
+    넣은 것)은 건너뛴다 — 그래서 한 번도 번역 안 된 줄이든 이미 번역된
+    줄이든 항상 원문(그리고 원문 사이의 진짜 문단 구분 빈 줄)만 정확히
+    되찾는다."""
     parts = text.split("\n")
     result: list[str | None] = []
     i = 0
-    while i < len(parts):
+    n = len(parts)
+    while i < n:
         part = parts[i]
         if _is_marked(part):
             i += 1
-            continue
-        if part == "" and i + 1 < len(parts) and _is_marked(parts[i + 1]):
-            i += 1  # 발음/번역 사이의 blockquote 분리용 빈 줄 — 건너뛴다
+            skipped = 0
+            while skipped < 2 and i < n and parts[i] == "":
+                i += 1
+                skipped += 1
             continue
         result.append(part if part.strip() else None)
         i += 1
