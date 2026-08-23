@@ -9,12 +9,17 @@ const RESULT_LIMIT = 8;
 
 export function searchAll(query) {
   const q = (query || "").trim().toLowerCase();
-  if (!q) return { tracks: [], albums: [], circles: [], songArtists: [] };
+  if (!q) return { tracks: [], albums: [], circles: [], songArtists: [], tracksTruncated: false };
 
   const tracks = store.getTracks();
   const albums = store.getAlbums();
 
-  const tracksMatch = tracks.filter((t) => (t.title || "").toLowerCase().includes(q)).slice(0, RESULT_LIMIT);
+  const tracksAll = tracks.filter((t) => (t.title || "").toLowerCase().includes(q));
+  const tracksMatch = tracksAll.slice(0, RESULT_LIMIT);
+  // "feat"처럼 흔한 단어로 검색하면 실제 일치하는 곡이 미리보기 상한(RESULT_LIMIT)보다
+  // 훨씬 많을 수 있다 — 찾던 곡이 그 뒤에 묻혀 검색이 안 되는 것처럼 보이므로,
+  // 잘렸는지 여부를 같이 돌려줘서 호출부가 "곡 탭에서 전체 보기" 안내를 띄울 수 있게 한다.
+  const tracksTruncated = tracksAll.length > RESULT_LIMIT;
   const albumsMatch = albums.filter((a) => (a.name || "").toLowerCase().includes(q)).slice(0, RESULT_LIMIT);
 
   // 서클(앨범 아티스트)/곡 아티스트는 이명 레지스트리로 대표 이름을 구해서
@@ -44,5 +49,5 @@ export function searchAll(query) {
     .filter((name) => name.toLowerCase().includes(q))
     .slice(0, RESULT_LIMIT);
 
-  return { tracks: tracksMatch, albums: albumsMatch, circles: circlesMatch, songArtists: songArtistsMatch };
+  return { tracks: tracksMatch, albums: albumsMatch, circles: circlesMatch, songArtists: songArtistsMatch, tracksTruncated };
 }

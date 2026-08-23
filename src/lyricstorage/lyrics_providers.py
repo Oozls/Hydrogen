@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,6 +19,24 @@ import urllib.request
 from lyricstorage import lyrics_io
 
 _TIMEOUT_SEC = 8
+
+# 로컬 트랙 제목은 참여 아티스트를 "곡명 feat. A,B" 식으로 제목 자체에 적어두는
+# 관행이 흔하다(이 라이브러리도 "Dreamy Noise feat. AO" 등 다수 — 공백 없이
+# "곡명feat.A"로 붙어있거나 대소문자가 Feat/FEAT인 것도 있다). 이 구간을
+# 그대로 검색어에 넣으면 실제로 등록된(참여 아티스트 표기 없는) 제목과 안
+# 맞아 검색이 통째로 실패한다("nameMatchMode=Words"는 검색어의 모든 단어가
+# 후보 이름에 있어야 하는데, 후보 제목엔 애초에 "feat. ..." 부분이 없다).
+# "(리믹스명)"처럼 feat. 뒤에 이어지는 진짜 제목의 일부는 보존한다.
+# 앞에 라틴 문자가 바로 붙어있으면(예: "defeat") 매칭하지 않는다 — 그 앞이
+# 공백이든 한글/한자든 문자열 시작이든 다 매칭된다("남몰래feat.김철수"도 포함).
+_FEAT_RE = re.compile(r"(?<![A-Za-z])feat\.?\s*[^(]*?(?=\s*\(|$)", re.IGNORECASE)
+
+
+def _strip_feat_credits(title: str) -> str:
+    cleaned = _FEAT_RE.sub("", title)
+    # 원문에 "feat." 앞뒤로 공백이 있었으면 그 구간을 지우고 나서 공백이
+    # 두 칸 남거나(중간에서 지운 경우) 끝에 남을(맨 끝에서 지운 경우) 수 있다.
+    return re.sub(r"\s{2,}", " ", cleaned).strip()
 _USER_AGENT = "lyric-storage/1.0"
 
 
@@ -195,4 +214,5 @@ def fetch_touhoudb(title: str, artist: str, circle: str = "") -> dict | None:
 
 def fetch_lyrics(title: str, artist: str, circle: str = "") -> dict | None:
     """LRCLIB을 먼저 시도하고, 못 찾으면 TouhouDB로 폴백한다."""
-    return fetch_lrclib(title, artist) or fetch_touhoudb(title, artist, circle)
+    search_title = _strip_feat_credits(title)
+    return fetch_lrclib(search_title, artist) or fetch_touhoudb(search_title, artist, circle)

@@ -2962,12 +2962,34 @@ textarea.file-content-body:disabled {
   gap: 20px;
 }
 .album-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   padding-bottom: 6px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
+}
+/* 헤더 검색 결과의 "곡" 구획은 미리보기 상한(RESULT_LIMIT) 때문에 실제
+   일치하는 곡을 다 못 보여줄 수 있다 — 그럴 때만 곡 탭 전체 검색으로
+   넘어가는 링크를 헤더 오른쪽에 붙인다. */
+.search-section-more {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  flex: none;
+}
+@media (hover: hover) {
+.search-section-more:hover {
+  text-decoration: underline;
+}
 }
 /* 구획(아티스트)당 앨범들은 한 행에 가로로 나란히 두고, 다 못 들어가면 그
    행만 가로로 스크롤한다 — 폭이 좁다고 grid처럼 줄바꿈해서 한 아티스트의

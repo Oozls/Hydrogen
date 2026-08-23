@@ -1572,15 +1572,26 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     return { name, count, albums: [...albumIds].map((id) => albumById.get(id)).filter(Boolean) };
   }
 
-  function buildSearchSection(title, buildBody) {
+  function buildSearchSection(title, buildBody, headerAction) {
     const section = document.createElement("div");
     section.className = "album-section";
     const header = document.createElement("div");
     header.className = "album-section-header";
     header.textContent = title;
+    if (headerAction) header.appendChild(headerAction);
     section.appendChild(header);
     section.appendChild(buildBody());
     return section;
+  }
+
+  // 곡 탭으로 넘어가 같은 검색어로 필터링된 상태를 보여준다 — 헤더 검색은
+  // 구획당 미리보기 개수(RESULT_LIMIT)로 잘리지만, 곡 탭 자체 필터는 페이지네이션이라
+  // 잘림 없이 전체를 볼 수 있다.
+  function openSongSearch(query) {
+    switchMode("song");
+    filterQuery = query || "";
+    filterField = "all";
+    render();
   }
 
   function renderSearchResults(query) {
@@ -1590,13 +1601,25 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
     const sections = [];
     if (result.tracks.length) {
+      let headerAction = null;
+      if (result.tracksTruncated) {
+        headerAction = document.createElement("button");
+        headerAction.type = "button";
+        headerAction.className = "search-section-more";
+        headerAction.textContent = "곡 탭에서 전체 보기";
+        headerAction.addEventListener("click", () => openSongSearch(query));
+      }
       sections.push(
-        buildSearchSection("곡", () => {
-          const list = document.createElement("ul");
-          list.className = "playlist-list";
-          renderSongRows(list, result.tracks, (t) => playFromList(t, result.tracks, "검색 결과"));
-          return list;
-        })
+        buildSearchSection(
+          "곡",
+          () => {
+            const list = document.createElement("ul");
+            list.className = "playlist-list";
+            renderSongRows(list, result.tracks, (t) => playFromList(t, result.tracks, "검색 결과"));
+            return list;
+          },
+          headerAction
+        )
       );
     }
     const albumGroups = result.albums
