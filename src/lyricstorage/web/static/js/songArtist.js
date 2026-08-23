@@ -12,9 +12,12 @@ export function splitArtists(artist) {
 
 // 곡 목록 행/카드의 아티스트 칸을 만든다. 아티스트가 하나면 기존과 동일하게
 // 마퀴 스크롤이 가능한 클릭 영역 하나로 만들고, 쉼표로 여럿이면 각 이름을
-// 개별적으로 클릭 가능한 조각으로 나눠 렌더링한다 — 이 경우 마퀴 스크롤(둘 이상의
-// 클릭 영역과 텍스트 복제 애니메이션을 동시에 지원하려면 marquee.js의 내부 구조를
-// 다시 짜야 해서 배보다 배꼽이 큼)은 포기하고 그냥 말줄임표로 자른다.
+// 개별적으로 클릭 가능한 조각으로 나눠 렌더링한다. 두 경우 모두 같은
+// .marquee-clip > .marquee-inner 구조를 쓰므로 marquee.js가 넘치는 텍스트를
+// 똑같이 스크롤해준다 — 다만 이름별 클릭 리스너를 각 span에 직접 달면
+// marquee.js가 스크롤용으로 노드를 복제할 때(cloneNode) 리스너가 함께
+// 복제되지 않으므로, 클릭 리스너는 clip 하나에만 위임(delegation)으로 달고
+// 어느 이름이 클릭됐는지는 data-artist-name 속성으로 구분한다.
 // onOpenArtist(name)이 없으면 클릭 불가능한 일반 텍스트로 렌더링한다.
 export function buildArtistCell(clipClassName, artistString, onOpenArtist) {
   const names = splitArtists(artistString);
@@ -32,20 +35,28 @@ export function buildArtistCell(clipClassName, artistString, onOpenArtist) {
   }
   const clip = document.createElement("span");
   clip.className = `${clipClassName} marquee-clip`;
+  const inner = document.createElement("span");
+  inner.className = "marquee-inner";
   names.forEach((name, i) => {
-    if (i > 0) clip.appendChild(document.createTextNode(", "));
+    if (i > 0) inner.appendChild(document.createTextNode(", "));
     const nameEl = document.createElement("span");
     nameEl.textContent = name;
     if (onOpenArtist) {
       nameEl.className = "playlist-row-artist-link";
       nameEl.title = "아티스트 보기";
-      nameEl.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onOpenArtist(name);
-      });
+      nameEl.dataset.artistName = name;
     }
-    clip.appendChild(nameEl);
+    inner.appendChild(nameEl);
   });
+  clip.appendChild(inner);
+  if (onOpenArtist) {
+    clip.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-artist-name]");
+      if (!target) return;
+      e.stopPropagation();
+      onOpenArtist(target.dataset.artistName);
+    });
+  }
   return clip;
 }
 

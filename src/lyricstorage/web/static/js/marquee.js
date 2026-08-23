@@ -158,13 +158,14 @@ export function applyMarquee(rootEl) {
     stopMarquee(inner);
     stopMarqueeFade(clip);
 
-    // 우선 일반 텍스트로 되돌려서 실제(줄바꿈 없는) 폭을 측정한다.
-    // 이미 marquee 복사본 2벌이 남아있다면 textContent를 그대로 읽으면 이어붙여져
-    // 중복되므로, 복사본 중 하나만 원본으로 취급한다.
+    // 원본 노드(단순 텍스트 또는 아티스트 여러 명처럼 클릭 가능한 span이 섞인
+    // 구조)를 그대로 복제해 되돌린다. textContent만 다루면 아티스트 칸의
+    // data-artist-name 속성이 날아가버린다. 이미 marquee 복사본 2벌이 남아있다면
+    // 그대로 읽으면 이어붙여져 중복되므로, 복사본 중 하나만 원본으로 취급한다.
     const firstCopy = inner.querySelector(".marquee-copy");
-    const text = firstCopy ? firstCopy.textContent : inner.textContent;
+    const sourceNodes = Array.from((firstCopy || inner).childNodes).map((n) => n.cloneNode(true));
     inner.innerHTML = "";
-    inner.textContent = text;
+    sourceNodes.forEach((n) => inner.appendChild(n.cloneNode(true)));
     const singleWidth = inner.scrollWidth;
     const clipWidth = clip.clientWidth;
 
@@ -174,11 +175,11 @@ export function applyMarquee(rootEl) {
     inner.innerHTML = "";
     const first = document.createElement("span");
     first.className = "marquee-copy";
-    first.textContent = text;
+    sourceNodes.forEach((n) => first.appendChild(n.cloneNode(true)));
     first.style.marginRight = `${LOOP_GAP_PX}px`;
     const second = document.createElement("span");
     second.className = "marquee-copy";
-    second.textContent = text;
+    sourceNodes.forEach((n) => second.appendChild(n.cloneNode(true)));
     inner.appendChild(first);
     inner.appendChild(second);
     inner.classList.add("marquee");
