@@ -75,9 +75,11 @@ textarea {
   background-clip: content-box;
   min-height: 28px;
 }
+@media (hover: hover) {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-muted);
   background-clip: content-box;
+}
 }
 
 /* -- 아이콘: Feather SVG(stroke=currentColor)를 CSS mask로 재색상화 -------- */
@@ -261,8 +263,10 @@ textarea {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   cursor: pointer;
 }
+@media (hover: hover) {
 .sidebar-toggle-btn:hover {
   background: var(--border);
+}
 }
 .sidebar-backdrop {
   display: none;
@@ -324,9 +328,11 @@ textarea {
   text-align: left;
   text-decoration: none;
 }
+@media (hover: hover) {
 .sidebar-home-btn:hover,
 .sidebar-nav-btn:hover {
   background: #1f2330;
+}
 }
 .sidebar-home-btn.active,
 .sidebar-nav-btn.active {
@@ -379,8 +385,10 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+@media (hover: hover) {
 .sidebar-playlist-row:hover {
   background: #1f2330;
+}
 }
 .sidebar-playlist-row.active {
   background: var(--bg-elevated);
@@ -422,8 +430,10 @@ textarea {
   padding: 0;
   position: relative;
 }
+@media (hover: hover) {
 .icon-btn:hover {
   background: var(--bg-elevated);
+}
 }
 .icon-btn:active {
   background: var(--border);
@@ -446,8 +456,10 @@ textarea {
   color: var(--icon-on-accent);
   padding: 0;
 }
+@media (hover: hover) {
 .play-btn:hover {
   background: var(--accent-muted);
+}
 }
 .play-btn .icon {
   width: 18px;
@@ -526,8 +538,10 @@ select#today-limit-select {
      않는다. */
   line-height: 1;
 }
+@media (hover: hover) {
 .playlist-row:hover {
   background: #1f2330;
+}
 }
 .playlist-row.selected {
   background: var(--bg-elevated);
@@ -621,8 +635,10 @@ select#today-limit-select {
 .playlist-row-album-link {
   cursor: pointer;
 }
+@media (hover: hover) {
 .playlist-row-album-link:hover {
   color: var(--accent);
+}
 }
 .playlist-row-artist {
   flex: 0 1 150px;
@@ -634,8 +650,10 @@ select#today-limit-select {
 .playlist-row-artist-link {
   cursor: pointer;
 }
+@media (hover: hover) {
 .playlist-row-artist-link:hover {
   color: var(--accent);
+}
 }
 .playlist-row-duration {
   flex: 0 0 40px;
@@ -749,9 +767,11 @@ select#today-limit-select {
   cursor: pointer;
   border-radius: 4px;
 }
+@media (hover: hover) {
 .pagination-label:hover {
   color: var(--text-primary);
   background: var(--bg-elevated);
+}
 }
 .pagination-page-input {
   width: 48px;
@@ -793,8 +813,10 @@ select#today-limit-select {
   cursor: pointer;
   border-radius: 6px;
 }
+@media (hover: hover) {
 .lyrics-line:hover {
   background: var(--bg-elevated);
+}
 }
 .lyrics-line.active {
   font-size: 18px;
@@ -923,9 +945,11 @@ table.lyrics-edit-table {
   color: var(--text-primary);
   cursor: pointer;
 }
+@media (hover: hover) {
 .lyrics-detail-edit-btn:hover {
   background: var(--bg-elevated);
   color: var(--accent);
+}
 }
 
 /* -- 가사 상세 편집(타이밍 태깅) 모달 --------------------------------------- */
@@ -1136,8 +1160,10 @@ table.lyrics-edit-table {
 .rating-heart-fill.full {
   clip-path: inset(0 0 0 0);
 }
+@media (hover: hover) {
 .rating-heart:hover {
   background: var(--bg-elevated);
+}
 }
 .rating-heart:disabled {
   opacity: 0.4;
@@ -1208,8 +1234,10 @@ input[type="range"]::-webkit-slider-thumb {
   margin-top: -4px;
   border: none;
 }
+@media (hover: hover) {
 input[type="range"]:hover::-webkit-slider-thumb {
   background: var(--accent);
+}
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -1229,8 +1257,10 @@ input[type="range"]::-moz-range-thumb {
   background: var(--text-primary);
   border: none;
 }
+@media (hover: hover) {
 input[type="range"]:hover::-moz-range-thumb {
   background: var(--accent);
+}
 }
 
 /* -- 기본 플레이리스트에서 추가 모달 -------------------------------------- */
@@ -1287,8 +1317,10 @@ input[type="range"]:hover::-moz-range-thumb {
   cursor: pointer;
   font-size: 13px;
 }
+@media (hover: hover) {
 .lyrics-backup-row:hover {
   background: #1f2330;
+}
 }
 .browse-manage-list {
   display: flex;
@@ -1309,8 +1341,10 @@ input[type="range"]:hover::-moz-range-thumb {
   text-align: left;
   cursor: pointer;
 }
+@media (hover: hover) {
 .browse-manage-item:hover {
   background: #1f2330;
+}
 }
 .lyrics-backups-empty {
   color: var(--text-secondary);
@@ -1481,8 +1515,10 @@ input[type="range"]:hover::-moz-range-thumb {
   border-radius: 6px;
   font-size: 12px;
 }
+@media (hover: hover) {
 .rebuild-skip-row:hover {
   background: #1f2330;
+}
 }
 .rebuild-skip-filename {
   color: var(--text-primary);
@@ -1721,8 +1757,10 @@ textarea.file-content-body:disabled {
   cursor: pointer;
   color: var(--text-primary);
 }
+@media (hover: hover) {
 .track-info-art-row button:hover {
   background: var(--bg-elevated);
+}
 }
 .track-info-field {
   position: relative;
@@ -1799,10 +1837,15 @@ textarea.file-content-body:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.picker-row:hover,
 .picker-row.highlighted {
   background: var(--bg-elevated);
   color: var(--accent);
+}
+@media (hover: hover) {
+.picker-row:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
 }
 .artist-alias-list {
   display: flex;
@@ -1830,8 +1873,10 @@ textarea.file-content-body:disabled {
   line-height: 1;
   padding: 2px 4px;
 }
+@media (hover: hover) {
 .artist-alias-chip-remove:hover {
   color: #e5484d;
+}
 }
 .artist-alias-add-row {
   position: relative;
@@ -1851,8 +1896,10 @@ textarea.file-content-body:disabled {
   cursor: pointer;
   color: var(--text-primary);
 }
+@media (hover: hover) {
 .artist-alias-add-row button:hover {
   background: var(--bg-elevated);
+}
 }
 
 .dialog-actions {
@@ -1871,10 +1918,12 @@ textarea.file-content-body:disabled {
   cursor: pointer;
   color: var(--text-primary);
 }
+@media (hover: hover) {
 .dialog-actions button:hover,
 .album-art-prompt-actions button:hover,
 .album-artist-prompt-controls button:hover {
   background: var(--bg-elevated);
+}
 }
 .dialog-actions button:disabled,
 .album-art-prompt-actions button:disabled,
@@ -1882,17 +1931,21 @@ textarea.file-content-body:disabled {
   opacity: 0.5;
   cursor: default;
 }
+@media (hover: hover) {
 .dialog-actions button:disabled:hover,
 .album-art-prompt-actions button:disabled:hover,
 .album-artist-prompt-controls button:disabled:hover {
   background: transparent;
 }
+}
 .dialog-actions button.danger {
   color: #e5484d;
   border-color: #e5484d;
 }
+@media (hover: hover) {
 .dialog-actions button.danger:hover {
   background: rgba(229, 72, 77, 0.12);
+}
 }
 .dialog-actions button.primary,
 .album-art-prompt-actions button.primary,
@@ -2112,8 +2165,10 @@ textarea.file-content-body:disabled {
   padding: 6px;
   margin: -6px;
 }
+@media (hover: hover) {
 .media-card-clickable:hover {
   background: var(--bg-elevated);
+}
 }
 .media-card-art-wrap {
   position: relative;
@@ -2145,9 +2200,11 @@ textarea.file-content-body:disabled {
      SortableJS(터치 폴백 드래그)에 넘기도록 한다. */
   touch-action: none;
 }
+@media (hover: hover) {
 .media-card-drag-handle:hover {
   color: var(--text-primary);
   background: var(--bg-elevated);
+}
 }
 .media-card-drag-handle:active {
   cursor: grabbing;
@@ -2252,8 +2309,10 @@ textarea.file-content-body:disabled {
   color: var(--text-primary);
   cursor: pointer;
 }
+@media (hover: hover) {
 .pill-btn:hover {
   background: var(--border);
+}
 }
 .home-empty {
   color: var(--text-secondary);
@@ -2303,8 +2362,10 @@ textarea.file-content-body:disabled {
   padding: 6px;
   margin: -6px;
 }
+@media (hover: hover) {
 .home-recent-card:hover {
   background: var(--bg-elevated);
+}
 }
 .home-recent-card-art-wrap {
   position: relative;
@@ -2333,8 +2394,10 @@ textarea.file-content-body:disabled {
   opacity: 0;
   cursor: pointer;
 }
+@media (hover: hover) {
 .home-recent-card:hover .home-recent-card-play {
   opacity: 1;
+}
 }
 .home-recent-card-title {
   display: block;
@@ -2373,8 +2436,10 @@ textarea.file-content-body:disabled {
   cursor: pointer;
   min-width: 0;
 }
+@media (hover: hover) {
 .home-quickpick-row:hover {
   background: var(--bg-elevated);
+}
 }
 .home-quickpick-art-wrap {
   position: relative;
@@ -2534,8 +2599,10 @@ textarea.file-content-body:disabled {
     0 0 0 6px rgba(255, 255, 255, 0.05),
     0 0 0 7px rgba(0, 0, 0, 0.55);
 }
+@media (hover: hover) {
 .expanded-player-cd-disc:not(.is-current):hover {
   filter: brightness(1.18);
+}
 }
 @keyframes cd-spin {
   to {
@@ -2643,8 +2710,10 @@ textarea.file-content-body:disabled {
   text-align: center;
   cursor: pointer;
 }
+@media (hover: hover) {
 .expanded-player-circle:hover {
   color: var(--accent);
+}
 }
 /* 서클명이 곡 아티스트와 같아서 보여줄 게 없을 때도, hidden(display:none)
    대신 이 클래스로 숨긴다 — display:none은 줄 자체를 접어 CD 높이가 곡마다
@@ -2695,8 +2764,10 @@ textarea.file-content-body:disabled {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
+@media (hover: hover) {
 .expanded-player-stats-period:hover {
   background-color: var(--bg-elevated);
+}
 }
 .expanded-player-stats-period:focus-visible {
   outline: none;
@@ -2774,8 +2845,10 @@ textarea.file-content-body:disabled {
 }
 /* 패널 배경 자체가 --bg-elevated라, 행 강조도 같은 색이면 안 보인다 —
    한 단계 밝은 --border를 대신 쓴다. */
+@media (hover: hover) {
 .expanded-queue-row:hover {
   background: var(--border);
+}
 }
 .expanded-queue-row.current {
   background: var(--border);
@@ -2960,9 +3033,11 @@ textarea.file-content-body:disabled {
   font-size: 13px;
   white-space: nowrap;
 }
+@media (hover: hover) {
 .context-menu-item:hover {
   background: var(--accent);
   color: var(--icon-on-accent);
+}
 }
 .context-menu-item.disabled {
   color: var(--text-muted);
@@ -3120,8 +3195,10 @@ textarea.file-content-body:disabled {
   background: var(--bg-elevated);
   transition: background 0.1s ease, border-color 0.1s ease;
 }
+@media (hover: hover) {
 .row-checkbox-input:hover ~ .row-checkbox-box {
   border-color: var(--accent);
+}
 }
 .row-checkbox-input:checked ~ .row-checkbox-box {
   background: var(--accent);
@@ -3261,14 +3338,18 @@ textarea.file-content-body:disabled {
 .files-tree-row-clickable {
   cursor: pointer;
 }
+@media (hover: hover) {
 .files-tree-row-clickable:hover {
   background: #1f2330;
+}
 }
 .files-tree-delete {
   flex: none;
 }
+@media (hover: hover) {
 .files-tree-delete:hover {
   color: #e5484d;
+}
 }
 .files-tree-toggle {
   flex: none;
