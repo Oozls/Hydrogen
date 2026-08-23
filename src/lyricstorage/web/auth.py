@@ -17,9 +17,10 @@ from __future__ import annotations
 import hmac
 import os
 import secrets
+import time
 from datetime import timedelta
 
-from flask import Blueprint, Flask, redirect, render_template, request, session, url_for
+from flask import Blueprint, Flask, jsonify, redirect, render_template, request, session, url_for
 
 from lyricstorage import applog, storage
 
@@ -37,12 +38,33 @@ def _configured_credentials() -> tuple[str, str] | None:
 
 
 def _secret_key() -> str:
+    # gunicorn은 워커마다 별도 프로세스에서 create_app()을 호출하므로, 파일이 아직
+    # 없는 최초 기동 시 여러 워커가 동시에 "없네, 새로 만들어야지"로 판단해 각자
+    # 다른 랜덤 키를 만들어 서로 덮어쓸 수 있다 — 그러면 워커별로 메모리에 든
+    # secret_key가 갈려서, 로그인은 워커 A가 처리하고 이후 요청은 워커 B가 처리하면
+    # 세션 쿠키 서명이 안 맞아 로그인이 풀린 것처럼 보인다(간헐적 재로그인 요구,
+    # API 요청이 로그인 페이지로 리다이렉트되는 증상 모두 이게 원인일 수 있다).
+    # os.O_EXCL로 배타 생성해 딱 한 워커만 파일을 쓰게 하고, 나머지는 그 결과를
+    # 읽게 해서 모든 워커가 항상 같은 키를 쓰도록 한다.
     path = storage.app_data_dir() / "secret_key"
-    if path.exists():
-        return path.read_text(encoding="utf-8").strip()
-    key = secrets.token_hex(32)
-    path.write_text(key, encoding="utf-8")
-    return key
+    for _ in range(50):
+        if path.exists():
+            content = path.read_text(encoding="utf-8").strip()
+            if content:
+                return content
+            time.sleep(0.05)
+            continue
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            continue
+        try:
+            key = secrets.token_hex(32)
+            os.write(fd, key.encode("utf-8"))
+        finally:
+            os.close(fd)
+        return key
+    raise RuntimeError("secret_key 파일을 생성하거나 읽지 못했습니다.")
 
 
 @bp.get("/login")
@@ -96,6 +118,11 @@ def init_auth(app: Flask) -> None:
         ):
             return None
         if not session.get("authenticated"):
+            # API 요청을 로그인 페이지로 리다이렉트하면 fetch()가 그 HTML을 JSON으로
+            # 파싱하려다 조용히 실패해서, 화면엔 그냥 아무 정보도 안 뜨는 것처럼
+            # 보인다. API 경로는 401을 바로 돌려줘 원인이 콘솔에 드러나게 한다.
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "로그인이 필요합니다."}), 401
             return redirect(url_for("auth.login_page"))
         session.permanent = True
         return None
