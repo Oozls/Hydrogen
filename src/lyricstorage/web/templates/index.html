@@ -562,6 +562,18 @@
     </div>
   </dialog>
 
+  <dialog id="lyrics-candidates-dialog" class="library-picker-dialog lyrics-backups-dialog lyrics-candidates-dialog">
+    <div class="library-picker-header">
+      <h3>가사 후보 선택</h3>
+      <div class="spacer"></div>
+      <button id="lyrics-candidates-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <p class="lyrics-candidates-hint">후보를 눌러 적용하세요. 기존 가사는 자동으로 백업됩니다.</p>
+    <ul id="lyrics-candidates-list" class="playlist-list lyrics-candidates-list"></ul>
+  </dialog>
+
   <dialog id="lyrics-format-help-dialog" class="library-picker-dialog lyrics-format-help-dialog">
     <div class="library-picker-header">
       <h3>가사 텍스트(.lrc) 형식</h3>

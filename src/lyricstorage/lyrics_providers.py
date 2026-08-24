@@ -1,4 +1,4 @@
-"""외부 가사 제공처(LRCLIB, TouhouDB)에서 가사를 가져온다.
+"""외부 가사 제공처(LRCLIB, TouhouDB)에서 가사 후보를 가져온다.
 
 둘 다 공개 API고 인증이 필요 없다:
 - LRCLIB(lrclib.net): 동기화 가사를 .lrc와 동일한 [mm:ss.xx] 포맷으로 제공 —
@@ -6,6 +6,11 @@
 - TouhouDB(touhoudb.com): VocaDB 계열 동방 음악 데이터베이스. 가사는 타임스탬프
   없는 평문만 제공하므로, 00:00.00 한 줄에 전체 가사를 그대로 담는다(embedded
   \n 포함 — lyrics_io.to_lrc()가 이미 이런 멀티라인 단일 항목을 지원한다).
+
+두 제공처 모두 가사가 있을 수 있고, TouhouDB는 같은 제목의 곡이 여럿(다른
+서클/보컬 버전 등) 등록돼 있을 수 있어서, 자동으로 하나를 골라 저장하지 않고
+fetch_lyrics_candidates()가 찾을 수 있는 후보를 전부 모아 반환한다 — 최종
+선택은 호출자(사용자)에게 맡긴다.
 """
 
 from __future__ import annotations
@@ -47,7 +52,8 @@ def _get_json(url: str):
 
 
 def fetch_lrclib(title: str, artist: str) -> dict | None:
-    """반환: {"source": "LRCLIB", "synced": bool, "lines": [(ms, text), ...]} 또는 못 찾으면 None."""
+    """반환: {"source", "synced", "lines", "title", "artist", "album"} 또는 못 찾으면 None.
+    title/artist/album은 LRCLIB에 등록된 실제 표기 — 후보 목록에 보여줄 라벨용."""
     if not title:
         return None
     params = {"track_name": title}
@@ -61,14 +67,19 @@ def fetch_lrclib(title: str, artist: str) -> dict | None:
     for item in results or []:
         if item.get("instrumental"):
             continue
+        label = {
+            "title": item.get("trackName") or title,
+            "artist": item.get("artistName") or artist,
+            "album": item.get("albumName") or "",
+        }
         synced = item.get("syncedLyrics")
         if synced:
             lines = lyrics_io.parse_lrc(synced)
             if lines:
-                return {"source": "LRCLIB", "synced": True, "lines": lines}
+                return {"source": "LRCLIB", "synced": True, "lines": lines, **label}
         plain = (item.get("plainLyrics") or "").strip()
         if plain:
-            return {"source": "LRCLIB", "synced": False, "lines": [(0, plain)]}
+            return {"source": "LRCLIB", "synced": False, "lines": [(0, plain)], **label}
     return None
 
 
@@ -106,22 +117,36 @@ def _extract_lyrics(item: dict) -> str | None:
     return value or None
 
 
-def _search_touhoudb_songs(title: str, artist_ids: list[int]) -> dict | None:
-    """artist_ids로 서버 쪽에서 이미 걸러진 검색 — 결과는 신뢰하고 첫 번째로 가사가
-    있는 곡을 그대로 쓴다(요청자가 이미 특정 아티스트로 좁혀 보냈으므로)."""
-    params = [("query", title), ("maxResults", 10), ("fields", "Lyrics"), ("nameMatchMode", "Words")]
+def _touhoudb_candidate(item: dict) -> dict | None:
+    value = _extract_lyrics(item)
+    if not value:
+        return None
+    # 한 곡이 여러 앨범(정규/편집반/이벤트 한정반 등)에 실려 있을 수 있는데,
+    # 여기서는 후보 구분용 라벨 한 줄이면 충분하므로 첫 앨범명만 쓴다.
+    albums = item.get("albums") or []
+    return {
+        "source": "TouhouDB",
+        "synced": False,
+        "lines": [(0, value)],
+        "title": item.get("name") or "",
+        "artist": item.get("artistString") or "",
+        "album": albums[0].get("name", "") if albums else "",
+    }
+
+
+def _search_touhoudb_songs(title: str, artist_ids: list[int]) -> list[dict]:
+    """artist_ids로 서버 쪽에서 이미 걸러진 검색 — 결과는 신뢰하고 가사가 있는
+    곡을 전부 후보로 돌려준다(요청자가 이미 특정 아티스트로 좁혀 보냈으므로)."""
+    params = [("query", title), ("maxResults", 10), ("fields", "Lyrics,Albums"), ("nameMatchMode", "Words")]
     for aid in artist_ids:
         params.append(("artistId[]", aid))
     url = "https://touhoudb.com/api/songs?" + urllib.parse.urlencode(params)
     try:
         data = _get_json(url)
     except (urllib.error.URLError, ValueError, OSError, TimeoutError):
-        return None
-    for item in data.get("items") or []:
-        value = _extract_lyrics(item)
-        if value:
-            return {"source": "TouhouDB", "synced": False, "lines": [(0, value)]}
-    return None
+        return []
+    candidates = [_touhoudb_candidate(item) for item in data.get("items") or []]
+    return [c for c in candidates if c is not None]
 
 
 def _credited_names(item: dict) -> set[str]:
@@ -145,34 +170,33 @@ def _credited_names(item: dict) -> set[str]:
     return names
 
 
-def _search_touhoudb_songs_verified(title: str, artist: str, circle: str) -> dict | None:
+def _search_touhoudb_songs_verified(title: str, artist: str, circle: str) -> list[dict]:
     """artist/circle 중 어느 것도 TouhouDB에 정확매칭 등록돼 있지 않을 때(표기
     차이 등)만 쓰는 마지막 수단. 서버 쪽 필터 없이 제목만으로 후보를 여러 개
     모은 뒤, 후보의 크레딧 이름들에 로컬 아티스트/서클 이름이 조금이라도
-    겹치는지 직접 대조해서 통과한 것만 쓴다 — 동방 원곡명은 완전히 다른
-    서클/보컬의 곡과 흔히 겹치므로, 겹치는 게 하나도 없으면 그냥 못 찾은
-    걸로 친다(엉뚱한 곡의 가사를 가져오는 것보다 낫다)."""
+    겹치는지 직접 대조해서 통과한 것만 후보로 돌려준다 — 동방 원곡명은
+    완전히 다른 서클/보컬의 곡과 흔히 겹치므로, 겹치는 게 하나도 없으면 그냥
+    후보에서 뺀다(엉뚱한 곡의 가사를 후보로 섞는 것보다 낫다)."""
     needles = [n.lower() for n in (_split_names(artist) + _split_names(circle))]
     if not needles:
-        return None
-    params = [("query", title), ("maxResults", 20), ("fields", "Lyrics,Artists"), ("nameMatchMode", "Words")]
+        return []
+    params = [("query", title), ("maxResults", 20), ("fields", "Lyrics,Artists,Albums"), ("nameMatchMode", "Words")]
     url = "https://touhoudb.com/api/songs?" + urllib.parse.urlencode(params)
     try:
         data = _get_json(url)
     except (urllib.error.URLError, ValueError, OSError, TimeoutError):
-        return None
+        return []
+    matched = []
     for item in data.get("items") or []:
         credited = _credited_names(item)
-        if not credited or not any(needle in c or c in needle for needle in needles for c in credited):
-            continue
-        value = _extract_lyrics(item)
-        if value:
-            return {"source": "TouhouDB", "synced": False, "lines": [(0, value)]}
-    return None
+        if credited and any(needle in c or c in needle for needle in needles for c in credited):
+            matched.append(item)
+    candidates = [_touhoudb_candidate(item) for item in matched]
+    return [c for c in candidates if c is not None]
 
 
-def fetch_touhoudb(title: str, artist: str, circle: str = "") -> dict | None:
-    """반환: {"source": "TouhouDB", "synced": False, "lines": [(0, text)]} 또는 못 찾으면 None.
+def fetch_touhoudb_candidates(title: str, artist: str, circle: str = "") -> list[dict]:
+    """반환: [{"source": "TouhouDB", "synced": False, "lines": [(0, text)], "title", "artist"}, ...].
 
     동방 동인 음악은 같은 제목("竹取飛翔" 등 원곡명을 그대로 쓰는 어레인지)의
     곡이 서로 다른 서클/보컬로 수십 곡씩 등록돼 있어서, 제목만으로 검색하면
@@ -185,9 +209,9 @@ def fetch_touhoudb(title: str, artist: str, circle: str = "") -> dict | None:
 
     아티스트와 서클을 한 번에 artistId[]=A&artistId[]=B로 같이 넘기면 안 된다
     — VocaDB는 여러 값을 OR가 아니라 AND로 묶어서 "둘 다 참여한 곡"만 찾는데,
-    실제로는 개별 곡이 서클 전체가 아니라 멤버 개인(예: "岸田교団" 대신
-    "岸田")으로만 크레딧되는 경우가 흔해 서클 id를 같이 넣으면 오히려 못 찾게
-    된다. 대신 아티스트 → 서클 순서로 하나씩 따로 시도해 먼저 찾히는 걸 쓴다.
+    실제로는 개별 곡이 서클 전체가 아니라 멤버 개인으로만 크레딧되는 경우가
+    흔해 서클 id를 같이 넣으면 오히려 못 찾게 된다. 대신 아티스트 → 서클
+    순서로 하나씩 따로 시도해 먼저 후보가 나오는 걸 쓴다.
 
     곡 아티스트는 보컬이 여럿이면 로컬에서 "たま, ytr, AO"처럼 쉼표로 합쳐
     저장돼 있다(songArtist.js와 동일 규칙). 이 통짜 문자열 그대로 정확매칭에
@@ -196,23 +220,27 @@ def fetch_touhoudb(title: str, artist: str, circle: str = "") -> dict | None:
 
     아티스트/서클 개별 이름 전부가 TouhouDB에 정확매칭되는 게 없으면(표기
     차이로 못 찾은 것뿐일 수 있다) 제목만으로 무필터 검색하되, 후보의
-    크레딧과 로컬 아티스트/서클 이름이 하나도 안 겹치면 포기한다 — 동방
-    원곡명은 완전히 다른 곡과 흔히 겹쳐서, 검증 없이 그냥 1등 후보를 썼다가는
-    아티스트·서클·보컬·프로듀서 어느 것도 안 겹치는 완전히 다른 곡의 가사를
-    가져오게 된다."""
+    크레딧과 로컬 아티스트/서클 이름이 하나도 안 겹치는 것들은 후보에서
+    뺀다."""
     if not title:
-        return None
+        return []
     for name in _split_names(artist) + _split_names(circle):
         artist_id = _resolve_touhoudb_artist_id(name)
         if artist_id is None:
             continue
-        result = _search_touhoudb_songs(title, [artist_id])
-        if result is not None:
-            return result
+        candidates = _search_touhoudb_songs(title, [artist_id])
+        if candidates:
+            return candidates
     return _search_touhoudb_songs_verified(title, artist, circle)
 
 
-def fetch_lyrics(title: str, artist: str, circle: str = "") -> dict | None:
-    """LRCLIB을 먼저 시도하고, 못 찾으면 TouhouDB로 폴백한다."""
+def fetch_lyrics_candidates(title: str, artist: str, circle: str = "") -> list[dict]:
+    """LRCLIB과 TouhouDB에서 찾을 수 있는 가사 후보를 전부 모아 반환한다 —
+    어느 한쪽을 자동으로 우선하지 않고, 최종 선택은 호출자(사용자)에게 맡긴다."""
     search_title = _strip_feat_credits(title)
-    return fetch_lrclib(search_title, artist) or fetch_touhoudb(search_title, artist, circle)
+    candidates = []
+    lrclib = fetch_lrclib(search_title, artist)
+    if lrclib:
+        candidates.append(lrclib)
+    candidates.extend(fetch_touhoudb_candidates(search_title, artist, circle))
+    return candidates

@@ -88,6 +88,10 @@ export function setupLyrics(player, onLyricsSaved) {
   const clearBtn = document.getElementById("btn-lyrics-clear");
   const detailEditBtn = document.getElementById("btn-lyrics-detail-edit");
 
+  const candidatesDialog = document.getElementById("lyrics-candidates-dialog");
+  const candidatesCloseBtn = document.getElementById("lyrics-candidates-close");
+  const candidatesListEl = document.getElementById("lyrics-candidates-list");
+
   const backupsBtn = document.getElementById("btn-lyrics-backups");
   const backupsDialog = document.getElementById("lyrics-backups-dialog");
   const backupsCloseBtn = document.getElementById("lyrics-backups-close");
@@ -436,6 +440,68 @@ export function setupLyrics(player, onLyricsSaved) {
     });
   });
 
+  // 후보 하나(가사 텍스트 몇 줄)를 미리보기로 보여준다 — TouhouDB는 한 후보에
+  // 실제 줄이 전부 하나의 LyricLine(00:00)에 \n으로 합쳐져 들어있으므로, 표시
+  // 줄(LyricLine) 단위가 아니라 실제 텍스트 줄 단위로 다시 쪼개야 한다.
+  function candidateSnippet(candidate) {
+    const realLines = candidate.lines.flatMap((l) => l.text.split("\n")).filter((t) => t.trim());
+    return realLines.slice(0, 3).join("\n");
+  }
+
+  function renderCandidateRow(candidate) {
+    const li = document.createElement("li");
+    li.className = "lyrics-candidate-row";
+
+    const head = document.createElement("div");
+    head.className = "lyrics-candidate-row-head";
+    const sourceEl = document.createElement("span");
+    sourceEl.className = "lyrics-candidate-row-source";
+    sourceEl.textContent = candidate.source;
+    const badgeEl = document.createElement("span");
+    badgeEl.className = "lyrics-candidate-row-badge";
+    const badgeParts = [candidate.synced ? "동기화됨" : "타이밍 없음"];
+    if (candidate.title) badgeParts.push(candidate.title);
+    if (candidate.artist) badgeParts.push(candidate.artist);
+    if (candidate.album) badgeParts.push(candidate.album);
+    badgeEl.textContent = badgeParts.join(" · ");
+    head.appendChild(sourceEl);
+    head.appendChild(badgeEl);
+
+    const snippetEl = document.createElement("div");
+    snippetEl.className = "lyrics-candidate-row-snippet";
+    snippetEl.textContent = candidateSnippet(candidate);
+
+    li.appendChild(head);
+    li.appendChild(snippetEl);
+    li.addEventListener("click", () => applyCandidate(candidate));
+    return li;
+  }
+
+  function renderCandidatesList(candidates) {
+    candidatesListEl.innerHTML = "";
+    for (const candidate of candidates) candidatesListEl.appendChild(renderCandidateRow(candidate));
+  }
+
+  async function applyCandidate(candidate) {
+    candidatesDialog.close();
+    try {
+      const result = await api.saveLyrics(trackId, candidate.lines);
+      lines = result.lines;
+      renderView();
+      renderEdit();
+      if (onLyricsSaved) onLyricsSaved(trackId);
+      await alertDialog(
+        candidate.synced
+          ? `${candidate.source}에서 동기화된 가사를 적용했습니다.`
+          : `${candidate.source}에서 가사를 적용했습니다 (타이밍 정보 없음 — '가사 편집' 탭에서 직접 맞춰주세요).`
+      );
+    } catch (err) {
+      await alertDialog(err.message || "가사를 적용하지 못했습니다.");
+    }
+  }
+
+  candidatesCloseBtn.addEventListener("click", () => candidatesDialog.close());
+
   fetchExternalBtn.addEventListener("click", async () => {
     if (!trackId) {
       await alertDialog("먼저 곡을 재생하거나 선택하세요.");
@@ -445,16 +511,9 @@ export function setupLyrics(player, onLyricsSaved) {
       return;
     fetchExternalBtn.disabled = true;
     try {
-      const result = await api.fetchExternalLyrics(trackId);
-      lines = result.lines;
-      renderView();
-      renderEdit();
-      if (onLyricsSaved) onLyricsSaved(trackId);
-      await alertDialog(
-        result.synced
-          ? `${result.source}에서 동기화된 가사를 가져왔습니다.`
-          : `${result.source}에서 가사를 가져왔습니다 (타이밍 정보 없음 — '가사 편집' 탭에서 직접 맞춰주세요).`
-      );
+      const { candidates } = await api.fetchExternalLyricsCandidates(trackId);
+      renderCandidatesList(candidates);
+      candidatesDialog.showModal();
     } catch (err) {
       await alertDialog(err.message || "가사를 가져오지 못했습니다.");
     } finally {

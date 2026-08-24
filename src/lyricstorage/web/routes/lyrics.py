@@ -63,6 +63,9 @@ def save_lyrics(track_id: str):
 
 @bp.post("/<track_id>/lyrics/external")
 def fetch_external_lyrics(track_id: str):
+    """LRCLIB/TouhouDB에서 찾을 수 있는 가사 후보를 전부 조회만 하고 저장은
+    하지 않는다 — 두 제공처 모두 가사가 있을 수 있고 TouhouDB는 후보가
+    여럿일 수 있으므로, 사용자가 후보를 보고 고른 뒤 PUT /lyrics로 저장한다."""
     track = find_track_by_id(track_id)
     if track is None:
         return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
@@ -70,23 +73,24 @@ def fetch_external_lyrics(track_id: str):
     album = albums_repo.find_album_by_id(track.album_id) if track.album_id else None
     circle = circles.name_resolver().get(album.artist, album.artist) if album and album.artist else ""
 
-    result = lyrics_providers.fetch_lyrics(track.title, track.artist, circle)
-    if result is None:
+    candidates = lyrics_providers.fetch_lyrics_candidates(track.title, track.artist, circle)
+    if not candidates:
         return jsonify({"error": "가사를 찾지 못했습니다."}), 404
 
-    lyric_track = LyricTrack(track.path, [LyricLine(ms, text) for ms, text in result["lines"]])
-    saved_path = lyric_track.save()
-    applog.log_info(
-        "ACTION",
-        f"외부 가사 가져오기: {track_id} (source={result['source']}, synced={result['synced']})",
-    )
+    applog.log_info("ACTION", f"외부 가사 후보 조회: {track_id} ({len(candidates)}개)")
     return jsonify(
         {
-            "source": result["source"],
-            "synced": result["synced"],
-            "saved_count": len(lyric_track.lines),
-            "path": str(saved_path) if saved_path else None,
-            "lines": [_line_json(line) for line in lyric_track.lines],
+            "candidates": [
+                {
+                    "source": c["source"],
+                    "synced": c["synced"],
+                    "title": c.get("title", ""),
+                    "artist": c.get("artist", ""),
+                    "album": c.get("album", ""),
+                    "lines": [_line_json(LyricLine(ms, text)) for ms, text in c["lines"]],
+                }
+                for c in candidates
+            ]
         }
     )
 
