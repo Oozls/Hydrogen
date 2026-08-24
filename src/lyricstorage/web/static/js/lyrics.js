@@ -477,9 +477,23 @@ export function setupLyrics(player, onLyricsSaved) {
     return li;
   }
 
+  // 후보 하나를 그리다 실패해도(예상 밖 데이터 모양) 그 후보만 건너뛰고 나머지는
+  // 계속 보여준다 — 한 후보의 예외로 목록 전체가 빈 채로 뜨는 것을 막는다.
   function renderCandidatesList(candidates) {
     candidatesListEl.innerHTML = "";
-    for (const candidate of candidates) candidatesListEl.appendChild(renderCandidateRow(candidate));
+    for (const candidate of candidates) {
+      try {
+        candidatesListEl.appendChild(renderCandidateRow(candidate));
+      } catch (err) {
+        console.error("가사 후보 렌더링 실패", candidate, err);
+      }
+    }
+    if (!candidatesListEl.children.length) {
+      const empty = document.createElement("li");
+      empty.className = "lyrics-candidates-empty";
+      empty.textContent = "후보를 표시하지 못했습니다.";
+      candidatesListEl.appendChild(empty);
+    }
   }
 
   async function applyCandidate(candidate) {

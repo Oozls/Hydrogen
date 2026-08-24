@@ -61,10 +61,9 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
   const albumEl = document.getElementById("expanded-player-album");
   const statsEl = document.getElementById("expanded-player-stats-text");
   const statsPeriodEl = document.getElementById("expanded-player-stats-period");
-  const queueEl = document.getElementById("expanded-player-queue");
   const queueListEl = document.getElementById("expanded-player-queue-list");
 
-  attachScrollAutoHide(queueEl);
+  attachScrollAutoHide(queueListEl);
 
   statsPeriodEl.addEventListener("change", () => {
     const track = player.currentTrack;
