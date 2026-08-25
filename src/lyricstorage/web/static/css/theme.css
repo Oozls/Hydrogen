@@ -1317,6 +1317,12 @@ input[type="range"]:hover::-moz-range-thumb {
   flex-direction: column;
 }
 .lyrics-backups-list {
+  /* .playlist-list의 flex:1(= flex-basis:0%)은 "남는 공간을 나눠 갖는" 용도라,
+     이 dialog처럼 자기 내용 크기에 맞춰 스스로 커지는(고정 height가 없는)
+     컨테이너 안에서는 나눠 가질 공간 자체가 없다고 계산돼 0으로 접힐 수 있다
+     (Safari에서 실제로 이렇게 접혀 목록이 안 보이는 문제가 있었다) — 대신 내용
+     크기(auto)를 기준으로 하고 max-height에서 스크롤로 넘긴다. */
+  flex: 0 1 auto;
   max-height: 50vh;
   max-height: 50dvh;
 }
@@ -1373,6 +1379,9 @@ input[type="range"]:hover::-moz-range-thumb {
   margin: 2px 2px 6px;
 }
 .lyrics-candidates-list {
+  /* .lyrics-backups-list와 같은 이유(flex:1의 flex-basis:0%가 auto-height
+     dialog 안에서 0으로 접히는 문제)로 flex-basis를 내용 크기 기준으로 바꾼다. */
+  flex: 0 1 auto;
   max-height: 60vh;
   max-height: 60dvh;
 }
