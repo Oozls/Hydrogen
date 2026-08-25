@@ -1414,10 +1414,6 @@ input[type="range"]:hover::-moz-range-thumb {
   font-size: 12px;
   margin-top: 4px;
   white-space: pre-line;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
 }
 .lyrics-backups-preview-body {
   max-height: 50vh;
