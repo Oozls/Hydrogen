@@ -60,5 +60,6 @@ export function setupRating(player) {
   });
 
   player.addEventListener("trackchange", () => paint());
+  player.addEventListener("ratingchange", () => paint()); // 축 평가 다이얼로그 등 외부에서 바꾼 값도 반영
   paint();
 }

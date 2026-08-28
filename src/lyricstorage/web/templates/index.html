@@ -171,6 +171,11 @@
         <div id="browse-songs-panel" class="tab-panel">
           <div class="stats-track-body">
             <div class="stats-track-list-col">
+              <div class="browse-songs-toolbar">
+                <button id="btn-browse-songs-sort-rating" class="icon-btn toggle-btn" type="button" title="평점 높은 순 정렬(다시 누르면 원래 순서로)">
+                  <span class="icon" style="--icon: url(/static/icons/heart.svg)"></span>
+                </button>
+              </div>
               <ul id="browse-songs-list" class="playlist-list"></ul>
               <div id="browse-songs-pagination" class="pagination-row" hidden>
                 <button id="browse-songs-prev-page" class="icon-btn" type="button" title="이전 페이지">
@@ -395,6 +400,9 @@
               <span class="icon icon-sm rating-heart-fill" style="--icon: url(/static/icons/heart-filled.svg)"></span>
             </button>
           </div>
+          <button id="btn-axis-rating" class="icon-btn" title="여러 측면으로 평가해서 점수 매기기" type="button">
+            <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
+          </button>
           <button id="btn-lyrics-toggle" class="icon-btn toggle-btn" title="가사 표시">
             <span class="icon" style="--icon: url(/static/icons/mic.svg)"></span>
           </button>
@@ -738,6 +746,16 @@
       <div class="spacer"></div>
       <button id="track-info-cancel" type="button">취소</button>
       <button id="track-info-save" class="primary" type="button">저장</button>
+    </div>
+  </dialog>
+
+  <dialog id="axis-rating-dialog" class="library-picker-dialog track-info-dialog axis-rating-dialog">
+    <h3>여러 측면으로 평가하기</h3>
+    <div id="axis-rating-rows" class="axis-rating-rows"></div>
+    <div class="axis-rating-total">종합 점수 <strong id="axis-rating-total">-</strong></div>
+    <div class="dialog-actions">
+      <button id="axis-rating-cancel" type="button">취소</button>
+      <button id="axis-rating-save" class="primary" type="button">적용</button>
     </div>
   </dialog>
 

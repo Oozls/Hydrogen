@@ -92,6 +92,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const songsPrevPageBtn = document.getElementById("browse-songs-prev-page");
   const songsNextPageBtn = document.getElementById("browse-songs-next-page");
   const songsPageLabel = document.getElementById("browse-songs-page-label");
+  const songsSortRatingBtn = document.getElementById("btn-browse-songs-sort-rating");
   const songsTop3El = document.getElementById("browse-songs-top3");
   const albumsTop3El = document.getElementById("browse-albums-top3");
   const albumsList = document.getElementById("browse-albums-list");
@@ -137,6 +138,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   let albumsSortable = null;
   let songsPage = 0;
   let songsPageSize = SONGS_PAGE_SIZE_FALLBACK;
+  let songsSortByRating = false;
   let todaySongs = [];
   // 곡 아티스트 상세 화면에 지금 열려 있는 정체성({id, name, aliases}).
   let songArtistDetailIdentity = null;
@@ -728,6 +730,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     syncSelectionUI();
 
     const filtered = tracks.filter((t) => matchesSong(t, q, field));
+    if (songsSortByRating) filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / songsPageSize));
     songsPage = Math.min(songsPage, totalPages - 1);
@@ -826,6 +829,14 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     if (songsPage > 0) goToSongsPage(songsPage - 1);
   });
   songsNextPageBtn.addEventListener("click", () => goToSongsPage(songsPage + 1));
+
+  songsSortRatingBtn.addEventListener("click", () => {
+    songsSortByRating = !songsSortByRating;
+    songsSortRatingBtn.classList.toggle("active", songsSortByRating);
+    songsSortable.option("disabled", isSongSearchActive());
+    songsPage = 0;
+    renderSongs();
+  });
 
   function renderAlbumDetailRows(group) {
     renderSongRows(albumDetailList, group.tracks, (track) => playFromList(track, group.tracks, group.album || "앨범"));
@@ -1698,7 +1709,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 불안정하므로(특히 iOS Safari), 자체 JS 드래그 구현(forceFallback)을
   // 강제해 터치에서도 일관되게 동작하게 한다.
   function isSongSearchActive() {
-    return filterQuery.trim() !== "";
+    // 평점순 정렬 중에도 화면 인덱스가 라이브러리 순서와 어긋나므로 드래그를 막는다.
+    return filterQuery.trim() !== "" || songsSortByRating;
   }
 
   async function resyncFromServer() {

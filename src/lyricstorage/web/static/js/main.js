@@ -16,6 +16,7 @@ import { setupAlbumInfo } from "./albuminfo.js";
 import { setupSidebar } from "./sidebar.js";
 import { setupRouter } from "./router.js";
 import { setupRating } from "./rating.js";
+import { setupAxisRating } from "./axisRating.js";
 import { setupArtistIdentityDialog } from "./artistIdentityDialog.js";
 import { setupUsageTracking } from "./usageTracking.js";
 
@@ -124,6 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
   setupRating(player);
+  setupAxisRating(player);
   setupQueueEngine(player);
   const expandedPlayerApi = setupExpandedPlayer(player, {
     onOpen: () => sidebarApi.closeDrawer(),
