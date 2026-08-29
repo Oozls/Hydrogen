@@ -15,6 +15,11 @@ const PRELOAD_MIN_SEC = 15;
 // 가깝게 둬서 "실제 디코딩이 시작된 뒤 첫 timeupdate" 시점에 최대한 앞당긴다
 // — 그 시점엔 아직 곡 초반이라 재-seek이 나도 거의 안 들린다.
 const INITIAL_RESYNC_AFTER_SEC = 0;
+// (특히 iOS 백그라운드에서) 네트워크가 막혀 데이터를 못 받으면 audio.paused는
+// 계속 false인 채로 소리만 안 나는 상태가 무한정 이어질 수 있다. 그 상태가 이
+// 시간(ms)을 넘기면 실제로 멈췄다고 보고 명시적으로 pause해, OS 잠금화면이
+// "재생 중"으로 계속 잘못 표시하는 것을 막는다.
+const STALL_TIMEOUT_MS = 8000;
 
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
@@ -69,6 +74,7 @@ export class PlayerEngine extends EventTarget {
     // 현재 곡 재생이 시작된 시각(performance.now()) — 다운로드가 실제로
     // 재생 속도를 따라잡고 있는지(버퍼링된 초 / 경과한 실제 초) 재는 기준점.
     this._trackStartWallMs = null;
+    this._stallTimer = null;
 
     this._bindAudioEvents(this.audio);
   }
@@ -82,6 +88,7 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("timeupdate", () => {
       if (audio !== this.audio) return;
       if (!this._seeking) {
+        this._clearStallTimer();
         this._emit("tick", { positionMs: this.position() });
         if (this._needsInitialResync && audio.currentTime >= INITIAL_RESYNC_AFTER_SEC) {
           this._needsInitialResync = false;
@@ -100,6 +107,7 @@ export class PlayerEngine extends EventTarget {
     });
     audio.addEventListener("pause", () => {
       if (audio !== this.audio) return;
+      this._clearStallTimer();
       this._emit("playstate", { playing: false });
       this._needsResyncOnPlay = true;
       if (!this._intentionalPause && !audio.ended && this.currentIndex >= 0) {
@@ -115,9 +123,11 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("waiting", () => {
       if (audio !== this.audio) return;
       this._emit("buffering", { buffering: true });
+      this._armStallTimer(audio);
     });
     audio.addEventListener("playing", () => {
       if (audio !== this.audio) return;
+      this._clearStallTimer();
       this._emit("buffering", { buffering: false });
       if (this._resetPositionOnPlay) {
         this._resetPositionOnPlay = false;
@@ -137,6 +147,25 @@ export class PlayerEngine extends EventTarget {
       if (audio !== this.audio) return;
       this._emit("buffered", { bufferedMs: this.bufferedMs() });
     });
+  }
+
+  _armStallTimer(audio) {
+    this._clearStallTimer();
+    this._stallTimer = setTimeout(() => {
+      if (audio !== this.audio || this._seeking) return;
+      // 실제로는 멈춰 있었음을 반영해 명시적으로 pause한다 — 잠금화면/알림의
+      // 재생 버튼을 다시 누르면(백그라운드에서도 허용되는 사용자 제스처) 거기서
+      // 새로 재생을 시도하게 된다.
+      this._intentionalPause = true;
+      audio.pause();
+    }, STALL_TIMEOUT_MS);
+  }
+
+  _clearStallTimer() {
+    if (this._stallTimer != null) {
+      clearTimeout(this._stallTimer);
+      this._stallTimer = null;
+    }
   }
 
   // 지금 재생 위치가 속한 버퍼 구간의 끝(ms) — 그 구간에 없으면(탐색 등)

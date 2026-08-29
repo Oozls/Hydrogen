@@ -259,9 +259,15 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   player.addEventListener("buffering", (e) => {
     if (e.detail.buffering) {
       if (!bufferingStopSpin) bufferingStopSpin = showArtSpinner(artEl.parentElement);
-    } else if (bufferingStopSpin) {
-      bufferingStopSpin();
-      bufferingStopSpin = null;
+    } else {
+      if (bufferingStopSpin) {
+        bufferingStopSpin();
+        bufferingStopSpin = null;
+      }
+      // trackchange 시점(오디오가 아직 로드도 안 된 상태)에 세팅한 메타데이터를
+      // iOS 잠금화면이 놓치는 경우가 있어, 실제로 재생 가능해진 시점에 한 번 더
+      // 반영한다.
+      updateMediaSessionMetadata(player.currentTrack);
     }
   });
 
