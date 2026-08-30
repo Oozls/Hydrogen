@@ -151,7 +151,7 @@ export const api = {
     return request("POST", `/api/tracks/${trackId}/art`, { formData });
   },
   audioUrl: (trackId) => `/api/tracks/${trackId}/audio`,
-  artUrl: (trackId) => `/api/tracks/${trackId}/art`,
+  artUrl: (trackId, size) => `/api/tracks/${trackId}/art` + (size ? `?size=${size}` : ""),
   downloadUrl: (trackId) => `/api/tracks/${trackId}/download`,
   getAlbums: () => request("GET", "/api/albums"),
   getAlbum: (albumId) => request("GET", `/api/albums/${albumId}`),
@@ -162,7 +162,7 @@ export const api = {
     formData.append("art", file);
     return request("POST", `/api/albums/${albumId}/art`, { formData });
   },
-  albumArtUrl: (albumId) => `/api/albums/${albumId}/art`,
+  albumArtUrl: (albumId, size) => `/api/albums/${albumId}/art` + (size ? `?size=${size}` : ""),
   useTrackArtForAlbum: (albumId) => request("POST", `/api/albums/${albumId}/art/from-track`),
   albumDownloadUrl: (albumId) => `/api/albums/${albumId}/download`,
   getArtists: () => request("GET", "/api/artists"),

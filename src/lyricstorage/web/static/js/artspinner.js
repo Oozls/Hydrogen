@@ -14,7 +14,7 @@ export function showArtSpinner(wrapEl) {
 
 // 트랙 아트(로딩 스피너 + 실패 시 음표 아이콘 폴백)를 담은 wrapEl을 만든다.
 // home.js/expanded-player.js처럼 트랙 카드/행을 그리는 여러 화면에서 공유한다.
-export function buildArtEl(trackId, wrapClass) {
+export function buildArtEl(trackId, wrapClass, size) {
   const wrap = document.createElement("div");
   wrap.className = wrapClass;
   const stopSpin = showArtSpinner(wrap);
@@ -25,7 +25,7 @@ export function buildArtEl(trackId, wrapClass) {
   // 켜져 있으면 커버 아트를 누른 채 살짝만 움직여도 우리 pointer 기반
   // 드래그(재생 대기 CD 스크럽 등)보다 먼저 네이티브 드래그가 가로채간다.
   img.draggable = false;
-  img.src = api.artUrl(trackId);
+  img.src = api.artUrl(trackId, size);
   img.onload = () => stopSpin();
   img.onerror = () => {
     stopSpin();

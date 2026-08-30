@@ -7,11 +7,11 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify, request, send_file
+from flask import Blueprint, Response, abort, jsonify, request, send_file
 
 from lyricstorage import albums as albums_repo
 from lyricstorage import applog
-from lyricstorage.models import read_album_art, write_tags
+from lyricstorage.models import read_album_art, resize_image_bytes, write_tags
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.routes.media import _sniff_image_mimetype, sanitize_filename
 from lyricstorage.web.serialize import album_to_json, track_to_json
@@ -139,11 +139,25 @@ def get_album_art(album_id: str):
     path = albums_repo.album_art_path(album.id, album.art_ext)
     if not path.exists():
         abort(404)
-    mimetype = "image/png" if album.art_ext == "png" else "image/jpeg"
-    # conditional=True -> 파일이 안 바뀌었으면 304로 응답해 매번 다시 안 받게 한다.
-    # 느린 네트워크에서 목록을 오갈 때마다 표지를 재다운로드하던 게 체감 지연의
-    # 큰 부분이었다.
-    return send_file(path, mimetype=mimetype, conditional=True, max_age=604800)
+    # 재생바/목록처럼 작게 표시되는 자리는 ?size=로 축소본을 요청한다(원본을
+    # 그대로 내려주면 모바일에서 트랙 전환마다 그 큰 파일이 오디오 스트림과
+    # 대역폭을 다퉈 표지 로딩이 특히 느려진다).
+    size = request.args.get("size", type=int)
+    if not size:
+        mimetype = "image/png" if album.art_ext == "png" else "image/jpeg"
+        # conditional=True -> 파일이 안 바뀌었으면 304로 응답해 매번 다시 안 받게 한다.
+        # 느린 네트워크에서 목록을 오갈 때마다 표지를 재다운로드하던 게 체감 지연의
+        # 큰 부분이었다.
+        return send_file(path, mimetype=mimetype, conditional=True, max_age=604800)
+
+    etag = f'"{album_id}-{path.stat().st_mtime_ns}-{size}"'
+    if request.headers.get("If-None-Match") == etag:
+        return Response(status=304)
+    art_bytes, mimetype = resize_image_bytes(path.read_bytes(), size)
+    resp = Response(art_bytes, mimetype=mimetype)
+    resp.headers["Cache-Control"] = "public, max-age=604800"
+    resp.headers["ETag"] = etag
+    return resp
 
 
 @bp.get("/<album_id>/download")

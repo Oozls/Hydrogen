@@ -7,9 +7,11 @@ import re
 import shutil
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
+from PIL import Image
 from mutagen import File as MutagenFile
 from mutagen.id3 import ID3, ID3NoHeaderError, APIC, TALB, TIT2, TPE1
 from mutagen.mp4 import MP4, MP4Cover
@@ -117,6 +119,19 @@ def read_album_art(path: str) -> Optional[bytes]:
     except Exception:
         pass
     return None
+
+
+def resize_image_bytes(data: bytes, max_dim: int) -> tuple[bytes, str]:
+    """이미지가 max_dim보다 크면 비율을 유지해 축소하고 JPEG로 재인코딩한다.
+    이미 그보다 작으면 원본 그대로 반환(불필요한 재인코딩 방지)."""
+    with Image.open(BytesIO(data)) as img:
+        if img.width <= max_dim and img.height <= max_dim:
+            return data, img.get_format_mimetype() or "image/jpeg"
+        img = img.convert("RGB")
+        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        out = BytesIO()
+        img.save(out, format="JPEG", quality=85)
+        return out.getvalue(), "image/jpeg"
 
 
 def write_tags(path: str, *, title: str, artist: str, album: str) -> None:

@@ -10,4 +10,5 @@ dependencies = [
     "gunicorn>=26.0.0",
     "markdown>=3.10.2",
     "mutagen>=1.48.1",
+    "pillow>=11.0.0",
 ]

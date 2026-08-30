@@ -232,7 +232,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
-      img.src = api.albumArtUrl(item.album_id);
+      img.loading = "lazy";
+      img.src = api.albumArtUrl(item.album_id, 160);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();
@@ -491,7 +492,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
-      img.src = api.albumArtUrl(item.album_id);
+      img.loading = "lazy";
+      img.src = api.albumArtUrl(item.album_id, 160);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();
@@ -786,7 +788,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
     const img = document.createElement("img");
     img.className = "media-card-art";
     img.alt = "";
-    img.src = api.albumArtUrl(album.id);
+    img.loading = "lazy";
+    img.src = api.albumArtUrl(album.id, 160);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, abort, request, send_file
 
-from lyricstorage.models import read_album_art
+from lyricstorage.models import read_album_art, resize_image_bytes
 from lyricstorage.web.lookup import find_track_by_id
 
 bp = Blueprint("media", __name__, url_prefix="/api/tracks")
@@ -53,8 +53,12 @@ def get_art(track_id: str):
     if track is None:
         abort(404)
     path = Path(track.path)
+    # 재생바/목록처럼 작게 표시되는 자리는 ?size=로 축소본을 요청한다(원본을
+    # 그대로 내려주면 모바일에서 트랙 전환마다 그 큰 파일이 오디오 스트림과
+    # 대역폭을 다퉈 표지 로딩이 특히 느려진다).
+    size = request.args.get("size", type=int)
     try:
-        etag = f'"{track_id}-{path.stat().st_mtime_ns}"'
+        etag = f'"{track_id}-{path.stat().st_mtime_ns}-{size or "orig"}"'
     except OSError:
         abort(404)
     # 목록 화면 하나에 표지 요청이 수십 개씩 걸리는데, 태그를 매번 다시 읽지
@@ -65,7 +69,10 @@ def get_art(track_id: str):
     art_bytes = read_album_art(track.path)
     if not art_bytes:
         abort(404)
-    resp = Response(art_bytes, mimetype=_sniff_image_mimetype(art_bytes))
+    mimetype = _sniff_image_mimetype(art_bytes)
+    if size:
+        art_bytes, mimetype = resize_image_bytes(art_bytes, size)
+    resp = Response(art_bytes, mimetype=mimetype)
     resp.headers["Cache-Control"] = "public, max-age=604800"
     resp.headers["ETag"] = etag
     return resp

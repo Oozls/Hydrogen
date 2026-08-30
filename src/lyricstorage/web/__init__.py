@@ -29,6 +29,9 @@ def create_app() -> Flask:
     app.config["MAX_FORM_PARTS"] = 20000
     # 업로드 요청 본문(폴더 통째 업로드 등) 최대 크기를 2048MB로 설정.
     app.config["MAX_CONTENT_LENGTH"] = 2048 * 1024 * 1024
+    # 정적 파일(JS/CSS/아이콘 SVG)에 캐시 헤더가 없어 방문마다 다시 받아가던 것을
+    # 고정. 배포 후 내용이 바뀌면 파일 mtime이 바뀌어 캐시가 자동으로 무효화된다.
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
 
     @app.before_request
     def _log_request_start():

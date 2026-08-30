@@ -151,7 +151,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
       artEl.style.display = "";
       artPlaceholder.style.display = "none";
     };
-    const nextSrc = api.albumArtUrl(track.album_id) + (bustArtCache ? `?t=${Date.now()}` : "");
+    const nextSrc = api.albumArtUrl(track.album_id, 160) + (bustArtCache ? `&t=${Date.now()}` : "");
     // 반복 재생 등으로 같은 트랙이 다시 설정되면 artEl.src가 이미 같은 값이라
     // 브라우저가 새 요청을 보내지 않고, 그러면 load/error 이벤트도 다시 발생하지
     // 않아 방금 띄운 스피너가 영영 사라지지 않는다(특히 이전에 로딩이 실패했던

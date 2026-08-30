@@ -591,7 +591,8 @@ export function setupPlaylist(
       const img = document.createElement("img");
       img.className = "media-card-art";
       img.alt = "";
-      img.src = api.albumArtUrl(group.id);
+      img.loading = "lazy";
+      img.src = api.albumArtUrl(group.id, 160);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();
