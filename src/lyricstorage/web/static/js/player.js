@@ -204,20 +204,6 @@ export class PlayerEngine extends EventTarget {
     this._emit("queuechange", {});
   }
 
-  // 추천 큐(라디오)로 들어갈 때 셔플/반복을 강제로 끈다 — 계속 늘어나는 목록에는
-  // 두 개념이 맞지 않는다(무엇을 "반복"할지, 아직 없는 곡을 어떻게 "셔플"할지가
-  // 불명확해진다).
-  resetPlaybackModes() {
-    if (this.shuffle) {
-      this.shuffle = false;
-      this._emit("shufflechange", { shuffle: false });
-    }
-    if (this.repeatMode !== "off") {
-      this.repeatMode = "off";
-      this._emit("repeatchange", { repeatMode: "off" });
-    }
-  }
-
   // 같은 플레이리스트가 업로드/삭제/추가/순서변경 등으로 갱신됐을 때 사용.
   // 재생 중이던 트랙이 여전히 있으면 새 배열에서의 인덱스로 다시 맞춰
   // 재생 상태(다음/이전 계산 기준)가 끊기지 않게 한다.

@@ -17,7 +17,6 @@ let seedingPlaylist = null;
 // 다시 듣기/빠른 선곡에서 곡을 클릭했을 때 호출한다. 시드 곡으로 즉시 재생을
 // 시작하고, 나머지 9곡은 백그라운드로 받아와 큐에 이어 붙인다.
 export async function startRecommendQueue(player, track) {
-  player.resetPlaybackModes();
   player.setPlaylist({ name: "재생 대기 목록", tracks: [track] }, { mode: "recommend" });
   seedingPlaylist = player.playlist;
   player.playIndex(0);
@@ -82,8 +81,9 @@ export function setupQueueEngine(player) {
 }
 
 // 확장 화면에서 "재생 대기 목록"에 보여줄 곡 목록을 그리기 위한 순수 함수.
-// queueMode에 따라 계산 방식이 다르다 — recommend는 이미 평평한 배열이라 그대로
-// 자르면 되고, list는 셔플/전곡반복 상태를 반영해 재구성해야 한다.
+// 셔플 상태는 recommend/list 공통으로 반영한다. 전곡반복으로 앞부분을 다시
+// 이어붙이는 동작만 recommend(계속 늘어나는 목록이라 "전체를 한 바퀴 더 돈다"는
+// 개념이 없다)에서는 제외한다.
 //
 // 목록은 재생이 시작된 지점("앵커")부터 보여주고, 곡이 끝나거나 건너뛰어도
 // currentIndex를 따라 슬라이딩 윈도우처럼 줄어들지 않는다 — 앵커는 이 playlist
@@ -93,16 +93,13 @@ export function setupQueueEngine(player) {
 // 지금 위치보다 뒤로 밀림) 지금 곡을 새 앵커로 다시 잡아 "새 바퀴"를 시작한다.
 function buildQueueFrom(player, anchor) {
   const tracks = player.playlist.tracks;
-  if (player.queueMode === "recommend") {
-    return tracks.slice(anchor);
-  }
   if (player.shuffle && player.shuffleOrder.length) {
     const pos = player.shuffleOrder.indexOf(anchor);
     const order = pos >= 0 ? player.shuffleOrder.slice(pos) : [anchor];
     return order.map((i) => tracks[i]);
   }
   const forward = tracks.slice(anchor);
-  if (player.repeatMode === "all") {
+  if (player.queueMode !== "recommend" && player.repeatMode === "all") {
     return forward.concat(tracks.slice(0, anchor));
   }
   return forward;
