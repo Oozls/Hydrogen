@@ -550,7 +550,7 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
   function buildQueueRow(track, isCurrent) {
     const row = document.createElement("div");
     row.className = "expanded-queue-row" + (isCurrent ? " current" : "");
-    row.appendChild(buildArtEl(track.track_id, "expanded-queue-row-art-wrap", 160));
+    row.appendChild(buildArtEl(track.track_id, "expanded-queue-row-art-wrap"));
 
     const text = document.createElement("div");
     text.className = "expanded-queue-row-text";

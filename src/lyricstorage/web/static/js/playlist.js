@@ -592,7 +592,7 @@ export function setupPlaylist(
       img.className = "media-card-art";
       img.alt = "";
       img.loading = "lazy";
-      img.src = api.albumArtUrl(group.id, 160);
+      img.src = api.albumArtUrl(group.id);
       img.onload = () => stopSpin();
       img.onerror = () => {
         stopSpin();

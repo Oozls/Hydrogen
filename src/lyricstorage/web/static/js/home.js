@@ -26,7 +26,7 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
     card.className = "home-recent-card";
     card.title = item.title || item.track_id;
 
-    const artWrap = buildArtEl(item.track_id, "home-recent-card-art-wrap", 160);
+    const artWrap = buildArtEl(item.track_id, "home-recent-card-art-wrap");
     const playBtn = document.createElement("button");
     playBtn.type = "button";
     playBtn.className = "home-recent-card-play";
@@ -138,7 +138,7 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
     card.title = item.title;
 
     if (item.track_id) {
-      card.appendChild(buildArtEl(item.track_id, "home-recent-card-art-wrap", 160));
+      card.appendChild(buildArtEl(item.track_id, "home-recent-card-art-wrap"));
     } else {
       const iconWrap = document.createElement("div");
       iconWrap.className = "home-recent-card-art-wrap";

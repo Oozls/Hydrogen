@@ -610,7 +610,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     img.className = "media-card-art";
     img.alt = "";
     img.loading = "lazy";
-    img.src = api.artUrl(item.track_id, 160);
+    img.src = api.artUrl(item.track_id);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();
@@ -668,7 +668,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     img.className = "media-card-art";
     img.alt = "";
     img.loading = "lazy";
-    img.src = api.albumArtUrl(group.id, 160);
+    img.src = api.albumArtUrl(group.id);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();
@@ -903,7 +903,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // 뷰포트(스크롤 컨테이너 포함)에 가까워질 때만 브라우저가 실제로
     // 불러오도록 네이티브 lazy loading을 사용한다.
     img.loading = "lazy";
-    img.src = api.albumArtUrl(group.id, 160);
+    img.src = api.albumArtUrl(group.id);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();

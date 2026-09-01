@@ -27,7 +27,7 @@ export function fillArtistArt(artWrap, albumsForArtist) {
     img.className = "media-card-art";
     img.alt = "";
     img.loading = "lazy";
-    img.src = api.albumArtUrl(covers[0].id, 160);
+    img.src = api.albumArtUrl(covers[0].id);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();
@@ -47,7 +47,7 @@ export function fillArtistArt(artWrap, albumsForArtist) {
     const img = document.createElement("img");
     img.alt = "";
     img.loading = "lazy";
-    img.src = api.albumArtUrl(album.id, 160);
+    img.src = api.albumArtUrl(album.id);
     img.onload = () => stopSpin();
     img.onerror = () => {
       stopSpin();
