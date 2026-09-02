@@ -36,6 +36,7 @@ def index():
             "last_playlist": current_playlist.name if current_playlist else None,
             "volume": settings.get("volume", 80),
             "today_limit": settings.get("today_limit", recommend.DEFAULT_LIMIT),
+            "lyrics_slide_mode": bool(settings.get("lyrics_slide_mode", False)),
         },
     }
     # </script>로 오인되어 태그가 끊기지 않도록 이스케이프.

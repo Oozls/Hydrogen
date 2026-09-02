@@ -17,6 +17,7 @@ def get_settings():
             "last_playlist": settings.get("last_playlist"),
             "volume": settings.get("volume", 80),
             "today_limit": settings.get("today_limit", recommend.DEFAULT_LIMIT),
+            "lyrics_slide_mode": bool(settings.get("lyrics_slide_mode", False)),
         }
     )
 
@@ -41,6 +42,9 @@ def update_settings():
             applied["today_limit"] = settings["today_limit"]
         except (TypeError, ValueError):
             pass
+    if "lyrics_slide_mode" in data:
+        settings["lyrics_slide_mode"] = bool(data["lyrics_slide_mode"])
+        applied["lyrics_slide_mode"] = settings["lyrics_slide_mode"]
     storage.save_settings(settings)
     applog.log_info("ACTION", f"설정 변경: {applied}")
     return jsonify(settings)

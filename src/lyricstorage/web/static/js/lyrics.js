@@ -71,13 +71,14 @@ function parseLrcText(text) {
   return result;
 }
 
-export function setupLyrics(player, onLyricsSaved) {
+export function setupLyrics(player, bootstrap, onLyricsSaved) {
   const tabViewBtn = document.getElementById("tab-lyrics-view-btn");
   const tabEditBtn = document.getElementById("tab-lyrics-edit-btn");
   const viewPanel = document.getElementById("lyrics-view-panel");
   const editPanel = document.getElementById("lyrics-edit-panel");
 
   const viewList = document.getElementById("lyrics-view-list");
+  const slideModeCheckbox = document.getElementById("lyrics-slide-mode-checkbox");
   const fetchExternalBtn = document.getElementById("btn-lyrics-fetch-external");
   const translateBtn = document.getElementById("btn-lyrics-translate");
 
@@ -126,6 +127,14 @@ export function setupLyrics(player, onLyricsSaved) {
   const SYNC_OFFSET_MAX_MS = 2000;
   let syncOffsetMs = 0; // 재생 위치 하이라이트 계산에만 쓰이는 세션 한정 보정값. 저장되지 않는다.
 
+  // 기본은 줄이 바뀔 때마다 그 줄을 중앙으로 점프시키는 방식(스크롤도
+  // scrollIntoView가 알아서 처리). 슬라이딩 모드를 켜면 그 대신, 지금 줄의
+  // 타임스탬프부터 다음 줄(또는 마지막 줄이면 곡 길이)까지의 구간 안에서
+  // 스크롤 위치를 매 프레임 선형 보간해 계속 위로 흘러가게 한다. volume/
+  // today_limit과 같은 방식으로 /api/settings에 저장해 다음 접속에도 유지된다.
+  let slideModeOn = !!(bootstrap.settings && bootstrap.settings.lyrics_slide_mode);
+  slideModeCheckbox.checked = slideModeOn;
+
   // 편집 탭이 display:none인 동안엔 scrollHeight가 0으로 읽혀 textarea 높이가
   // 찌그러진 채로 고정된다. 탭이 실제로 보이게 된 "다음" 프레임에 전부 재측정한다.
   function regrowEditTextareas() {
@@ -170,16 +179,124 @@ export function setupLyrics(player, onLyricsSaved) {
       viewList.appendChild(li);
     }
     lastHighlighted = -2;
-    applyHighlight(currentIndexForPosition(lines, player.position() + syncOffsetMs));
+    userScrollPausedUntil = 0; // 새 트랙/재렌더는 사용자의 이전 스크롤 일시정지를 이어받지 않는다
+    refreshLyricsPosition(player.position() + syncOffsetMs, { immediate: true });
+  }
+
+  // idx번 줄을 컨테이너 중앙에 두는 데 필요한 scrollTop. 위아래로 빈 여백이
+  // 생기지 않도록 [0, 최대 스크롤]로 clamp한다 — 네이티브 scrollIntoView가
+  // 목록 양 끝에서 알아서 하는 것과 같은 clamp를 슬라이딩 모드에서도 직접 재현.
+  function centerScrollTopFor(items, idx) {
+    const el = items[idx];
+    if (!el) return 0;
+    const maxScroll = Math.max(0, viewList.scrollHeight - viewList.clientHeight);
+    const target = el.offsetTop - (viewList.clientHeight - el.offsetHeight) / 2;
+    return Math.max(0, Math.min(target, maxScroll));
   }
 
   function applyHighlight(idx) {
     if (!lines.length) return;
     const items = viewList.querySelectorAll(".lyrics-line");
     items.forEach((el, row) => el.classList.toggle("active", row === idx));
-    if (idx >= 0 && items[idx]) {
+    if (!slideModeOn && idx >= 0 && items[idx]) {
       items[idx].scrollIntoView({ block: "center", behavior: "smooth" });
     }
+  }
+
+  // 슬라이딩 모드 전용: posMs가 속한 구간([이 줄, 다음 줄] 또는 첫 줄 이전엔
+  // [0, 첫 줄], 마지막 줄이면 [마지막 줄, 곡 길이])에서 진행률을 구해 그
+  // 구간의 시작/끝 중앙 스크롤 위치를 선형 보간한 "목표" scrollTop을 계산한다.
+  // 다음 줄이 없어도(마지막 줄) 곡 길이를 끝점으로 삼아 계속 흘러가는 게 핵심
+  // 요구사항. 실제로 화면에 쓰는 값은 이 목표를 향해 매끄럽게 따라가는
+  // applySlideScroll이 담당(목표 자체는 이지→다음 구간 경계에서 기울기가
+  // 바뀌지만, 화면 값은 그 경계를 부드럽게 넘어가도록 뒤에서 완충한다).
+  function computeSlideTarget(posMs, idx, items) {
+    const maxScroll = Math.max(0, viewList.scrollHeight - viewList.clientHeight);
+    let fromMs, toMs, fromScroll, toScroll;
+    if (idx < 0) {
+      fromMs = 0;
+      toMs = lines[0].timestamp_ms;
+      fromScroll = 0;
+      toScroll = centerScrollTopFor(items, 0);
+    } else {
+      fromMs = lines[idx].timestamp_ms;
+      // 첫 줄이 곡 시작(0ms)부터 바로 활성이면 위 idx<0 구간이 아예 없어서
+      // "이전에 스크롤된 적"이 없다 — 이때는 중앙 정렬 대신 맨 위(0)에서
+      // 시작해야 재생 시작 시 가사 맨 윗줄이 보인다는 기대와 맞는다. 그 밖의
+      // 모든 줄은 직전 구간이 항상 이 줄을 이미 중앙으로 가져다 놨으므로
+      // 그대로 이어받는다.
+      fromScroll = idx === 0 && fromMs <= 0 ? 0 : centerScrollTopFor(items, idx);
+      if (idx + 1 < lines.length) {
+        toMs = lines[idx + 1].timestamp_ms;
+        toScroll = centerScrollTopFor(items, idx + 1);
+      } else {
+        toMs = Math.max(player.duration(), fromMs + 1);
+        toScroll = maxScroll;
+      }
+    }
+    const progress = Math.max(0, Math.min(1, (posMs - fromMs) / Math.max(1, toMs - fromMs)));
+    return fromScroll + (toScroll - fromScroll) * progress;
+  }
+
+  // 우리 코드가 마지막으로 지정한 scrollTop(반올림) — 아래 scroll 리스너가
+  // "이건 우리가 방금 쓴 값이라 사용자 스크롤이 아니다"를 판단하는 기준.
+  let lastAutoScrollTop = null;
+  function setSlideScrollTop(value) {
+    lastAutoScrollTop = Math.round(value);
+    viewList.scrollTop = value;
+  }
+
+  // 슬라이딩 모드 중 사용자가 휠/터치/스크롤바로 직접 스크롤을 옮기면, 그 시도를
+  // 덮어써 자동 스크롤로 되돌리는 대신 잠시 손을 뗀다 — USER_SCROLL_PAUSE_MS
+  // 동안 자동 스크롤 쓰기를 건너뛰고, 그 시간이 지나면 그때의 실제 재생 위치로
+  // (아래 이지 감쇠 덕에) 부드럽게 다시 붙는다. 브라우저 scroll 이벤트는 우리가
+  // 직접 쓴 경우에도 발생하므로, 방금 우리가 쓴 값과 실제 값이 다를 때만(사용자가
+  // 개입해 값이 바뀐 경우) 사용자 스크롤로 간주한다.
+  const USER_SCROLL_PAUSE_MS = 5000;
+  let userScrollPausedUntil = 0;
+  viewList.addEventListener("scroll", () => {
+    if (!slideModeOn) return;
+    const current = Math.round(viewList.scrollTop);
+    if (lastAutoScrollTop !== null && Math.abs(current - lastAutoScrollTop) <= 1) return;
+    userScrollPausedUntil = Date.now() + USER_SCROLL_PAUSE_MS;
+  });
+
+  // dtMs가 없으면(트랙 전환, 일시정지 중 탐색, 슬라이딩 모드를 막 켠 순간 등)
+  // 목표 위치로 즉시 스냅한다. dtMs가 있으면(재생 중 rAF 루프) 목표를 향해
+  // 지수 감쇠로 매끄럽게 따라간다 — 구간 경계에서 기울기가 바뀌어도 화면에
+  // 보이는 움직임 자체는 급이 꺾이지 않고, 사용자 스크롤 일시정지가 풀린
+  // 뒤에도 같은 방식으로 자연스럽게 다시 붙는다.
+  const SLIDE_SMOOTHING_TAU_MS = 260;
+  function applySlideScroll(posMs, idx, dtMs) {
+    const items = viewList.querySelectorAll(".lyrics-line");
+    if (!items.length) return;
+    const target = computeSlideTarget(posMs, idx, items);
+    if (dtMs == null) {
+      setSlideScrollTop(target);
+      return;
+    }
+    const current = viewList.scrollTop;
+    const alpha = 1 - Math.exp(-dtMs / SLIDE_SMOOTHING_TAU_MS);
+    setSlideScrollTop(current + (target - current) * alpha);
+  }
+
+  // tick(재생 중 성긴 timeupdate)과 rAF 루프(재생 중 매 프레임) 양쪽에서 공유하는
+  // 진입점. 줄이 실제로 바뀔 때만 하이라이트를 갱신한다(applyHighlight 자체가
+  // idx==row 비교라 매번 불러도 안전은 하지만, scrollIntoView(smooth)를 매
+  // 프레임 다시 트리거하면 애니메이션이 끊기므로 idx 변화 시에만 부른다).
+  // skipScroll은 tick 전용 — rAF 루프가 이미 돌고 있는 동안은 tick이 스크롤
+  // 쪽엔 손대지 않는다(하이라이트만 갱신), 그러지 않으면 tick의 스냅이 rAF의
+  // 감쇠 애니메이션과 부딪혀 끊겨 보인다.
+  function refreshLyricsPosition(posMs, { immediate = false, skipScroll = false } = {}) {
+    if (!lines.length) return;
+    const idx = currentIndexForPosition(lines, posMs);
+    if (idx !== lastHighlighted) {
+      lastHighlighted = idx;
+      applyHighlight(idx);
+    }
+    if (!slideModeOn || skipScroll) return;
+    if (!immediate && Date.now() < userScrollPausedUntil) return;
+    applySlideScroll(posMs, idx, immediate ? null : lastFrameDtMs);
   }
 
   // 가사 싱크 보정: 저장된 타임스탬프는 건드리지 않고, 하이라이트 계산에
@@ -188,17 +305,53 @@ export function setupLyrics(player, onLyricsSaved) {
     syncOffsetMs = Math.max(-SYNC_OFFSET_MAX_MS, Math.min(SYNC_OFFSET_MAX_MS, ms));
     syncOffsetValueEl.textContent = `${syncOffsetMs > 0 ? "+" : ""}${syncOffsetMs}ms`;
     lastHighlighted = -2;
-    applyHighlight(currentIndexForPosition(lines, player.position() + syncOffsetMs));
+    refreshLyricsPosition(player.position() + syncOffsetMs, { immediate: true });
   }
   syncOffsetMinusBtn.addEventListener("click", () => setSyncOffset(syncOffsetMs - SYNC_OFFSET_STEP_MS));
   syncOffsetPlusBtn.addEventListener("click", () => setSyncOffset(syncOffsetMs + SYNC_OFFSET_STEP_MS));
 
-  player.addEventListener("tick", (e) => {
-    if (!lines.length) return;
-    const idx = currentIndexForPosition(lines, e.detail.positionMs + syncOffsetMs);
-    if (idx === lastHighlighted) return;
-    lastHighlighted = idx;
-    applyHighlight(idx);
+  player.addEventListener("tick", (e) =>
+    refreshLyricsPosition(e.detail.positionMs + syncOffsetMs, { immediate: true, skipScroll: slideRafId != null })
+  );
+
+  // 슬라이딩 모드는 tick(초당 몇 번 안 되는 timeupdate)만으로 움직이면 계단식으로
+  // 보이므로, 재생 중일 때만 rAF로 매 프레임 다시 계산한다(재생바 진행 슬라이더와
+  // 동일한 이유·패턴 — nowplaying.js의 progressStep 참고). 프레임 간 실제 경과
+  // 시간(dt)을 재서 감쇠 속도가 프레임레이트에 흔들리지 않게 한다.
+  let slideRafId = null;
+  let lastFrameTimeMs = null;
+  let lastFrameDtMs = 16;
+  function slideStep(nowMs) {
+    lastFrameDtMs = lastFrameTimeMs != null ? nowMs - lastFrameTimeMs : 16;
+    lastFrameTimeMs = nowMs;
+    refreshLyricsPosition(player.position() + syncOffsetMs);
+    slideRafId = requestAnimationFrame(slideStep);
+  }
+  function startSlideLoop() {
+    if (slideRafId == null) {
+      lastFrameTimeMs = null;
+      slideRafId = requestAnimationFrame(slideStep);
+    }
+  }
+  function stopSlideLoop() {
+    if (slideRafId != null) {
+      cancelAnimationFrame(slideRafId);
+      slideRafId = null;
+    }
+  }
+  player.addEventListener("playstate", (e) => {
+    if (slideModeOn && e.detail.playing) startSlideLoop();
+    else stopSlideLoop();
+  });
+
+  slideModeCheckbox.addEventListener("change", () => {
+    slideModeOn = slideModeCheckbox.checked;
+    userScrollPausedUntil = 0;
+    if (slideModeOn && player.isPlaying()) startSlideLoop();
+    else stopSlideLoop();
+    lastHighlighted = -2;
+    refreshLyricsPosition(player.position() + syncOffsetMs, { immediate: true });
+    api.updateSettings({ lyrics_slide_mode: slideModeOn }).catch(() => {});
   });
 
   function selectRow(tr) {

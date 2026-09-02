@@ -9,6 +9,7 @@ import { setupPlayTracking } from "./playtracking.js";
 import { setupStats } from "./stats.js";
 import { setupTodaySongs } from "./todaysongs.js";
 import { setupHome } from "./home.js";
+import { setupMatch } from "./match.js";
 import { setupQueueEngine } from "./queue.js";
 import { setupExpandedPlayer } from "./expanded-player.js";
 import { setupBrowse } from "./browse.js";
@@ -72,6 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
     browseApi.hide();
     statsApi.hide();
     todaySongsApi.hide();
+    matchApi.hide();
     playlistApi.show();
     playlistApi.showAutoPlaylist(autoId);
     sidebarApi.setActive(null);
@@ -84,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
     onGoBrowse: () => refs.router.goBrowse(),
     onGoStats: () => refs.router.goStats(),
     onGoToday: () => refs.router.goToday(),
+    onGoMatch: () => refs.router.goMatch(),
   });
   const playlistApi = setupPlaylist(
     player,
@@ -122,10 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
       await browseApi.refreshAfterAlbumUpdate();
     }
   );
-  setupLyrics(player, (trackId) => playlistApi.refreshHasLyrics(trackId));
+  setupLyrics(player, bootstrap, (trackId) => playlistApi.refreshHasLyrics(trackId));
   setupPlayTracking(player);
   setupRating(player);
-  setupAxisRating(player);
+  const axisRatingApi = setupAxisRating(player);
   setupQueueEngine(player);
   const expandedPlayerApi = setupExpandedPlayer(player, {
     onOpen: () => sidebarApi.closeDrawer(),
@@ -134,6 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistFromTrack, refs);
   const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack, openAutoPlaylist);
+  const matchApi = setupMatch(player, axisRatingApi, openAlbumFromTrack, openArtistFromTrack);
   const todaySongsApi = setupTodaySongs(
     bootstrap,
     player,
@@ -204,6 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
       browseApi.hide();
       statsApi.hide();
       todaySongsApi.hide();
+      matchApi.hide();
       homeApi.show();
       sidebarApi.setActive("__home__");
       sidebarApi.refreshDataSize();
@@ -213,6 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
       playlistApi.hide();
       statsApi.hide();
       todaySongsApi.hide();
+      matchApi.hide();
       const focus = refs.pendingAlbumFocus;
       refs.pendingAlbumFocus = null;
       browseApi.show(route, focus);
@@ -224,6 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
       browseApi.hide();
       statsApi.hide();
       todaySongsApi.hide();
+      matchApi.hide();
       playlistApi.show();
       playlistApi.loadPlaylist(name);
       sidebarApi.setActive(name);
@@ -234,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
       playlistApi.hide();
       browseApi.hide();
       todaySongsApi.hide();
+      matchApi.hide();
       statsApi.show(route);
       sidebarApi.setActive("__stats__");
       sidebarApi.refreshDataSize();
@@ -243,8 +251,19 @@ document.addEventListener("DOMContentLoaded", () => {
       playlistApi.hide();
       browseApi.hide();
       statsApi.hide();
+      matchApi.hide();
       todaySongsApi.show();
       sidebarApi.setActive("__today__");
+      sidebarApi.refreshDataSize();
+    },
+    onMatch: () => {
+      homeApi.hide();
+      playlistApi.hide();
+      browseApi.hide();
+      statsApi.hide();
+      todaySongsApi.hide();
+      matchApi.show();
+      sidebarApi.setActive("__match__");
       sidebarApi.refreshDataSize();
     },
   });

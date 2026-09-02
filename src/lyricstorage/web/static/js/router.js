@@ -17,6 +17,7 @@ function parseRoute(pathname, search) {
     return { type: "stats", period: period || null, group: group || null };
   }
   if (raw === "today") return { type: "today" };
+  if (raw === "match") return { type: "match" };
   if (raw === "browse" || raw.startsWith("browse/")) {
     const rest = raw === "browse" ? "" : raw.slice("browse/".length);
     // URL은 화면에 보이는 이름(서클/아티스트)을 그대로 따르지만, 내부 mode
@@ -44,12 +45,13 @@ function currentPath() {
   return location.pathname + location.search;
 }
 
-export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday }) {
+export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday, onMatch }) {
   function dispatch() {
     const route = parseRoute(location.pathname, location.search);
     if (route.type === "playlist") onPlaylist(route.name);
     else if (route.type === "stats") onStats(route);
     else if (route.type === "today") onToday();
+    else if (route.type === "match") onMatch();
     else if (route.type === "browse") onBrowse(route);
     else onHome();
   }
@@ -103,6 +105,9 @@ export function setupRouter({ onHome, onBrowse, onPlaylist, onStats, onToday }) 
     },
     goToday() {
       navigate("/today");
+    },
+    goMatch() {
+      navigate("/match");
     },
     // 탭 전환/상세 열기·닫기처럼 화면이 자체적으로 상태를 바꿀 때, 주소창만 그
     // 상태에 맞게 조용히 갱신한다(히스토리 항목을 새로 쌓지 않고 dispatch도

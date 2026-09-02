@@ -12,7 +12,7 @@ function fmtBytes(bytes) {
   return `${gb.toFixed(2)} GB`;
 }
 
-export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse, onGoStats, onGoToday }) {
+export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse, onGoStats, onGoToday, onGoMatch }) {
   const sidebarEl = document.getElementById("sidebar");
   const toggleBtn = document.getElementById("btn-sidebar-toggle");
   const backdrop = document.getElementById("sidebar-backdrop");
@@ -21,6 +21,7 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse
   const listEl = document.getElementById("sidebar-playlist-list");
   const statsBtn = document.getElementById("btn-sidebar-stats");
   const todayBtn = document.getElementById("btn-sidebar-today");
+  const matchBtn = document.getElementById("btn-sidebar-match");
   const dataSizeText = document.getElementById("sidebar-data-size-text");
 
   let names = bootstrap.playlist_names.slice();
@@ -47,6 +48,7 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse
     homeBtn.classList.toggle("active", activeName === "__browse__");
     statsBtn.classList.toggle("active", activeName === "__stats__");
     todayBtn.classList.toggle("active", activeName === "__today__");
+    matchBtn.classList.toggle("active", activeName === "__match__");
     listEl.innerHTML = "";
     for (const name of names) {
       const li = document.createElement("li");
@@ -89,6 +91,12 @@ export function setupSidebar(bootstrap, { onSelectPlaylist, onGoHome, onGoBrowse
   if (onGoToday) {
     todayBtn.addEventListener("click", () => {
       onGoToday();
+      closeDrawer();
+    });
+  }
+  if (onGoMatch) {
+    matchBtn.addEventListener("click", () => {
+      onGoMatch();
       closeDrawer();
     });
   }

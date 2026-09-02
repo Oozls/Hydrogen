@@ -68,6 +68,7 @@ export function setupAxisRating(player) {
   const openBtn = document.getElementById("btn-axis-rating");
 
   const values = {};
+  let targetTrack = null;
 
   function computeTotal() {
     const avg = AXES.reduce((sum, a) => sum + (values[a.key] || 0), 0) / AXES.length;
@@ -145,8 +146,11 @@ export function setupAxisRating(player) {
     return wrap;
   }
 
-  function open() {
-    if (!player.currentTrack) return;
+  // track을 넘기면 그 곡을 대상으로 열고(레이팅 매치 화면처럼 재생 중이 아닌
+  // 곡도 평가할 때), 생략하면 기존처럼 재생바의 현재 재생 곡을 대상으로 한다.
+  function open(track) {
+    targetTrack = track || player.currentTrack;
+    if (!targetTrack) return;
     AXES.forEach((a) => (values[a.key] = 0));
     rowsEl.innerHTML = "";
     AXES.forEach((a) => rowsEl.appendChild(buildRow(a)));
@@ -158,11 +162,11 @@ export function setupAxisRating(player) {
     openBtn.disabled = !player.currentTrack;
   }
 
-  openBtn.addEventListener("click", open);
+  openBtn.addEventListener("click", () => open());
   cancelBtn.addEventListener("click", () => dialog.close());
 
   saveBtn.addEventListener("click", async () => {
-    const track = player.currentTrack;
+    const track = targetTrack;
     if (!track) return;
     const nextRating = computeTotal();
     const prevRating = track.rating || 0;
@@ -182,4 +186,6 @@ export function setupAxisRating(player) {
 
   player.addEventListener("trackchange", syncOpenBtn);
   syncOpenBtn();
+
+  return { open };
 }

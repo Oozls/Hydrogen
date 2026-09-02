@@ -206,6 +206,7 @@ textarea {
 .lyrics-panel,
 .stats-panel,
 .today-panel,
+.match-panel,
 .home-panel {
   flex: 1;
   display: flex;
@@ -803,12 +804,33 @@ select#today-limit-select {
 }
 /* 목록 흐름 밖으로 빼서 오른쪽 위 구석에 고정한다 — .lyrics-view-list가
    실제 스크롤 컨테이너(overflow-y:auto)라 이 형제 요소는 스크롤과 무관하게
-   항상 같은 자리에 떠 있는다. */
+   항상 같은 자리에 떠 있는다. right는 커스텀 스크롤바 폭(11px, 위 전역 규칙
+   참고)보다 넉넉히 띄워서 스크롤바와 겹치지 않게 한다. 아래 흐르는 가사와
+   구분되도록 배경을 깔아둔다.
+*/
 .lyrics-view-toolbar {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 6px;
+  right: 16px;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.lyrics-view-toolbar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
 }
 .lyrics-view-list {
   list-style: none;
@@ -2366,6 +2388,9 @@ textarea.file-content-body:disabled {
   color: var(--text-secondary);
   font-size: 13px;
 }
+.list-loading[hidden] {
+  display: none;
+}
 .list-loading::before {
   content: "";
   width: 16px;
@@ -2601,6 +2626,126 @@ textarea.file-content-body:disabled {
   display: block;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* -- 레이팅 매치(1대1 곡 비교) 화면 ------------------------------------------- */
+/* 카드 두 장이 화면 상단에 붙어 남는 아래쪽 공간이 텅 비어 보이던 문제를
+   피하려고, 헤더/안내문 아래 남는 세로 공간 전체를 stage로 잡고 그 가운데에
+   카드 쌍을 배치한다. */
+.match-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.match-cards {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 28px;
+  max-width: 760px;
+  width: 100%;
+}
+.match-cards[hidden] {
+  display: none;
+}
+@media (max-width: 640px) {
+  .match-cards {
+    grid-template-columns: 1fr;
+  }
+}
+/* 두 카드가 서로 무관한 곡 두 개처럼 보이지 않고 "비교 중"임이 드러나도록
+   가운데 두는 배지. 좁은 화면(1열 스택)에서도 justify-self로 가운데 유지. */
+.match-vs {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.match-card-slot {
+  min-width: 0;
+}
+.match-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  padding: 16px;
+}
+.match-card-art-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.match-card-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.match-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: none;
+  color: #fff;
+  opacity: 0;
+  cursor: pointer;
+}
+@media (hover: hover) {
+.match-card-play:hover {
+  opacity: 1;
+}
+}
+@media (hover: none) {
+.match-card-play {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.2);
+}
+}
+.match-card-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-card-subtitle {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.match-card-album {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.match-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 
 /* -- 확장 재생 화면 (재생바 상단 이동 + 상세/대기 목록) ------------------------ */

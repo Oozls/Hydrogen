@@ -40,6 +40,10 @@
             <span class="icon" style="--icon: url(/static/icons/sunrise.svg)"></span>
             <span>오늘의 곡</span>
           </button>
+          <button id="btn-sidebar-match" class="sidebar-nav-btn" type="button">
+            <span class="icon" style="--icon: url(/static/icons/heart.svg)"></span>
+            <span>매치</span>
+          </button>
           <button id="btn-sidebar-stats" class="sidebar-nav-btn" type="button">
             <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
             <span>재생 통계</span>
@@ -338,6 +342,30 @@
           </button>
         </div>
       </div>
+
+      <div id="match-panel" class="panel match-panel page-panel">
+        <div class="overlay-header">
+          <span class="section-title">레이팅 매치</span>
+          <div class="spacer"></div>
+          <label class="today-weights-mode-toggle">
+            <input type="checkbox" id="match-rated-only" />
+            이미 레이팅된 곡끼리만 매치
+          </label>
+          <button id="btn-match-reroll" class="icon-btn" title="다시 뽑기">
+            <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
+          </button>
+        </div>
+        <p class="today-panel-hint">두 곡을 번갈아 들어보고 비교해서 레이팅하면 기준이 더 일관돼요.</p>
+        <p id="match-loading" class="list-loading" hidden>불러오는 중...</p>
+        <p id="match-empty" class="today-panel-hint" hidden>매치할 곡이 부족합니다(2곡 이상 필요).</p>
+        <div class="match-stage">
+          <div id="match-cards" class="match-cards">
+            <div id="match-card-left" class="match-card-slot"></div>
+            <div class="match-vs">VS</div>
+            <div id="match-card-right" class="match-card-slot"></div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <div id="transport-stack" class="transport-stack">
@@ -459,6 +487,10 @@
           <div id="lyrics-content-row" class="lyrics-content-row">
             <div id="lyrics-view-panel" class="tab-panel active">
               <div class="lyrics-view-toolbar">
+                <label class="lyrics-view-toolbar-toggle" title="줄이 바뀔 때 점프하는 대신, 다음 줄까지 계속 자연스럽게 스크롤됩니다">
+                  <input type="checkbox" id="lyrics-slide-mode-checkbox" />
+                  자동 스크롤
+                </label>
                 <button id="btn-lyrics-fetch-external" class="icon-btn" type="button" title="인터넷에서 가사 가져오기">
                   <span class="icon" style="--icon: url(/static/icons/download.svg)"></span>
                 </button>
