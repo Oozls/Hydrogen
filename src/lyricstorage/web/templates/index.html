@@ -36,10 +36,6 @@
             <span class="icon icon-sm" style="--icon: url(/static/icons/folder.svg)"></span>
             <span id="sidebar-data-size-text">계산 중...</span>
           </div>
-          <button id="btn-sidebar-today" class="sidebar-nav-btn" type="button">
-            <span class="icon" style="--icon: url(/static/icons/sunrise.svg)"></span>
-            <span>오늘의 곡</span>
-          </button>
           <button id="btn-sidebar-match" class="sidebar-nav-btn" type="button">
             <span class="icon" style="--icon: url(/static/icons/heart.svg)"></span>
             <span>매치</span>
@@ -308,41 +304,6 @@
         </div>
       </div>
 
-      <div id="today-panel" class="panel today-panel page-panel">
-        <div class="overlay-header">
-          <span class="section-title">오늘의 곡</span>
-          <div class="spacer"></div>
-          <select id="today-limit-select" title="표시할 곡 수">
-            <option value="4">4곡</option>
-            <option value="6">6곡</option>
-            <option value="8">8곡</option>
-            <option value="10">10곡</option>
-            <option value="12">12곡</option>
-            <option value="16">16곡</option>
-            <option value="20">20곡</option>
-            <option value="30">30곡</option>
-          </select>
-          <button id="btn-today-weights-toggle" class="icon-btn" title="가중치 조절">
-            <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
-          </button>
-          <button id="btn-today-reroll" class="icon-btn" title="다시 뽑기">
-            <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
-          </button>
-        </div>
-        <p class="today-panel-hint">재생 기록이 적거나 없는 곡 중에서, 취향에 맞게 골라봤어요.</p>
-
-        <ul id="today-songs-list" class="playlist-list"></ul>
-        <div id="today-songs-pagination" class="pagination-row" hidden>
-          <button id="today-songs-prev-page" class="icon-btn" type="button" title="이전 페이지">
-            <span class="icon" style="--icon: url(/static/icons/chevron-left.svg)"></span>
-          </button>
-          <span id="today-songs-page-label" class="pagination-label"></span>
-          <button id="today-songs-next-page" class="icon-btn" type="button" title="다음 페이지">
-            <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
-          </button>
-        </div>
-      </div>
-
       <div id="match-panel" class="panel match-panel page-panel">
         <div class="overlay-header">
           <span class="section-title">레이팅 매치</span>
@@ -432,9 +393,6 @@
           <button id="btn-axis-rating" class="icon-btn" title="여러 측면으로 평가해서 점수 매기기" type="button">
             <span class="icon" style="--icon: url(/static/icons/bar-chart-2.svg)"></span>
           </button>
-          <button id="btn-lyrics-toggle" class="icon-btn toggle-btn" title="가사 표시">
-            <span class="icon" style="--icon: url(/static/icons/mic.svg)"></span>
-          </button>
           <button id="btn-expand-player" class="icon-btn" title="전체 화면으로 보기">
             <span class="icon" style="--icon: url(/static/icons/chevron-up.svg)"></span>
           </button>
@@ -473,12 +431,24 @@
           </div>
         </div>
         <div id="expanded-player-queue" class="expanded-player-queue">
-          <span class="section-title">재생 대기 목록</span>
+          <div class="expanded-player-side-header">
+            <span class="section-title">재생 대기 목록</span>
+            <div class="spacer"></div>
+            <button id="btn-lyrics-toggle" class="icon-btn" title="가사 표시">
+              <span class="icon" style="--icon: url(/static/icons/mic.svg)"></span>
+            </button>
+          </div>
           <div id="expanded-player-queue-list" class="expanded-player-queue-list scroll-autohide"></div>
         </div>
 
         <section id="lyrics-panel" class="lyrics-panel" style="display: none">
-          <span class="section-title">가사</span>
+          <div class="expanded-player-side-header">
+            <span class="section-title">가사</span>
+            <div class="spacer"></div>
+            <button id="btn-queue-toggle" class="icon-btn" title="재생 대기 목록 보기">
+              <span class="icon" style="--icon: url(/static/icons/list.svg)"></span>
+            </button>
+          </div>
           <div class="tabs">
             <button id="tab-lyrics-view-btn" class="tab-btn active" type="button">가사 보기</button>
             <button id="tab-lyrics-edit-btn" class="tab-btn" type="button">가사 편집</button>
@@ -494,7 +464,15 @@
                 <button id="btn-lyrics-fetch-external" class="icon-btn" type="button" title="인터넷에서 가사 가져오기">
                   <span class="icon" style="--icon: url(/static/icons/download.svg)"></span>
                 </button>
-                <button id="btn-lyrics-translate" class="icon-btn" type="button" title="AI로 발음·번역 추가 (Gemini)">
+                <button
+                  id="btn-lyrics-translate-model"
+                  class="lyrics-translate-model-btn"
+                  type="button"
+                  title="번역 모델 선택"
+                >
+                  <span id="lyrics-translate-model-label"></span>
+                </button>
+                <button id="btn-lyrics-translate" class="icon-btn" type="button" title="AI로 발음·번역 추가 (OpenRouter)">
                   <span class="icon" style="--icon: url(/static/icons/globe.svg)"></span>
                 </button>
               </div>
@@ -615,6 +593,27 @@
     <ul id="lyrics-candidates-list" class="playlist-list lyrics-candidates-list"></ul>
   </dialog>
 
+  <dialog id="lyrics-model-dialog" class="library-picker-dialog lyrics-model-dialog">
+    <div class="library-picker-header">
+      <h3>번역 모델 선택</h3>
+      <div class="spacer"></div>
+      <button id="lyrics-model-refresh" class="icon-btn" type="button" title="목록 새로고침">
+        <span class="icon" style="--icon: url(/static/icons/refresh-cw.svg)"></span>
+      </button>
+      <button id="lyrics-model-close" class="icon-btn" type="button" title="닫기">
+        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
+      </button>
+    </div>
+    <input
+      id="lyrics-model-search"
+      class="lyrics-model-search"
+      type="text"
+      placeholder="이름 또는 ID로 검색 (예: gemini, gpt, deepseek)"
+    />
+    <p id="lyrics-model-status" class="lyrics-model-status" hidden></p>
+    <ul id="lyrics-model-list" class="playlist-list lyrics-model-list"></ul>
+  </dialog>
+
   <dialog id="lyrics-format-help-dialog" class="library-picker-dialog lyrics-format-help-dialog">
     <div class="library-picker-header">
       <h3>가사 텍스트(.lrc) 형식</h3>
@@ -654,29 +653,6 @@
         <li><span class="lyrics-format-help-swatch" style="background:#f8f9fa"></span><code>&amp;w</code> 하양</li>
       </ul>
       <p>예: <code>&amp;g초록 글자&amp;/</code></p>
-    </div>
-  </dialog>
-
-  <dialog id="today-weights-dialog" class="library-picker-dialog today-weights-dialog">
-    <div class="library-picker-header">
-      <h3>오늘의 곡 가중치</h3>
-      <div class="spacer"></div>
-      <button id="today-weights-close" class="icon-btn" type="button" title="닫기">
-        <span class="icon" style="--icon: url(/static/icons/x.svg)"></span>
-      </button>
-    </div>
-    <div class="today-weights-mode-row">
-      <label class="today-weights-mode-toggle">
-        <input type="checkbox" id="today-weights-auto-toggle" checked />
-        자동 학습
-      </label>
-    </div>
-    <!-- 슬라이더 행은 백엔드가 내려주는 요소 목록(FEATURE_KEYS)에 맞춰 todaysongs.js가
-         매번 새로 그린다 — 요소가 추가/제거돼도 이 마크업을 손댈 필요가 없다. -->
-    <div id="today-weights-sliders" class="today-weights-sliders"></div>
-    <div class="today-weights-graph">
-      <svg id="today-weights-svg" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
-      <div id="today-weights-legend" class="today-weights-legend"></div>
     </div>
   </dialog>
 

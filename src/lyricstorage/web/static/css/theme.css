@@ -205,7 +205,6 @@ textarea {
 .browse-panel,
 .lyrics-panel,
 .stats-panel,
-.today-panel,
 .match-panel,
 .home-panel {
   flex: 1;
@@ -489,8 +488,7 @@ textarea {
   color: var(--text-primary);
 }
 
-select#playlist-sort,
-select#today-limit-select {
+select#playlist-sort {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -831,6 +829,27 @@ select#today-limit-select {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+}
+.lyrics-translate-model-btn {
+  max-width: 150px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.lyrics-translate-model-btn span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+.lyrics-translate-model-btn:hover {
+  border-color: var(--accent);
+}
 }
 .lyrics-view-list {
   list-style: none;
@@ -1445,6 +1464,87 @@ input[type="range"]:hover::-moz-range-thumb {
   font-size: 12px;
   margin-top: 4px;
   white-space: pre-line;
+}
+.lyrics-model-dialog {
+  width: 520px;
+  max-height: 78vh;
+  max-height: 78dvh;
+}
+.lyrics-model-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.lyrics-model-search {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  padding: 7px 10px;
+  margin: 2px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+.lyrics-model-status {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px 0;
+  margin: 0;
+}
+.lyrics-model-list {
+  flex: 0 1 auto;
+  max-height: 60vh;
+  max-height: 60dvh;
+}
+.lyrics-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 1px 2px;
+  cursor: pointer;
+}
+@media (hover: hover) {
+.lyrics-model-row:hover {
+  background: #1f2330;
+}
+}
+.lyrics-model-row.selected {
+  background: rgba(124, 156, 255, 0.14);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.lyrics-model-row-main {
+  min-width: 0;
+}
+.lyrics-model-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lyrics-model-row-id {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lyrics-model-row-meta {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.lyrics-model-row-meta strong {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 .lyrics-backups-preview-body {
   max-height: 50vh;
@@ -2112,23 +2212,6 @@ textarea.file-content-body:disabled {
   color: var(--text-secondary);
   font-size: 13px;
 }
-
-/* -- 오늘의 곡 가중치 조절/그래프 다이얼로그 --------------------------- */
-.today-weights-dialog {
-  width: 420px;
-}
-/* dialog는 닫혀있을 때 UA 기본값(display:none)이어야 하므로, flex 레이아웃은
-   showModal로 [open]이 붙었을 때만 적용한다(lyrics-backups-dialog와 동일 이유). */
-.today-weights-dialog[open] {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.today-weights-mode-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .today-weights-mode-toggle {
   display: flex;
   align-items: center;
@@ -2137,67 +2220,6 @@ textarea.file-content-body:disabled {
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
-}
-.today-weights-sliders {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.today-weight-row {
-  display: grid;
-  grid-template-columns: 80px 1fr 40px;
-  align-items: center;
-  gap: 8px;
-}
-.today-weight-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.today-weight-slider {
-  width: 100%;
-}
-.today-weight-slider:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.today-weight-value {
-  font-size: 12px;
-  text-align: right;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.today-weights-graph {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-#today-weights-svg {
-  width: 100%;
-  height: 100px;
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.today-weights-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.today-weights-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.today-weights-legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
 }
 .stats-controls-row {
   display: flex;
@@ -3070,13 +3092,22 @@ textarea.file-content-body:disabled {
 #expanded-player-rating-slot .track-rating {
   margin-right: 0;
 }
-/* 제목은 스크롤되는 목록 밖에 있는 별도의(스크롤 안 되는) flex 자식이라,
+/* 제목 행은 스크롤되는 목록 밖에 있는 별도의(스크롤 안 되는) flex 자식이라,
    목록 행이 위로 스크롤돼도 항상 그 위에 그대로 남는다 — sticky로 흉내낼
-   필요 없이 애초에 스크롤 영역 자체를 목록에만 준다. */
-#expanded-player-queue .section-title {
-  display: block;
+   필요 없이 애초에 스크롤 영역 자체를 목록에만 준다. 가사 토글 버튼을 이
+   제목 행에 같이 넣어서(재생바 쪽 아이콘 줄이 아니라), 별도 줄을 더 차지하지
+   않고도 실제로 그 내용이 보이는 자리 바로 옆에 두었다 — 대기 목록/가사 둘 다
+   같은 자리를 나눠 쓰므로(#expanded-player-queue, #lyrics-panel 공용 규칙
+   참고) 이 제목 행 스타일도 공유한다. */
+.expanded-player-side-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 8px 10px;
   border-bottom: 1px solid var(--border);
+}
+.expanded-player-side-header .section-title {
+  margin: 0;
 }
 /* 가사 패널과 같은 자리를 나눠 쓰므로, 배경·둥근 모서리·크기·위치를 완전히
    맞춘다(#lyrics-panel 쪽 flex 비율도 동일하게 맞춰뒀다). */

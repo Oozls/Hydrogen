@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import applog, recommend, storage
+from lyricstorage import applog, storage, translation
 
 bp = Blueprint("settings", __name__, url_prefix="/api/settings")
 
@@ -16,8 +16,8 @@ def get_settings():
         {
             "last_playlist": settings.get("last_playlist"),
             "volume": settings.get("volume", 80),
-            "today_limit": settings.get("today_limit", recommend.DEFAULT_LIMIT),
             "lyrics_slide_mode": bool(settings.get("lyrics_slide_mode", False)),
+            "translation_model": settings.get("translation_model") or translation.DEFAULT_MODEL,
         }
     )
 
@@ -36,15 +36,13 @@ def update_settings():
             applied["volume"] = settings["volume"]
         except (TypeError, ValueError):
             pass
-    if "today_limit" in data:
-        try:
-            settings["today_limit"] = max(1, min(30, int(data["today_limit"])))
-            applied["today_limit"] = settings["today_limit"]
-        except (TypeError, ValueError):
-            pass
     if "lyrics_slide_mode" in data:
         settings["lyrics_slide_mode"] = bool(data["lyrics_slide_mode"])
         applied["lyrics_slide_mode"] = settings["lyrics_slide_mode"]
+    if "translation_model" in data:
+        model = str(data["translation_model"] or "").strip() or translation.DEFAULT_MODEL
+        settings["translation_model"] = model
+        applied["translation_model"] = model
     storage.save_settings(settings)
     applog.log_info("ACTION", f"설정 변경: {applied}")
     return jsonify(settings)

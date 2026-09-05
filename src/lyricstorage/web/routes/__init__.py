@@ -20,6 +20,7 @@ def register_routes(app: Flask) -> None:
     from lyricstorage.web.routes.recommendations import bp as recommendations_bp
     from lyricstorage.web.routes.settings import bp as settings_bp
     from lyricstorage.web.routes.stats import bp as stats_bp
+    from lyricstorage.web.routes.translation import bp as translation_bp
 
     app.register_blueprint(pages_bp)
     app.register_blueprint(settings_bp)
@@ -35,3 +36,4 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(circles_bp)
     app.register_blueprint(logs_bp)
     app.register_blueprint(files_bp)
+    app.register_blueprint(translation_bp)

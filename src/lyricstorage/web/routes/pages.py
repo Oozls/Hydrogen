@@ -6,7 +6,7 @@ import json
 
 from flask import Blueprint, render_template
 
-from lyricstorage import recommend, storage
+from lyricstorage import storage, translation
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.serialize import playlist_to_json
@@ -35,8 +35,8 @@ def index():
         "settings": {
             "last_playlist": current_playlist.name if current_playlist else None,
             "volume": settings.get("volume", 80),
-            "today_limit": settings.get("today_limit", recommend.DEFAULT_LIMIT),
             "lyrics_slide_mode": bool(settings.get("lyrics_slide_mode", False)),
+            "translation_model": settings.get("translation_model") or translation.DEFAULT_MODEL,
         },
     }
     # </script>로 오인되어 태그가 끊기지 않도록 이스케이프.

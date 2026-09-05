@@ -130,7 +130,10 @@ export const api = {
   saveLyrics: (trackId, lines) =>
     request("PUT", `/api/tracks/${trackId}/lyrics`, { json: { lines } }),
   fetchExternalLyricsCandidates: (trackId) => request("POST", `/api/tracks/${trackId}/lyrics/external`),
-  translateLyrics: (trackId) => request("POST", `/api/tracks/${trackId}/lyrics/translate`),
+  translateLyrics: (trackId, model) =>
+    request("POST", `/api/tracks/${trackId}/lyrics/translate`, { json: { model } }),
+  getTranslationModels: (forceRefresh) =>
+    request("GET", `/api/translation/models${forceRefresh ? "?refresh=1" : ""}`),
   getLyricsBackups: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics/backups`),
   getLyricsBackup: (trackId, name) =>
     request("GET", `/api/tracks/${trackId}/lyrics/backups/${encodeURIComponent(name)}`),
@@ -219,12 +222,10 @@ export const api = {
         (familiarCount ? `&familiar_count=${familiarCount}` : "") +
         (excludeIds && excludeIds.length ? `&exclude=${excludeIds.map(encodeURIComponent).join(",")}` : "")
     ),
-  getTodayWeights: () => request("GET", "/api/recommendations/weights"),
   // 사이드바에 없는, 매 요청마다 즉석 계산되는 테마별(안 들어본 곡/자주 듣는
   // 곡/아티스트/서클) 자동 플레이리스트 — 홈 화면 "빠른 선곡" 아래 카드용.
   getAutoPlaylists: () => request("GET", "/api/recommendations/auto-playlists"),
   getAutoPlaylist: (id) => request("GET", `/api/recommendations/auto-playlists/${encodeURIComponent(id)}`),
   saveAutoPlaylist: (id, name) =>
     request("POST", `/api/recommendations/auto-playlists/${encodeURIComponent(id)}/save`, { json: { name } }),
-  updateTodayWeights: (patch) => request("PUT", "/api/recommendations/weights", { json: patch }),
 };

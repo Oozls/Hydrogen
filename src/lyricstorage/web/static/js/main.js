@@ -7,7 +7,6 @@ import { setupTrackInfo } from "./trackinfo.js";
 import { setupBulkEdit } from "./bulkedit.js";
 import { setupPlayTracking } from "./playtracking.js";
 import { setupStats } from "./stats.js";
-import { setupTodaySongs } from "./todaysongs.js";
 import { setupHome } from "./home.js";
 import { setupMatch } from "./match.js";
 import { setupQueueEngine } from "./queue.js";
@@ -72,7 +71,6 @@ document.addEventListener("DOMContentLoaded", () => {
     homeApi.hide();
     browseApi.hide();
     statsApi.hide();
-    todaySongsApi.hide();
     matchApi.hide();
     playlistApi.show();
     playlistApi.showAutoPlaylist(autoId);
@@ -85,7 +83,6 @@ document.addEventListener("DOMContentLoaded", () => {
     onGoHome: () => refs.router.goHome(),
     onGoBrowse: () => refs.router.goBrowse(),
     onGoStats: () => refs.router.goStats(),
-    onGoToday: () => refs.router.goToday(),
     onGoMatch: () => refs.router.goMatch(),
   });
   const playlistApi = setupPlaylist(
@@ -138,22 +135,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const statsApi = setupStats(player, openAlbumFromTrack, identityDialogApi, openArtistFromTrack, refs);
   const homeApi = setupHome(player, openAlbumFromTrack, openArtistFromTrack, openAutoPlaylist);
   const matchApi = setupMatch(player, axisRatingApi, openAlbumFromTrack, openArtistFromTrack);
-  const todaySongsApi = setupTodaySongs(
-    bootstrap,
-    player,
-    playlistApi,
-    (track) => trackInfoApi.open(track),
-    (ids) => bulkEditApi.open(ids),
-    openAlbumFromTrack,
-    openArtistFromTrack
-  );
   const lyricsPanelEl = document.getElementById("lyrics-panel");
   const lyricsToggleBtn = document.getElementById("btn-lyrics-toggle");
+  const queueToggleBtn = document.getElementById("btn-queue-toggle");
   const expandedQueueEl = document.getElementById("expanded-player-queue");
 
   // 가사 패널은 확장 재생 패널 안, 재생 대기 목록과 같은 자리를 나눠 쓴다 —
   // 평소엔 대기 목록이 보이고, 토글 버튼을 누르면 가사로 바뀐다(세션 중에만
-  // 유지, 새로고침하면 다시 대기 목록으로 시작).
+  // 유지, 새로고침하면 다시 대기 목록으로 시작). 버튼은 별도 줄이 아니라 그
+  // 자리에 실제로 보이는 쪽(대기 목록/가사) 제목 행에 각각 하나씩 있다.
   let lyricsVisible = false;
   function syncLyricsPanelDisplay() {
     lyricsPanelEl.style.display = lyricsVisible ? "" : "none";
@@ -162,8 +152,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   syncLyricsPanelDisplay();
   lyricsToggleBtn.addEventListener("click", () => {
-    lyricsVisible = !lyricsVisible;
-    lyricsToggleBtn.classList.toggle("active", lyricsVisible);
+    lyricsVisible = true;
+    syncLyricsPanelDisplay();
+  });
+  queueToggleBtn.addEventListener("click", () => {
+    lyricsVisible = false;
     syncLyricsPanelDisplay();
   });
 
@@ -207,7 +200,6 @@ document.addEventListener("DOMContentLoaded", () => {
       playlistApi.hide();
       browseApi.hide();
       statsApi.hide();
-      todaySongsApi.hide();
       matchApi.hide();
       homeApi.show();
       sidebarApi.setActive("__home__");
@@ -217,7 +209,6 @@ document.addEventListener("DOMContentLoaded", () => {
       homeApi.hide();
       playlistApi.hide();
       statsApi.hide();
-      todaySongsApi.hide();
       matchApi.hide();
       const focus = refs.pendingAlbumFocus;
       refs.pendingAlbumFocus = null;
@@ -229,7 +220,6 @@ document.addEventListener("DOMContentLoaded", () => {
       homeApi.hide();
       browseApi.hide();
       statsApi.hide();
-      todaySongsApi.hide();
       matchApi.hide();
       playlistApi.show();
       playlistApi.loadPlaylist(name);
@@ -240,20 +230,9 @@ document.addEventListener("DOMContentLoaded", () => {
       homeApi.hide();
       playlistApi.hide();
       browseApi.hide();
-      todaySongsApi.hide();
       matchApi.hide();
       statsApi.show(route);
       sidebarApi.setActive("__stats__");
-      sidebarApi.refreshDataSize();
-    },
-    onToday: () => {
-      homeApi.hide();
-      playlistApi.hide();
-      browseApi.hide();
-      statsApi.hide();
-      matchApi.hide();
-      todaySongsApi.show();
-      sidebarApi.setActive("__today__");
       sidebarApi.refreshDataSize();
     },
     onMatch: () => {
@@ -261,7 +240,6 @@ document.addEventListener("DOMContentLoaded", () => {
       playlistApi.hide();
       browseApi.hide();
       statsApi.hide();
-      todaySongsApi.hide();
       matchApi.show();
       sidebarApi.setActive("__match__");
       sidebarApi.refreshDataSize();

@@ -82,6 +82,15 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   const fetchExternalBtn = document.getElementById("btn-lyrics-fetch-external");
   const translateBtn = document.getElementById("btn-lyrics-translate");
 
+  const modelBtn = document.getElementById("btn-lyrics-translate-model");
+  const modelLabelEl = document.getElementById("lyrics-translate-model-label");
+  const modelDialog = document.getElementById("lyrics-model-dialog");
+  const modelCloseBtn = document.getElementById("lyrics-model-close");
+  const modelRefreshBtn = document.getElementById("lyrics-model-refresh");
+  const modelSearchInput = document.getElementById("lyrics-model-search");
+  const modelStatusEl = document.getElementById("lyrics-model-status");
+  const modelListEl = document.getElementById("lyrics-model-list");
+
   const editScroll = document.getElementById("lyrics-edit-scroll");
   const editBody = document.getElementById("lyrics-edit-body");
   const addRowBtn = document.getElementById("btn-lyrics-add-row");
@@ -130,10 +139,113 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   // 기본은 줄이 바뀔 때마다 그 줄을 중앙으로 점프시키는 방식(스크롤도
   // scrollIntoView가 알아서 처리). 슬라이딩 모드를 켜면 그 대신, 지금 줄의
   // 타임스탬프부터 다음 줄(또는 마지막 줄이면 곡 길이)까지의 구간 안에서
-  // 스크롤 위치를 매 프레임 선형 보간해 계속 위로 흘러가게 한다. volume/
-  // today_limit과 같은 방식으로 /api/settings에 저장해 다음 접속에도 유지된다.
+  // 스크롤 위치를 매 프레임 선형 보간해 계속 위로 흘러가게 한다. volume과
+  // 같은 방식으로 /api/settings에 저장해 다음 접속에도 유지된다.
   let slideModeOn = !!(bootstrap.settings && bootstrap.settings.lyrics_slide_mode);
   slideModeCheckbox.checked = slideModeOn;
+
+  // 번역에 쓸 OpenRouter 모델 ID. volume과 같은 방식으로
+  // /api/settings에 저장해 다음 접속에도 유지된다. 모델 목록 자체는 OpenRouter의
+  // 공개 카탈로그(수백 개, 가격 정보 포함)에서 받아와 다이얼로그에서 검색·선택한다.
+  let selectedModel = (bootstrap.settings && bootstrap.settings.translation_model) || "google/gemini-2.5-flash";
+  let modelsCache = null; // 다이얼로그를 처음 열 때만 받아오고, 이후엔 재사용
+  applyModelLabel(selectedModel);
+
+  function applyModelLabel(modelId) {
+    modelLabelEl.textContent = modelId;
+    modelBtn.title = `번역 모델 선택 (현재: ${modelId})`;
+  }
+
+  function formatModelPrice(pricePerM) {
+    if (pricePerM == null) return "-";
+    if (pricePerM === 0) return "무료";
+    return pricePerM < 1 ? `$${pricePerM.toFixed(3)}` : `$${pricePerM.toFixed(2)}`;
+  }
+
+  function formatContextLength(n) {
+    if (!n) return "";
+    if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M 컨텍스트`;
+    if (n >= 1000) return `${Math.round(n / 1000)}K 컨텍스트`;
+    return `${n} 컨텍스트`;
+  }
+
+  function renderModelRow(model) {
+    const li = document.createElement("li");
+    li.className = "lyrics-model-row";
+    if (model.id === selectedModel) li.classList.add("selected");
+
+    const main = document.createElement("div");
+    main.className = "lyrics-model-row-main";
+    const nameEl = document.createElement("div");
+    nameEl.className = "lyrics-model-row-name";
+    nameEl.textContent = model.name;
+    const idEl = document.createElement("div");
+    idEl.className = "lyrics-model-row-id";
+    idEl.textContent = model.id;
+    main.appendChild(nameEl);
+    main.appendChild(idEl);
+
+    const meta = document.createElement("div");
+    meta.className = "lyrics-model-row-meta";
+    const priceLine = document.createElement("div");
+    priceLine.innerHTML = `입력 <strong>${formatModelPrice(model.prompt_price_per_m)}</strong> · 출력 <strong>${formatModelPrice(model.completion_price_per_m)}</strong>`;
+    const ctxLine = document.createElement("div");
+    ctxLine.textContent = formatContextLength(model.context_length);
+    meta.appendChild(priceLine);
+    meta.appendChild(ctxLine);
+
+    li.appendChild(main);
+    li.appendChild(meta);
+    li.addEventListener("click", () => {
+      selectedModel = model.id;
+      applyModelLabel(selectedModel);
+      api.updateSettings({ translation_model: selectedModel }).catch(() => {});
+      modelDialog.close();
+    });
+    return li;
+  }
+
+  function renderModelList(models) {
+    modelListEl.innerHTML = "";
+    for (const model of models) modelListEl.appendChild(renderModelRow(model));
+    modelStatusEl.hidden = models.length > 0;
+    if (!models.length) modelStatusEl.textContent = "검색 결과가 없습니다.";
+  }
+
+  function applyModelFilter() {
+    if (!modelsCache) return;
+    const q = modelSearchInput.value.trim().toLowerCase();
+    const filtered = q
+      ? modelsCache.filter((m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+      : modelsCache;
+    renderModelList(filtered);
+  }
+
+  async function loadModels(forceRefresh) {
+    modelListEl.innerHTML = "";
+    modelStatusEl.hidden = false;
+    modelStatusEl.textContent = "모델 목록을 불러오는 중...";
+    try {
+      const { models } = await api.getTranslationModels(forceRefresh);
+      modelsCache = models;
+      applyModelFilter();
+    } catch (err) {
+      modelsCache = null;
+      modelStatusEl.hidden = false;
+      modelStatusEl.textContent = err.message || "모델 목록을 불러오지 못했습니다.";
+    }
+  }
+
+  modelBtn.addEventListener("click", () => {
+    modelDialog.showModal();
+    modelSearchInput.value = "";
+    modelSearchInput.focus();
+    if (modelsCache) applyModelFilter();
+    else loadModels(false);
+  });
+  modelCloseBtn.addEventListener("click", () => modelDialog.close());
+  modelRefreshBtn.addEventListener("click", () => loadModels(true));
+  modelSearchInput.addEventListener("input", applyModelFilter);
 
   // 편집 탭이 display:none인 동안엔 scrollHeight가 0으로 읽혀 textarea 높이가
   // 찌그러진 채로 고정된다. 탭이 실제로 보이게 된 "다음" 프레임에 전부 재측정한다.
@@ -183,15 +295,42 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
     refreshLyricsPosition(player.position() + syncOffsetMs, { immediate: true });
   }
 
-  // idx번 줄을 컨테이너 중앙에 두는 데 필요한 scrollTop. 위아래로 빈 여백이
+  // idx번 줄의 "윗변"을 컨테이너 세로 중앙에 두는 데 필요한 scrollTop(줄 전체를
+  // 상자로 보고 그 중앙을 맞추는 게 아니라, 줄이 시작되는 지점 자체를 중앙에
+  // 둔다). 한 줄이 여러 문단으로 된 통짜 가사처럼 컨테이너보다 훨씬 크면,
+  // 상자 중앙 맞추기는 그 줄의 중간 어딘가로 건너뛰어버리지만 윗변 기준은
+  // 항상 그 줄이 "시작되는" 위치를 정확히 중앙에 둔다. 위아래로 빈 여백이
   // 생기지 않도록 [0, 최대 스크롤]로 clamp한다 — 네이티브 scrollIntoView가
-  // 목록 양 끝에서 알아서 하는 것과 같은 clamp를 슬라이딩 모드에서도 직접 재현.
-  function centerScrollTopFor(items, idx) {
+  // 목록 양 끝에서 알아서 하는 것과 같은 clamp를 슬라이딩 모드가 꺼져 있을 땐
+  // 그대로 재현한다(자동 스크롤 중엔 아래 ensureSlidePadding이 여백을 미리
+  // 깔아둬서, 첫/마지막 줄도 이 clamp에 걸리지 않고 실제로 중앙까지 갈 수 있다).
+  function topScrollTopFor(items, idx) {
     const el = items[idx];
     if (!el) return 0;
     const maxScroll = Math.max(0, viewList.scrollHeight - viewList.clientHeight);
-    const target = el.offsetTop - (viewList.clientHeight - el.offsetHeight) / 2;
+    const target = el.offsetTop - viewList.clientHeight / 2;
     return Math.max(0, Math.min(target, maxScroll));
+  }
+
+  // 자동 스크롤이 꺼져 있을 때는 목록처럼 위아래 끝에서 스크롤이 막혀야
+  // 하지만(여백 없음), 켜져 있을 때는 첫/마지막 줄도 세로 중앙까지 이동할 수
+  // 있어야 한다 — 그러려면 위아래에 컨테이너 높이의 절반만큼 여백이 필요하다
+  // (그래야 topScrollTopFor의 clamp가 더 이상 첫/마지막 줄을 가장자리에
+  // 묶어두지 않는다). 창 크기 조절/탭 전환으로 clientHeight가 바뀔 수 있으니
+  // 매 프레임(applySlideScroll 진입 시) 값이 달라졌을 때만 다시 계산해 적용한다.
+  let paddedForHeight = 0;
+  function ensureSlidePadding() {
+    const h = viewList.clientHeight;
+    if (!h || h === paddedForHeight) return;
+    const half = `${Math.round(h / 2)}px`;
+    viewList.style.paddingTop = half;
+    viewList.style.paddingBottom = half;
+    paddedForHeight = h;
+  }
+  function clearSlidePadding() {
+    viewList.style.paddingTop = "";
+    viewList.style.paddingBottom = "";
+    paddedForHeight = 0;
   }
 
   function applyHighlight(idx) {
@@ -217,18 +356,16 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
       fromMs = 0;
       toMs = lines[0].timestamp_ms;
       fromScroll = 0;
-      toScroll = centerScrollTopFor(items, 0);
+      toScroll = topScrollTopFor(items, 0);
     } else {
       fromMs = lines[idx].timestamp_ms;
-      // 첫 줄이 곡 시작(0ms)부터 바로 활성이면 위 idx<0 구간이 아예 없어서
-      // "이전에 스크롤된 적"이 없다 — 이때는 중앙 정렬 대신 맨 위(0)에서
-      // 시작해야 재생 시작 시 가사 맨 윗줄이 보인다는 기대와 맞는다. 그 밖의
-      // 모든 줄은 직전 구간이 항상 이 줄을 이미 중앙으로 가져다 놨으므로
-      // 그대로 이어받는다.
-      fromScroll = idx === 0 && fromMs <= 0 ? 0 : centerScrollTopFor(items, idx);
+      // 위아래 여백(ensureSlidePadding) 덕에 첫 줄(idx===0)도 다른 줄과 똑같이
+      // 중앙 정렬 대상이 될 수 있다 — 곡이 0ms부터 시작해도 첫 줄의 윗변이 세로
+      // 중앙에서 시작한다.
+      fromScroll = topScrollTopFor(items, idx);
       if (idx + 1 < lines.length) {
         toMs = lines[idx + 1].timestamp_ms;
-        toScroll = centerScrollTopFor(items, idx + 1);
+        toScroll = topScrollTopFor(items, idx + 1);
       } else {
         toMs = Math.max(player.duration(), fromMs + 1);
         toScroll = maxScroll;
@@ -238,12 +375,26 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
     return fromScroll + (toScroll - fromScroll) * progress;
   }
 
-  // 우리 코드가 마지막으로 지정한 scrollTop(반올림) — 아래 scroll 리스너가
+  // 우리 코드가 마지막으로 지정한 scrollTop(정수) — 아래 scroll 리스너가
   // "이건 우리가 방금 쓴 값이라 사용자 스크롤이 아니다"를 판단하는 기준.
   let lastAutoScrollTop = null;
+  // scrollTop은 브라우저가 정수 픽셀로 반올림/절삭해버려서, 프레임당 이동량이
+  // 1px보다 작은(느린 구간) 슬라이딩에서는 값을 그대로 대입해도 여러 프레임
+  // 동안 화면이 그대로 있다가 한 번에 1px씩 튀는 "끊기는" 움직임으로 보인다.
+  // 정수 부분만 scrollTop에 쓰고, 남는 소수점 오차는 같은 요소의 transform으로
+  // 보정해 실제 픽셀 사이의 움직임까지 매끄럽게(서브픽셀) 렌더링한다. 이때
+  // 소수점 값 자체는 DOM에서 다시 읽을 수 없으므로(scrollTop은 정수만
+  // 돌려준다) currentSlideScrollTop에 따로 기억해둔다 — 안 그러면 다음 프레임의
+  // 보간이 매번 정수로 잘린 값에서 다시 시작해, 애써 더한 소수점만큼을 매번
+  // 잃어버리고 "멈췄다 튀었다" 하는 것처럼 보인다.
+  let currentSlideScrollTop = null;
   function setSlideScrollTop(value) {
-    lastAutoScrollTop = Math.round(value);
-    viewList.scrollTop = value;
+    currentSlideScrollTop = value;
+    const base = Math.floor(value);
+    lastAutoScrollTop = base;
+    viewList.scrollTop = base;
+    const frac = value - base;
+    viewList.style.transform = frac > 0.002 ? `translateY(${(-frac).toFixed(3)}px)` : "";
   }
 
   // 슬라이딩 모드 중 사용자가 휠/터치/스크롤바로 직접 스크롤을 옮기면, 그 시도를
@@ -270,14 +421,21 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   function applySlideScroll(posMs, idx, dtMs) {
     const items = viewList.querySelectorAll(".lyrics-line");
     if (!items.length) return;
+    ensureSlidePadding();
     const target = computeSlideTarget(posMs, idx, items);
     if (dtMs == null) {
       setSlideScrollTop(target);
       return;
     }
-    const current = viewList.scrollTop;
+    // 사용자가 스크롤 일시정지 동안 직접 스크롤을 옮겨놨을 수 있으니, 우리가
+    // 마지막으로 쓴 값과 실제 DOM 값이 어긋나 있으면(드리프트) 보간 기준을 그
+    // 실제 위치로 다시 맞춘다 — 안 그러면 사용자가 옮긴 위치를 무시하고 일시정지
+    // 전 목표로 순간이동해버린다.
+    if (currentSlideScrollTop == null || Math.abs(viewList.scrollTop - Math.floor(currentSlideScrollTop)) > 1) {
+      currentSlideScrollTop = viewList.scrollTop;
+    }
     const alpha = 1 - Math.exp(-dtMs / SLIDE_SMOOTHING_TAU_MS);
-    setSlideScrollTop(current + (target - current) * alpha);
+    setSlideScrollTop(currentSlideScrollTop + (target - currentSlideScrollTop) * alpha);
   }
 
   // tick(재생 중 성긴 timeupdate)과 rAF 루프(재생 중 매 프레임) 양쪽에서 공유하는
@@ -347,6 +505,10 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   slideModeCheckbox.addEventListener("change", () => {
     slideModeOn = slideModeCheckbox.checked;
     userScrollPausedUntil = 0;
+    if (!slideModeOn) {
+      clearSlidePadding();
+      viewList.style.transform = "";
+    }
     if (slideModeOn && player.isPlaying()) startSlideLoop();
     else stopSlideLoop();
     lastHighlighted = -2;
@@ -699,7 +861,7 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
     }
     translateBtn.disabled = true;
     try {
-      const result = await api.translateLyrics(trackId);
+      const result = await api.translateLyrics(trackId, selectedModel);
       lines = result.lines;
       renderView();
       renderEdit();

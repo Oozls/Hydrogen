@@ -118,8 +118,10 @@ def translate_lyrics(track_id: str):
     ]
 
     flat_originals = [text for _, items in groups for text in items if text is not None]
+    data = request.get_json(silent=True) or {}
+    model = str(data.get("model") or "").strip() or None
     try:
-        translated = translation.translate_lines(flat_originals)
+        translated = translation.translate_lines(flat_originals, model=model)
     except translation.TranslationError as exc:
         return jsonify({"error": str(exc)}), 502
 
