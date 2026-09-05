@@ -15,6 +15,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from pydantic import BaseModel, ValidationError
@@ -33,6 +34,11 @@ _MODELS_URL = f"{_API_BASE}/models"
 # 막는 쪽을 택함).
 _BATCH_SIZE = 40
 _MAX_TOKENS = 8000
+# 배치를 순서대로 하나씩 보내면 총 대기 시간이 배치 수만큼 곱해져, 긴 가사는
+# 앞단(브라우저/네트워크 경로의 어떤 게이트웨이든)의 타임아웃에 걸리기 쉽다.
+# I/O 대기가 대부분이라 스레드로 동시에 보내 총 시간을 "가장 느린 배치 하나"
+# 수준으로 줄인다. 동시 요청 수는 OpenRouter 쪽 레이트리밋을 배려해 제한한다.
+_MAX_PARALLEL_BATCHES = 4
 
 # 모델 목록(수백 개)은 자주 안 바뀌므로, 매번 새로 받는 대신 한 시간 동안
 # 캐시해둔다. 모듈 전역 하나뿐인 단일 프로세스 dev/gunicorn 앱 구조라
@@ -220,14 +226,20 @@ def _translate_batch(originals: list[str], model: str, api_key: str) -> list[Lin
 def translate_lines(originals: list[str], model: str | None = None) -> list[LineTranslation]:
     """originals와 정확히 같은 길이·순서의 리스트를 반환. 실패하면 TranslationError.
 
-    _BATCH_SIZE보다 길면 여러 번에 나눠 요청한다(모듈 docstring의 배치 설명 참고)."""
+    _BATCH_SIZE보다 길면 여러 번에 나눠 요청하되, 순서대로 기다리지 않고
+    동시에 보내 총 소요 시간을 줄인다(위 _MAX_PARALLEL_BATCHES 설명 참고)."""
     if not originals:
         return []
 
     api_key = _api_key()
     model = model or DEFAULT_MODEL
+    chunks = [originals[start : start + _BATCH_SIZE] for start in range(0, len(originals), _BATCH_SIZE)]
+    if len(chunks) == 1:
+        return _translate_batch(chunks[0], model, api_key)
+
+    with ThreadPoolExecutor(max_workers=min(len(chunks), _MAX_PARALLEL_BATCHES)) as executor:
+        batches = list(executor.map(lambda chunk: _translate_batch(chunk, model, api_key), chunks))
     results: list[LineTranslation] = []
-    for start in range(0, len(originals), _BATCH_SIZE):
-        chunk = originals[start : start + _BATCH_SIZE]
-        results.extend(_translate_batch(chunk, model, api_key))
+    for batch in batches:
+        results.extend(batch)
     return results
