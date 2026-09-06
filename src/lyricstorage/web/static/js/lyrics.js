@@ -91,6 +91,11 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   const modelStatusEl = document.getElementById("lyrics-model-status");
   const modelListEl = document.getElementById("lyrics-model-list");
 
+  const translateProgressDialog = document.getElementById("lyrics-translate-progress-dialog");
+  const translateProgressElapsedEl = document.getElementById("lyrics-translate-progress-elapsed");
+  // 번역 도중엔 Esc로 닫아도 서버 요청은 계속 진행 중이라 상태가 어긋나므로 막는다.
+  translateProgressDialog.addEventListener("cancel", (e) => e.preventDefault());
+
   const editScroll = document.getElementById("lyrics-edit-scroll");
   const editBody = document.getElementById("lyrics-edit-body");
   const addRowBtn = document.getElementById("btn-lyrics-add-row");
@@ -860,6 +865,12 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
       return;
     }
     translateBtn.disabled = true;
+    const startedAt = Date.now();
+    translateProgressElapsedEl.textContent = "0초 경과";
+    translateProgressDialog.showModal();
+    const elapsedTimer = setInterval(() => {
+      translateProgressElapsedEl.textContent = `${Math.floor((Date.now() - startedAt) / 1000)}초 경과`;
+    }, 1000);
     try {
       const result = await api.translateLyrics(trackId, selectedModel);
       lines = result.lines;
@@ -869,6 +880,8 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
     } catch (err) {
       await alertDialog(err.message || "번역에 실패했습니다.");
     } finally {
+      clearInterval(elapsedTimer);
+      translateProgressDialog.close();
       translateBtn.disabled = false;
     }
   });

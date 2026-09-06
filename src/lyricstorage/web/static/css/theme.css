@@ -1465,6 +1465,20 @@ input[type="range"]:hover::-moz-range-thumb {
   margin-top: 4px;
   white-space: pre-line;
 }
+.lyrics-translate-progress-dialog {
+  width: 320px;
+  text-align: center;
+}
+.lyrics-translate-progress-hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+.lyrics-translate-progress-elapsed {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
 .lyrics-model-dialog {
   width: 520px;
   max-height: 78vh;
