@@ -885,13 +885,13 @@ select#playlist-sort {
   white-space: nowrap;
 }
 .lyrics-translate-model-btn {
-  max-width: 150px;
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
+  max-width: 120px;
+  font-size: 11px;
+  padding: 4px 6px;
+  border: none;
   border-radius: 6px;
-  background: var(--bg-base);
-  color: var(--text-primary);
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 .lyrics-translate-model-btn span {
@@ -902,7 +902,8 @@ select#playlist-sort {
 }
 @media (hover: hover) {
 .lyrics-translate-model-btn:hover {
-  border-color: var(--accent);
+  background: var(--bg-base);
+  color: var(--text-primary);
 }
 }
 .lyrics-view-list {
