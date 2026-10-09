@@ -33,6 +33,15 @@ def create_app() -> Flask:
     # 고정. 배포 후 내용이 바뀌면 파일 mtime이 바뀌어 캐시가 자동으로 무효화된다.
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800
 
+    # 위 7일 캐시는 mtime으로 무효화되지 않는다(max-age 동안은 서버에 묻지도 않음) —
+    # 그래서 배포 후에도 옛 JS/CSS가 남아 새 HTML과 어긋났다. 코드(JS/CSS)만은
+    # 매번 ETag로 재검증(변경 없으면 304)하게 한다.
+    @app.after_request
+    def _revalidate_code_assets(response):
+        if request.path.startswith("/static/") and request.path.endswith((".js", ".css")):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     @app.before_request
     def _log_request_start():
         g._log_start = time.monotonic()

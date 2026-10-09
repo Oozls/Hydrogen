@@ -813,32 +813,39 @@ select#playlist-sort {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 3px;
+  padding: 2px 4px;
 }
 .lyrics-toolbar-body {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+}
+/* 접으면 틀(배경/테두리) 없이 화살표 버튼 하나만 남긴다. */
+.lyrics-view-toolbar.collapsed {
+  background: transparent;
+  border-color: transparent;
 }
 .lyrics-view-toolbar.collapsed .lyrics-toolbar-body,
 .lyrics-view-toolbar.collapsed .lyrics-display-popover {
   display: none;
 }
+#btn-lyrics-toolbar-toggle {
+  width: 24px;
+  height: 24px;
+}
 #btn-lyrics-toolbar-toggle .icon {
   transition: transform 0.15s;
 }
-.lyrics-view-toolbar:not(.collapsed) #btn-lyrics-toolbar-toggle .icon {
+.lyrics-view-toolbar.collapsed #btn-lyrics-toolbar-toggle .icon {
   transform: rotate(180deg);
 }
 .lyrics-display-btn {
   font-size: 12px;
   font-weight: 600;
-  width: auto;
-  padding: 0 8px;
 }
 .lyrics-display-popover {
   position: absolute;
@@ -2911,6 +2918,7 @@ textarea.file-content-body:disabled {
   display: flex;
   gap: 32px;
   min-height: 0;
+  min-width: 0;
   padding: 40px;
 }
 .expanded-player-detail {
@@ -3182,6 +3190,9 @@ textarea.file-content-body:disabled {
 #lyrics-panel {
   background: var(--bg-panel);
   border-radius: 10px;
+  /* 긴 곡/아티스트명이 패널 폭을 밀어내 오른쪽으로 삐져나가지 않게 한다. */
+  min-width: 0;
+  overflow: hidden;
 }
 .expanded-player-queue {
   flex: 1 1 54%;
@@ -3238,7 +3249,9 @@ textarea.file-content-body:disabled {
   object-fit: cover;
 }
 .expanded-queue-row-text {
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 .expanded-queue-row-title {
   display: block;
