@@ -67,7 +67,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   // 잠금화면/알림에는 ?size= 없는 원본 이미지를 그대로 넘긴다(절대 URL). 앨범 id가
   // 없으면 곡 내장 표지로 대체한다.
   function artworkUrl(track) {
-    const path = track.album_id ? api.albumArtUrl(track.album_id) : `/api/tracks/${track.track_id}/art`;
+    const path = track.album_id ? `${api.albumArtUrl(track.album_id)}/original` : `/api/tracks/${track.track_id}/art`;
     return new URL(path, window.location.href).href;
   }
 

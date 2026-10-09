@@ -131,8 +131,15 @@ def use_track_art_for_album(album_id: str):
     return jsonify({"error": "표지가 있는 곡을 찾을 수 없습니다."}), 404
 
 
+@bp.get("/<album_id>/art/original")
+def get_album_art_original(album_id: str):
+    # 잠금화면/알림용. /art?size=N(재생바용 축소본)과 경로 자체를 분리해, OS나
+    # 브라우저가 쿼리를 무시하고 캐시를 섞어 저화질 이미지를 쓰는 일을 막는다.
+    return get_album_art(album_id, force_original=True)
+
+
 @bp.get("/<album_id>/art")
-def get_album_art(album_id: str):
+def get_album_art(album_id: str, force_original: bool = False):
     album = albums_repo.find_album_by_id(album_id)
     if album is None or not album.art_ext:
         abort(404)
@@ -142,7 +149,7 @@ def get_album_art(album_id: str):
     # 재생바/목록처럼 작게 표시되는 자리는 ?size=로 축소본을 요청한다(원본을
     # 그대로 내려주면 모바일에서 트랙 전환마다 그 큰 파일이 오디오 스트림과
     # 대역폭을 다퉈 표지 로딩이 특히 느려진다).
-    size = request.args.get("size", type=int)
+    size = None if force_original else request.args.get("size", type=int)
     if not size:
         mimetype = "image/png" if album.art_ext == "png" else "image/jpeg"
         # conditional=True -> 파일이 안 바뀌었으면 304로 응답해 매번 다시 안 받게 한다.
