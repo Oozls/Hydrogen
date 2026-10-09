@@ -549,12 +549,12 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   const toolbarToggleBtn = document.getElementById("btn-lyrics-toolbar-toggle");
   const displayBtn = document.getElementById("btn-lyrics-display");
   const displayPopover = document.getElementById("lyrics-display-popover");
-  const DISPLAY_DEFAULTS = { size: 15, gap: 4, letter: 0 };
+  const DISPLAY_DEFAULTS = { size: 15, lineHeight: 1.4, letter: 0 };
   const DISPLAY_KEY = "lyricsDisplayOptions";
   const TOOLBAR_KEY = "lyricsToolbarCollapsed";
   const displayInputs = {
     size: [document.getElementById("lyrics-opt-size"), document.getElementById("lyrics-opt-size-val")],
-    gap: [document.getElementById("lyrics-opt-gap"), document.getElementById("lyrics-opt-gap-val")],
+    lineHeight: [document.getElementById("lyrics-opt-gap"), document.getElementById("lyrics-opt-gap-val")],
     letter: [document.getElementById("lyrics-opt-letter"), document.getElementById("lyrics-opt-letter-val")],
   };
   let displayOpts = { ...DISPLAY_DEFAULTS };
@@ -565,12 +565,12 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   }
   function applyDisplayOpts() {
     viewList.style.setProperty("--lyric-size", `${displayOpts.size}px`);
-    viewList.style.setProperty("--lyric-gap", `${displayOpts.gap}px`);
+    viewList.style.setProperty("--lyric-line-height", String(displayOpts.lineHeight));
     viewList.style.setProperty("--lyric-letter", `${displayOpts.letter}px`);
     for (const key of Object.keys(displayInputs)) {
       const [input, label] = displayInputs[key];
       input.value = String(displayOpts[key]);
-      label.textContent = `${displayOpts[key]}px`;
+      label.textContent = key === "lineHeight" ? `${Number(displayOpts[key]).toFixed(2)}` : `${displayOpts[key]}px`;
     }
   }
   function saveDisplayOpts() {

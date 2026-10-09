@@ -915,11 +915,12 @@ select#playlist-sort {
 }
 .lyrics-view-list {
   --lyric-size: 15px;
-  --lyric-gap: 4px;
+  --lyric-line-height: 1.4;
   --lyric-letter: 0px;
 }
 .lyrics-line {
-  padding: var(--lyric-gap);
+  padding: 4px;
+  line-height: var(--lyric-line-height);
   letter-spacing: var(--lyric-letter);
   font-size: var(--lyric-size);
   color: var(--text-muted);
