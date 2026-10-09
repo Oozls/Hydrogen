@@ -456,7 +456,11 @@
 
           <div id="lyrics-content-row" class="lyrics-content-row">
             <div id="lyrics-view-panel" class="tab-panel active">
-              <div class="lyrics-view-toolbar">
+              <div class="lyrics-view-toolbar" id="lyrics-view-toolbar">
+                <button id="btn-lyrics-toolbar-toggle" class="icon-btn" type="button" title="도구 모음 접기/펼치기">
+                  <span class="icon" style="--icon: url(/static/icons/chevron-right.svg)"></span>
+                </button>
+                <div id="lyrics-toolbar-body" class="lyrics-toolbar-body">
                 <label class="lyrics-view-toolbar-toggle" title="줄이 바뀔 때 점프하는 대신, 다음 줄까지 계속 자연스럽게 스크롤됩니다">
                   <input type="checkbox" id="lyrics-slide-mode-checkbox" />
                   자동 스크롤
@@ -475,6 +479,20 @@
                 <button id="btn-lyrics-translate" class="icon-btn" type="button" title="AI로 발음·번역 추가 (OpenRouter)">
                   <span class="icon" style="--icon: url(/static/icons/globe.svg)"></span>
                 </button>
+                  <button id="btn-lyrics-display" class="icon-btn lyrics-display-btn" type="button" title="가사 표시 옵션">Aa</button>
+                </div>
+                <div id="lyrics-display-popover" class="lyrics-display-popover" hidden>
+                  <label>글자 크기 <span id="lyrics-opt-size-val"></span>
+                    <input type="range" id="lyrics-opt-size" min="11" max="30" step="1" />
+                  </label>
+                  <label>줄 간격 <span id="lyrics-opt-gap-val"></span>
+                    <input type="range" id="lyrics-opt-gap" min="0" max="24" step="1" />
+                  </label>
+                  <label>글자 간격 <span id="lyrics-opt-letter-val"></span>
+                    <input type="range" id="lyrics-opt-letter" min="-1" max="6" step="0.5" />
+                  </label>
+                  <button id="lyrics-opt-reset" type="button">초기화</button>
+                </div>
               </div>
               <ul id="lyrics-view-list" class="lyrics-view-list"></ul>
             </div>

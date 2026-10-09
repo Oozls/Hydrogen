@@ -819,6 +819,53 @@ select#playlist-sort {
   border-radius: 8px;
   padding: 3px;
 }
+.lyrics-toolbar-body {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lyrics-view-toolbar.collapsed .lyrics-toolbar-body,
+.lyrics-view-toolbar.collapsed .lyrics-display-popover {
+  display: none;
+}
+#btn-lyrics-toolbar-toggle .icon {
+  transition: transform 0.15s;
+}
+.lyrics-view-toolbar:not(.collapsed) #btn-lyrics-toolbar-toggle .icon {
+  transform: rotate(180deg);
+}
+.lyrics-display-btn {
+  font-size: 12px;
+  font-weight: 600;
+  width: auto;
+  padding: 0 8px;
+}
+.lyrics-display-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.lyrics-display-popover[hidden] {
+  display: none;
+}
+.lyrics-display-popover label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lyrics-display-popover input[type="range"] {
+  width: 100%;
+}
 .lyrics-view-toolbar-toggle {
   display: flex;
   align-items: center;
@@ -858,9 +905,15 @@ select#playlist-sort {
   overflow-y: auto;
   flex: 1;
 }
+.lyrics-view-list {
+  --lyric-size: 15px;
+  --lyric-gap: 4px;
+  --lyric-letter: 0px;
+}
 .lyrics-line {
-  padding: 4px;
-  font-size: 15px;
+  padding: var(--lyric-gap);
+  letter-spacing: var(--lyric-letter);
+  font-size: var(--lyric-size);
   color: var(--text-muted);
   transition: color 0.15s, font-size 0.15s;
   cursor: pointer;
@@ -872,18 +925,18 @@ select#playlist-sort {
 }
 }
 .lyrics-line.active {
-  font-size: 18px;
+  font-size: calc(var(--lyric-size) + 3px);
   font-weight: 600;
   color: var(--text-primary);
 }
 .lyrics-line .lyric-secondary {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(var(--lyric-size) - 3px);
   color: inherit;
   transition: color 0.15s, font-size 0.15s;
 }
 .lyrics-line.active .lyric-secondary {
-  font-size: 14px;
+  font-size: calc(var(--lyric-size) - 1px);
 }
 .lyrics-placeholder {
   color: var(--text-muted);

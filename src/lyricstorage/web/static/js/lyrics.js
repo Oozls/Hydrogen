@@ -146,8 +146,28 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   // 타임스탬프부터 다음 줄(또는 마지막 줄이면 곡 길이)까지의 구간 안에서
   // 스크롤 위치를 매 프레임 선형 보간해 계속 위로 흘러가게 한다. volume과
   // 같은 방식으로 /api/settings에 저장해 다음 접속에도 유지된다.
-  let slideModeOn = !!(bootstrap.settings && bootstrap.settings.lyrics_slide_mode);
+  // slideModePref는 사용자가 저장해 둔 선택, slideModeOn은 실제 적용값 — 타이밍이
+  // 있는 가사(00:00.00 한 곳에 몰아 넣은 형식 제외)는 어차피 타이밍대로 줄이
+  // 넘어가므로 이 연속 스크롤을 끄고 체크박스도 잠근다.
+  let slideModePref = !!(bootstrap.settings && bootstrap.settings.lyrics_slide_mode);
+  let slideModeOn = slideModePref;
   slideModeCheckbox.checked = slideModeOn;
+  function applySlideAvailability() {
+    const timed = lines.some((l) => l.timestamp_ms > 0);
+    slideModeCheckbox.disabled = timed;
+    slideModeCheckbox.parentElement.style.opacity = timed ? "0.5" : "";
+    const effective = slideModePref && !timed;
+    if (effective === slideModeOn) return;
+    slideModeOn = effective;
+    slideModeCheckbox.checked = effective;
+    if (!effective) {
+      clearSlidePadding();
+      viewList.style.transform = "";
+      stopSlideLoop();
+    } else if (player.isPlaying()) {
+      startSlideLoop();
+    }
+  }
 
   // 번역에 쓸 OpenRouter 모델 ID. volume과 같은 방식으로
   // /api/settings에 저장해 다음 접속에도 유지된다. 모델 목록 자체는 OpenRouter의
@@ -280,6 +300,7 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   });
 
   function renderView() {
+    applySlideAvailability();
     viewList.innerHTML = "";
     if (!lines.length) {
       const li = document.createElement("li");
@@ -508,7 +529,8 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
   });
 
   slideModeCheckbox.addEventListener("change", () => {
-    slideModeOn = slideModeCheckbox.checked;
+    slideModePref = slideModeCheckbox.checked;
+    slideModeOn = slideModePref;
     userScrollPausedUntil = 0;
     if (!slideModeOn) {
       clearSlidePadding();
@@ -518,8 +540,76 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
     else stopSlideLoop();
     lastHighlighted = -2;
     refreshLyricsPosition(player.position() + syncOffsetMs, { immediate: true });
-    api.updateSettings({ lyrics_slide_mode: slideModeOn }).catch(() => {});
+    api.updateSettings({ lyrics_slide_mode: slideModePref }).catch(() => {});
   });
+
+  // 가사 표시 옵션(글자 크기/줄 간격/글자 간격)과 도구 모음 접기 상태는 기기별
+  // 취향이라 localStorage에 저장한다.
+  const toolbarEl = document.getElementById("lyrics-view-toolbar");
+  const toolbarToggleBtn = document.getElementById("btn-lyrics-toolbar-toggle");
+  const displayBtn = document.getElementById("btn-lyrics-display");
+  const displayPopover = document.getElementById("lyrics-display-popover");
+  const DISPLAY_DEFAULTS = { size: 15, gap: 4, letter: 0 };
+  const DISPLAY_KEY = "lyricsDisplayOptions";
+  const TOOLBAR_KEY = "lyricsToolbarCollapsed";
+  const displayInputs = {
+    size: [document.getElementById("lyrics-opt-size"), document.getElementById("lyrics-opt-size-val")],
+    gap: [document.getElementById("lyrics-opt-gap"), document.getElementById("lyrics-opt-gap-val")],
+    letter: [document.getElementById("lyrics-opt-letter"), document.getElementById("lyrics-opt-letter-val")],
+  };
+  let displayOpts = { ...DISPLAY_DEFAULTS };
+  try {
+    Object.assign(displayOpts, JSON.parse(localStorage.getItem(DISPLAY_KEY) || "{}"));
+  } catch (_err) {
+    // 저장값이 깨졌으면 기본값 사용
+  }
+  function applyDisplayOpts() {
+    viewList.style.setProperty("--lyric-size", `${displayOpts.size}px`);
+    viewList.style.setProperty("--lyric-gap", `${displayOpts.gap}px`);
+    viewList.style.setProperty("--lyric-letter", `${displayOpts.letter}px`);
+    for (const key of Object.keys(displayInputs)) {
+      const [input, label] = displayInputs[key];
+      input.value = String(displayOpts[key]);
+      label.textContent = `${displayOpts[key]}px`;
+    }
+  }
+  function saveDisplayOpts() {
+    applyDisplayOpts();
+    try {
+      localStorage.setItem(DISPLAY_KEY, JSON.stringify(displayOpts));
+    } catch (_err) {
+      // 저장 불가 환경(사생활 보호 모드 등)에서는 세션 동안만 유지
+    }
+    // 줄 높이가 바뀌므로 슬라이드 패딩/스크롤 위치를 다시 계산하게 한다.
+    lastHighlighted = -2;
+    refreshLyricsPosition(player.position() + syncOffsetMs, { immediate: true });
+  }
+  for (const key of Object.keys(displayInputs)) {
+    displayInputs[key][0].addEventListener("input", () => {
+      displayOpts[key] = Number(displayInputs[key][0].value);
+      saveDisplayOpts();
+    });
+  }
+  document.getElementById("lyrics-opt-reset").addEventListener("click", () => {
+    displayOpts = { ...DISPLAY_DEFAULTS };
+    saveDisplayOpts();
+  });
+  displayBtn.addEventListener("click", () => {
+    displayPopover.hidden = !displayPopover.hidden;
+  });
+  applyDisplayOpts();
+
+  function setToolbarCollapsed(collapsed) {
+    toolbarEl.classList.toggle("collapsed", collapsed);
+    toolbarToggleBtn.title = collapsed ? "도구 모음 펼치기" : "도구 모음 접기";
+    try {
+      localStorage.setItem(TOOLBAR_KEY, collapsed ? "1" : "0");
+    } catch (_err) {
+      // 무시
+    }
+  }
+  toolbarToggleBtn.addEventListener("click", () => setToolbarCollapsed(!toolbarEl.classList.contains("collapsed")));
+  setToolbarCollapsed(localStorage.getItem(TOOLBAR_KEY) === "1");
 
   function selectRow(tr) {
     if (selectedRow) selectedRow.classList.remove("selected");
@@ -966,3 +1056,4 @@ export function setupLyrics(player, bootstrap, onLyricsSaved) {
 
   return { setTrack };
 }
+

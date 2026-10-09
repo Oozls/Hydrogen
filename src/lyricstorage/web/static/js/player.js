@@ -55,7 +55,7 @@ export class PlayerEngine extends EventTarget {
     this._needsResyncOnPlay = false;
     // 새로 시작한 트랙이 실제로 소리가 나기 시작하는 시점(playing 이벤트)에
     // 0으로 한 번 더 seek해, 버퍼가 덜 찬 상태로 재생을 걸었을 때 브라우저가
-    // 초반을 건너뛰는 경우를 바로잡는다. playIndex()/_swapToPreloaded()에서
+    // 초반을 건너뛰는 경우를 바로잡는다. playIndex()에서
     // 세팅한다.
     this._resetPositionOnPlay = false;
     // 새 트랙이 시작될 때마다 true로 세팅되고, 재생이 INITIAL_RESYNC_AFTER_SEC초
@@ -110,9 +110,10 @@ export class PlayerEngine extends EventTarget {
       this._clearStallTimer();
       this._emit("playstate", { playing: false });
       this._needsResyncOnPlay = true;
-      if (!this._intentionalPause && !audio.ended && this.currentIndex >= 0) {
-        audio.play().catch(() => {});
-      }
+      // OS가 전화/Siri/이어폰 분리/잠금화면 조작 등으로 멈춘 경우에도 되살리지 않는다 —
+      // 예전엔 의도치 않은 pause를 자동 재개해, 기기는 정지로 인식하는데 소리는
+      // 계속 나는 불일치가 생겼다. 항상 실제 상태를 그대로 UI/미디어 세션에 반영한다.
+      this._intentionalPause = true;
     });
     audio.addEventListener("ended", () => {
       if (audio !== this.audio) return;
@@ -128,6 +129,7 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("playing", () => {
       if (audio !== this.audio) return;
       this._clearStallTimer();
+      this._emit("playstate", { playing: true });
       this._emit("buffering", { buffering: false });
       if (this._resetPositionOnPlay) {
         this._resetPositionOnPlay = false;
@@ -290,19 +292,48 @@ export class PlayerEngine extends EventTarget {
   // 부족한 상태로 재생을 걸어 초반이 건너뛰어지는 문제는 _resetPositionOnPlay로
   // 실제로 소리가 나기 시작하는 시점에 0으로 재보정해서 막는다.
   _playWhenReady(audio) {
-    audio.play().catch(() => {});
+    this._tryPlay(audio);
+  }
+
+  // play()가 거부되면(특히 iOS 백그라운드에서 자동 전환 시) 이벤트가 안 와서 UI가
+  // "재생 중"으로 남으므로, 실제 상태(정지)를 명시적으로 알린다.
+  _tryPlay(audio) {
+    const p = audio.play();
+    if (p && p.catch) {
+      p.catch(() => {
+        if (audio !== this.audio) return;
+        this._intentionalPause = true;
+        this._emit("playstate", { playing: !audio.paused });
+      });
+    }
+  }
+
+  play() {
+    if (this.currentIndex < 0) {
+      if (this.playlist && this.playlist.tracks.length) this.playIndex(0);
+      return;
+    }
+    if (this.audio.ended) {
+      this.playIndex(this.currentIndex);
+      return;
+    }
+    this._intentionalPause = false;
+    this._tryPlay(this.audio);
+  }
+
+  pause() {
+    this._intentionalPause = true;
+    this.audio.pause();
+  }
+
+  // UI/미디어 세션이 실제 오디오 엘리먼트 상태와 어긋났을 때 다시 맞추기 위해 호출.
+  syncPlayState() {
+    this._emit("playstate", { playing: this.isPlaying() });
   }
 
   togglePlayPause() {
-    if (!this.audio.paused && !this.audio.ended) {
-      this._intentionalPause = true;
-      this.audio.pause();
-    } else if (this.currentIndex >= 0) {
-      this._intentionalPause = false;
-      this.audio.play().catch(() => {});
-    } else if (this.playlist && this.playlist.tracks.length) {
-      this.playIndex(0);
-    }
+    if (this.isPlaying()) this.pause();
+    else this.play();
   }
 
   stop() {
@@ -364,11 +395,10 @@ export class PlayerEngine extends EventTarget {
       this.stop();
       return;
     }
-    if (this._preloadIndex === index && this._preloadAudio) {
-      this._swapToPreloaded(index);
-    } else {
-      this.playIndex(index);
-    }
+    // 예전엔 미리 불러온 별도 <audio>로 갈아탔지만, iOS는 사용자 제스처로 한 번도
+    // 활성화되지 않은 엘리먼트의 백그라운드 play()를 막아 "재생 중으로 보이는데
+    // 소리가 안 나는" 증상을 냈다. 이미 활성화된 같은 엘리먼트의 src만 바꾼다.
+    this.playIndex(index);
   }
 
   _computeNextIndex() {
@@ -463,46 +493,5 @@ export class PlayerEngine extends EventTarget {
       this._preloadAudio.load();
     }
     this._preloadIndex = -1;
-  }
-
-  // 미리 불러와 둔 다음 곡으로 즉시(콜드 스타트 없이) 전환한다. 기존 재생
-  // 엘리먼트는 비워서 다음 프리로드 슬롯으로 재사용한다.
-  _swapToPreloaded(index) {
-    const promoted = this._preloadAudio;
-    const demoted = this.audio;
-
-    this._preloadAudio = demoted;
-    this._preloadIndex = -1;
-    demoted.pause();
-    demoted.removeAttribute("src");
-    demoted.load();
-
-    promoted.volume = demoted.volume;
-    promoted.style.display = "";
-    demoted.style.display = "none";
-
-    this.audio = promoted;
-    this.currentIndex = index;
-    if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
-    const track = this.playlist.tracks[index];
-
-    this._intentionalPause = false;
-    this._resetPositionOnPlay = true;
-    this._needsInitialResync = true;
-    this._trackStartWallMs = performance.now();
-    this._playWhenReady(promoted);
-    this._emit("trackchange", { track, index });
-    // promoted는 프리로드 단계에서 이미 durationchange가 한 번 발생했지만 그때는
-    // this.audio가 아니어서 무시됐다. 지금 this.audio로 승격됐다는 사실만으로는
-    // 네이티브 durationchange가 다시 발생하지 않으므로, 재생바 길이 표시가
-    // 새 트랙 값으로 갱신되도록 수동으로 다시 emit한다.
-    this._emit("durationchange", { durationMs: this.duration() });
-    // 같은 이유로 progress도 다시 발생하지 않는다 — promoted는 이미 프리로드
-    // 단계에서 대부분(또는 전부) 받아둔 상태라 승격 후에는 새로 받을 데이터가
-    // 거의 없어서 네이티브 progress가 아예 안 오는 경우가 흔하다(그래서 특히
-    // 자동으로 다음 곡으로 넘어갈 때 재생바에 미리 받은 구간이 안 보였다).
-    // durationchange 핸들러(UI 쪽)가 방금 버퍼 표시를 0%로 리셋했으므로, 그 뒤에
-    // 지금 실제 버퍼 상태를 다시 emit해 덮어쓴다.
-    this._emit("buffered", { bufferedMs: this.bufferedMs() });
   }
 }

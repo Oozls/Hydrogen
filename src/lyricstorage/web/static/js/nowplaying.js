@@ -55,13 +55,20 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   // 재생/일시정지/이전/다음/탐색 조작을 플레이어에 반영한다.
   const hasMediaSession = "mediaSession" in navigator;
   if (hasMediaSession) {
-    navigator.mediaSession.setActionHandler("play", () => player.togglePlayPause());
-    navigator.mediaSession.setActionHandler("pause", () => player.togglePlayPause());
+    navigator.mediaSession.setActionHandler("play", () => player.play());
+    navigator.mediaSession.setActionHandler("pause", () => player.pause());
     navigator.mediaSession.setActionHandler("previoustrack", () => player.previousTrack());
     navigator.mediaSession.setActionHandler("nexttrack", () => player.nextTrack());
     navigator.mediaSession.setActionHandler("seekto", (details) => {
       if (details.seekTime != null) player.seek(details.seekTime * 1000);
     });
+  }
+
+  // 잠금화면/알림에는 ?size= 없는 원본 이미지를 그대로 넘긴다(절대 URL). 앨범 id가
+  // 없으면 곡 내장 표지로 대체한다.
+  function artworkUrl(track) {
+    const path = track.album_id ? api.albumArtUrl(track.album_id) : `/api/tracks/${track.track_id}/art`;
+    return new URL(path, window.location.href).href;
   }
 
   function updateMediaSessionMetadata(track) {
@@ -75,7 +82,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
       title: track.title || "제목 없음",
       artist: track.artist || "아티스트 미상",
       album: track.album || "",
-      artwork: [{ src: api.albumArtUrl(track.album_id) }],
+      artwork: [{ src: artworkUrl(track), sizes: "1024x1024" }],
     });
   }
 
@@ -226,6 +233,8 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   }
 
   player.addEventListener("tick", (e) => {
+    // 기기/앱 재생 상태 불일치 방지: 주기적으로 실제 오디오 상태를 미디어 세션에 재반영.
+    if (hasMediaSession) navigator.mediaSession.playbackState = player.isPlaying() ? "playing" : "paused";
     updateMediaSessionPosition(e.detail.positionMs, player.duration());
   });
 
@@ -244,6 +253,11 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     if (hasMediaSession) navigator.mediaSession.playbackState = e.detail.playing ? "playing" : "paused";
     if (e.detail.playing) startProgressLoop();
     else stopProgressLoop();
+  });
+
+  // 백그라운드에서 돌아왔을 때 UI를 실제 오디오 상태에 다시 맞춘다.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && player.currentTrack) player.syncPlayState();
   });
 
   // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.
