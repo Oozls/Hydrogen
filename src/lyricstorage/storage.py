@@ -392,8 +392,15 @@ def rebuild_status_path() -> Path:
     return app_data_dir() / "rebuild_status.json"
 
 
-def path_hash(path: str) -> str:
+def legacy_path_hash(path: str) -> str:
+    """예전 방식: 절대경로를 그대로 해시. 서버를 옮겨 프로젝트 폴더 경로가 바뀌면 모든
+    track_id가 달라져 재생 기록과 끊긴다(scripts/remap_track_ids.py가 이전용)."""
     return hashlib.sha1(str(path).encode("utf-8")).hexdigest()[:16]
+
+
+def path_hash(path: str) -> str:
+    # 프로젝트 루트 기준 상대경로로 해시해서, 서버/폴더 위치가 바뀌어도 ID가 같다.
+    return legacy_path_hash(to_relative_path(path))
 
 
 def to_relative_path(path: str | Path) -> str:
