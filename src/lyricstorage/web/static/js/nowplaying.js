@@ -268,10 +268,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     updateProgressUI();
   });
 
-  // 다음 곡 엘리먼트를 제스처 안에서 잠금 해제해 둔다(player.unlockAudio 참고).
-  for (const evt of ["click", "touchend"]) {
-    document.addEventListener(evt, () => player.unlockAudio(), { capture: true, passive: true });
-  }
+
 
   // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.
   player.addEventListener("buffering", (e) => {

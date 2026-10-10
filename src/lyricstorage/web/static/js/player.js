@@ -357,6 +357,10 @@ export class PlayerEngine extends EventTarget {
   pause() {
     this._intentionalPause = true;
     this.audio.pause();
+    // 사용자가 일시정지를 누른 제스처 안에서, 재생 중인 곡과 겹치지 않을 때만 다음 곡용
+    // 엘리먼트를 잠금 해제한다(곡 재생과 동시에 하면 iOS가 오디오 세션을 놓쳐 "재생
+    // 중으로 보이는데 소리가 안 나는" 증상이 났다).
+    this.unlockAudio();
   }
 
   // UI/미디어 세션이 실제 오디오 엘리먼트 상태와 어긋났을 때 다시 맞추기 위해 호출.
@@ -508,9 +512,10 @@ export class PlayerEngine extends EventTarget {
     return dur;
   }
 
-  // 첫 사용자 제스처(클릭/터치)에서 호출 — 프리로드용 <audio>를 무음으로 한 번 재생해
+  // 사용자가 일시정지를 누를 때 호출(pause() 참고) — 프리로드용 <audio>를 무음으로 한 번 재생해
   // 두어 이후엔 제스처 없이도 play()가 허용되게 한다(iOS는 엘리먼트마다 따로 잠금).
   unlockAudio() {
+    if (!this.audio.paused) return; // 재생 중인 곡과 겹치지 않게 일시정지 중일 때만
     const el = this._ensurePreloadElement();
     if (el._unlocked || el._unlocking || el.getAttribute("src")) return;
     el._unlocking = true;
