@@ -20,6 +20,38 @@ const INITIAL_RESYNC_AFTER_SEC = 0;
 // 시간(ms)을 넘기면 실제로 멈췄다고 보고 명시적으로 pause해, OS 잠금화면이
 // "재생 중"으로 계속 잘못 표시하는 것을 막는다.
 const STALL_TIMEOUT_MS = 8000;
+// 화면이 꺼진/백그라운드 상태에서는 곡이 완전히 끝난 뒤(오디오가 멈춘 뒤)에 JS로 다음
+// 곡 play()를 부르면, iOS가 그 사이 페이지를 정지시키거나 제스처 없는 play()를
+// 거부해서 다음 곡이 안 시작되는 일이 있다. 그래서 오디오가 아직 재생 중이라 JS가
+// 살아있는 곡 끝 직전(이 시간(초) 이내)에 미리 사용자 제스처로 "잠금 해제"해 둔 다음
+// 곡 엘리먼트로 갈아탄다(곡 끝 이 시간만큼은 잘린다).
+const EARLY_SWAP_SEC = 0.5;
+// 사용자 제스처 안에서 재생해 보는 용도의 0.1초짜리 무음 WAV(엘리먼트 자동재생 잠금
+// 해제용). 샘플이 하나도 없는 WAV는 일부 브라우저가 재생으로 치지 않아 직접 만든다.
+let silentWavUrl = null;
+function getSilentWavUrl() {
+  if (silentWavUrl) return silentWavUrl;
+  const rate = 8000;
+  const samples = rate / 10;
+  const buf = new ArrayBuffer(44 + samples);
+  const v = new DataView(buf);
+  const str = (off, t) => [...t].forEach((c, i) => v.setUint8(off + i, c.charCodeAt(0)));
+  str(0, "RIFF");
+  v.setUint32(4, 36 + samples, true);
+  str(8, "WAVEfmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate, true);
+  v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true);
+  str(36, "data");
+  v.setUint32(40, samples, true);
+  new Uint8Array(buf, 44).fill(128); // 8bit PCM의 무음은 128
+  silentWavUrl = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  return silentWavUrl;
+}
 
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
@@ -96,6 +128,7 @@ export class PlayerEngine extends EventTarget {
         }
       }
       this._maybePreloadNext();
+      this._maybeEarlySwap();
     });
     audio.addEventListener("durationchange", () => {
       if (audio !== this.audio) return;
@@ -445,6 +478,7 @@ export class PlayerEngine extends EventTarget {
 
     const track = this.playlist.tracks[nextIndex];
     const el = this._ensurePreloadElement();
+    if (el._unlocking) return;
     this._preloadIndex = nextIndex;
     el.src = `/api/tracks/${track.track_id}/audio`;
     el.load();
@@ -474,6 +508,79 @@ export class PlayerEngine extends EventTarget {
     return dur;
   }
 
+  // 첫 사용자 제스처(클릭/터치)에서 호출 — 프리로드용 <audio>를 무음으로 한 번 재생해
+  // 두어 이후엔 제스처 없이도 play()가 허용되게 한다(iOS는 엘리먼트마다 따로 잠금).
+  unlockAudio() {
+    const el = this._ensurePreloadElement();
+    if (el._unlocked || el._unlocking || el.getAttribute("src")) return;
+    el._unlocking = true;
+    // muted로 재생하면 Chrome이 "소리 없는 백그라운드 미디어"로 보고 곧바로 중단시킨다.
+    // 파일 자체가 무음이라 muted가 필요 없다.
+    const silentUrl = getSilentWavUrl();
+    el.src = silentUrl;
+    const done = (ok) => {
+      el._unlocking = false;
+      if (ok) el._unlocked = true;
+      // 그 사이 진짜 프리로드가 시작됐다면(src가 바뀜) 건드리지 않는다.
+      if (el.getAttribute("src") === silentUrl) {
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
+    };
+    const p = el.play();
+    if (p && p.then) p.then(() => done(true), () => done(false));
+    else done(false);
+  }
+
+  // 화면이 꺼진/백그라운드 상태일 때만: 곡 끝 직전, 다음 곡이 준비돼 있으면 오디오가
+  // 아직 재생 중일 때 미리 갈아탄다(_swapToPreloaded). 조건이 안 맞으면 기존처럼
+  // ended 이벤트에서 같은 엘리먼트로 이어 재생한다.
+  _maybeEarlySwap() {
+    if (!document.hidden || !this.autoAdvance || this._seeking) return;
+    if (this.repeatMode === "one" || this.audio.paused) return;
+    const dur = this.audio.duration;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+    if (dur - this.audio.currentTime > EARLY_SWAP_SEC) return;
+    const el = this._preloadAudio;
+    if (!el || !el._unlocked || this._preloadIndex < 0 || el.readyState < 3) return;
+    const index = this._computeNextIndex();
+    if (index === null || index !== this._preloadIndex) return;
+    this._swapToPreloaded(index);
+  }
+
+  // 미리 불러와 둔 다음 곡으로 즉시 전환한다. 기존 재생 엘리먼트는 비워서 다음
+  // 프리로드 슬롯으로 재사용한다(이미 제스처로 재생된 적이 있어 잠금 해제 상태).
+  _swapToPreloaded(index) {
+    const promoted = this._preloadAudio;
+    const demoted = this.audio;
+
+    this._preloadAudio = demoted;
+    this._preloadIndex = -1;
+    demoted._unlocked = true;
+    this.audio = promoted;
+    demoted.pause();
+    demoted.removeAttribute("src");
+    demoted.load();
+
+    promoted.volume = demoted.volume;
+    promoted.style.display = "";
+    demoted.style.display = "none";
+
+    this.currentIndex = index;
+    if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
+    const track = this.playlist.tracks[index];
+
+    this._intentionalPause = false;
+    this._resetPositionOnPlay = true;
+    this._needsInitialResync = true;
+    this._trackStartWallMs = performance.now();
+    this._playWhenReady(promoted);
+    this._emit("trackchange", { track, index });
+    this._emit("durationchange", { durationMs: this.duration() });
+    this._emit("buffered", { bufferedMs: this.bufferedMs() });
+  }
+
   _ensurePreloadElement() {
     if (!this._preloadAudio) {
       const el = document.createElement("audio");
@@ -487,7 +594,9 @@ export class PlayerEngine extends EventTarget {
   }
 
   _resetPreload() {
-    if (this._preloadAudio) {
+    // 잠금 해제용 무음 재생이 진행 중이면 끊지 않는다(같은 클릭에서 곧바로 곡 재생이
+    // 시작되며 호출돼 해제가 매번 취소되던 문제). 어차피 src는 무음 파일이다.
+    if (this._preloadAudio && !this._preloadAudio._unlocking) {
       this._preloadAudio.pause();
       this._preloadAudio.removeAttribute("src");
       this._preloadAudio.load();

@@ -182,6 +182,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
 
   player.addEventListener("trackchange", (e) => {
     setTrack(e.detail.track);
+    updateProgressUI();
   });
 
   // durationMs가 아직 0/NaN인 상태(트랙 전환 직후)에는 setPositionState가
@@ -249,6 +250,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   });
 
   player.addEventListener("playstate", (e) => {
+    updateProgressUI();
     setIcon(playPauseBtn.querySelector(".icon"), e.detail.playing ? "pause" : "play");
     if (hasMediaSession) navigator.mediaSession.playbackState = e.detail.playing ? "playing" : "paused";
     if (e.detail.playing) startProgressLoop();
@@ -257,8 +259,19 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
 
   // 백그라운드에서 돌아왔을 때 UI를 실제 오디오 상태에 다시 맞춘다.
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && player.currentTrack) player.syncPlayState();
+    if (document.hidden || !player.currentTrack) return;
+    player.syncPlayState();
+    // 화면이 꺼진 동안엔 rAF가 멈춰 있어서 재생 위치/길이 표시가 이전 곡의 마지막
+    // 값(중간쯤)으로 남아 있을 수 있다 — 지금 실제 상태로 즉시 다시 그린다.
+    seekSlider.max = String(Math.max(0, player.duration()));
+    durationLabel.textContent = fmtTime(player.duration());
+    updateProgressUI();
   });
+
+  // 다음 곡 엘리먼트를 제스처 안에서 잠금 해제해 둔다(player.unlockAudio 참고).
+  for (const evt of ["click", "touchend"]) {
+    document.addEventListener(evt, () => player.unlockAudio(), { capture: true, passive: true });
+  }
 
   // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.
   player.addEventListener("buffering", (e) => {
