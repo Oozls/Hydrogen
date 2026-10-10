@@ -36,6 +36,12 @@
             <span class="icon icon-sm" style="--icon: url(/static/icons/folder.svg)"></span>
             <span id="sidebar-data-size-text">계산 중...</span>
           </div>
+          {% if git_version %}
+          <div class="sidebar-data-size" title="서버에 올라간 커밋 (해시 · 날짜)">
+            <span class="icon icon-sm" style="--icon: url(/static/icons/save.svg)"></span>
+            <span>{{ git_version }}</span>
+          </div>
+          {% endif %}
           <button id="btn-sidebar-match" class="sidebar-nav-btn" type="button">
             <span class="icon" style="--icon: url(/static/icons/heart.svg)"></span>
             <span>매치</span>

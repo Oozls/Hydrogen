@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 
 from flask import Blueprint, render_template
 
@@ -12,6 +13,25 @@ from lyricstorage.web import playlist_repo
 from lyricstorage.web.serialize import playlist_to_json
 
 bp = Blueprint("pages", __name__)
+
+
+def _read_git_version() -> str:
+    """서버가 시작될 때 체크아웃돼 있던 커밋(짧은 해시, 날짜). git이 없거나 저장소가
+    아니면 빈 문자열. 서버(VM)에 어떤 코드가 올라가 있는지 사이드바에서 확인하는 용도."""
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%h %cs"],
+            cwd=storage.PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return out.stdout.strip() if out.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+GIT_VERSION = _read_git_version()
 
 
 @bp.get("/")
@@ -41,7 +61,7 @@ def index():
     }
     # </script>로 오인되어 태그가 끊기지 않도록 이스케이프.
     bootstrap_json = json.dumps(bootstrap, ensure_ascii=False).replace("</", "<\\/")
-    return render_template("index.html", bootstrap_json=bootstrap_json)
+    return render_template("index.html", bootstrap_json=bootstrap_json, git_version=GIT_VERSION)
 
 
 @bp.get("/logs")
