@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from flask import Blueprint, abort, jsonify
+from flask import Blueprint, abort, jsonify, request
 
 from lyricstorage import applog
 
@@ -24,3 +24,13 @@ def get_log(date: str, half: str):
     if half not in ("AM", "PM") or not _DATE_RE.match(date):
         abort(404)
     return jsonify({"entries": applog.read_log_entries(date, half)})
+
+
+@bp.post("/client")
+def client_log():
+    """브라우저(특히 iOS 백그라운드 재생)에서 보내는 진단 메시지를 로그에 남긴다."""
+    data = request.get_json(silent=True) or {}
+    msg = str(data.get("msg", ""))[:300]
+    if msg:
+        applog.log_info("PLAYER", msg)
+    return ("", 204)

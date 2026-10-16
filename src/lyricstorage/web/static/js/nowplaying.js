@@ -239,6 +239,8 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     updateMediaSessionPosition(e.detail.positionMs, player.duration());
   });
 
+  player.addEventListener("debuglog", (e) => api.clientLog(e.detail.msg));
+
   player.addEventListener("buffered", (e) => updateBufferedFill(e.detail.bufferedMs));
 
   player.addEventListener("durationchange", (e) => {

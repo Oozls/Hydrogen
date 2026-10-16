@@ -191,6 +191,14 @@ export const api = {
   // 페이지가 백그라운드로 넘어가거나(sendBeacon) 닫히는 순간에도 요청이 끊기지
   // 않고 나가야 하므로, 가능하면 fetch 대신 sendBeacon을 쓴다(실패해도 조용히
   // 넘어간다 — 사용 시간 집계 하나 놓치는 건 치명적이지 않다).
+  // 클라이언트 쪽 진단 메시지를 서버 로그(/logs)에 남긴다. 실패해도 무시.
+  clientLog: (msg) => {
+    const body = JSON.stringify({ msg });
+    if (navigator.sendBeacon && navigator.sendBeacon("/api/logs/client", new Blob([body], { type: "application/json" }))) {
+      return;
+    }
+    request("POST", "/api/logs/client", { json: { msg } }).catch(() => {});
+  },
   pingUsage: (durationMs) => {
     const body = JSON.stringify({ duration_ms: durationMs });
     if (navigator.sendBeacon && navigator.sendBeacon("/api/stats/usage-ping", new Blob([body], { type: "application/json" }))) {

@@ -20,39 +20,6 @@ const INITIAL_RESYNC_AFTER_SEC = 0;
 // 시간(ms)을 넘기면 실제로 멈췄다고 보고 명시적으로 pause해, OS 잠금화면이
 // "재생 중"으로 계속 잘못 표시하는 것을 막는다.
 const STALL_TIMEOUT_MS = 8000;
-// 화면이 꺼진/백그라운드 상태에서는 곡이 완전히 끝난 뒤(오디오가 멈춘 뒤)에 JS로 다음
-// 곡 play()를 부르면, iOS가 그 사이 페이지를 정지시키거나 제스처 없는 play()를
-// 거부해서 다음 곡이 안 시작되는 일이 있다. 그래서 오디오가 아직 재생 중이라 JS가
-// 살아있는 곡 끝 직전(이 시간(초) 이내)에 미리 사용자 제스처로 "잠금 해제"해 둔 다음
-// 곡 엘리먼트로 갈아탄다(곡 끝 이 시간만큼은 잘린다).
-const EARLY_SWAP_SEC = 0.5;
-// 사용자 제스처 안에서 재생해 보는 용도의 0.1초짜리 무음 WAV(엘리먼트 자동재생 잠금
-// 해제용). 샘플이 하나도 없는 WAV는 일부 브라우저가 재생으로 치지 않아 직접 만든다.
-let silentWavUrl = null;
-function getSilentWavUrl() {
-  if (silentWavUrl) return silentWavUrl;
-  const rate = 8000;
-  const samples = rate / 10;
-  const buf = new ArrayBuffer(44 + samples);
-  const v = new DataView(buf);
-  const str = (off, t) => [...t].forEach((c, i) => v.setUint8(off + i, c.charCodeAt(0)));
-  str(0, "RIFF");
-  v.setUint32(4, 36 + samples, true);
-  str(8, "WAVEfmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, 1, true); // mono
-  v.setUint32(24, rate, true);
-  v.setUint32(28, rate, true);
-  v.setUint16(32, 1, true);
-  v.setUint16(34, 8, true);
-  str(36, "data");
-  v.setUint32(40, samples, true);
-  new Uint8Array(buf, 44).fill(128); // 8bit PCM의 무음은 128
-  silentWavUrl = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
-  return silentWavUrl;
-}
-
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
   for (let i = arr.length - 1; i > 0; i--) {
@@ -101,8 +68,11 @@ export class PlayerEngine extends EventTarget {
 
     // 다음 곡 미리 불러오기용 숨겨진 <audio>. { audio, index } 형태이며,
     // index는 그 엘리먼트에 로드해 둔 트랙이 playlist 상 몇 번째인지를 뜻한다.
-    this._preloadAudio = null;
-    this._preloadIndex = -1;
+    // 다음 곡을 미리 통째로 받아 둔 Blob URL: { index, url, controller, failed }.
+    // 별도 <audio>로 미리 틀지 않고 같은 엘리먼트의 src만 바꾸므로, 화면이 꺼진
+    // 상태에서도 다음 곡이 네트워크 대기 없이(이미 메모리에 있음) 바로 시작된다.
+    this._prefetch = null;
+    this._currentBlobUrl = null;
     // 현재 곡 재생이 시작된 시각(performance.now()) — 다운로드가 실제로
     // 재생 속도를 따라잡고 있는지(버퍼링된 초 / 경과한 실제 초) 재는 기준점.
     this._trackStartWallMs = null;
@@ -128,7 +98,6 @@ export class PlayerEngine extends EventTarget {
         }
       }
       this._maybePreloadNext();
-      this._maybeEarlySwap();
     });
     audio.addEventListener("durationchange", () => {
       if (audio !== this.audio) return;
@@ -191,6 +160,7 @@ export class PlayerEngine extends EventTarget {
       // 실제로는 멈춰 있었음을 반영해 명시적으로 pause한다 — 잠금화면/알림의
       // 재생 버튼을 다시 누르면(백그라운드에서도 허용되는 사용자 제스처) 거기서
       // 새로 재생을 시도하게 된다.
+      this._log("stall timeout -> pause");
       this._intentionalPause = true;
       audio.pause();
     }, STALL_TIMEOUT_MS);
@@ -300,6 +270,9 @@ export class PlayerEngine extends EventTarget {
 
   playIndex(index) {
     if (!this.playlist || index < 0 || index >= this.playlist.tracks.length) return;
+    // 미리 받아 둔 다음 곡이 이 곡이면 그 Blob URL을 넘겨받고, 나머지 프리페치는 정리한다.
+    const prefetched = this._prefetch && this._prefetch.index === index && this._prefetch.url ? this._prefetch : null;
+    if (prefetched) this._prefetch = null;
     this._resetPreload();
     this.currentIndex = index;
     // queue.js의 getDisplayQueue()가 여기서 앵커를 정한다 — 대기열 패널을 아직
@@ -310,7 +283,11 @@ export class PlayerEngine extends EventTarget {
     if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
     const track = this.playlist.tracks[index];
     this._intentionalPause = false;
-    this.audio.src = `/api/tracks/${track.track_id}/audio`;
+    const previousBlobUrl = this._currentBlobUrl;
+    this._currentBlobUrl = prefetched ? prefetched.url : null;
+    this.audio.src = prefetched ? prefetched.url : `/api/tracks/${track.track_id}/audio`;
+    if (previousBlobUrl) URL.revokeObjectURL(previousBlobUrl);
+    this._log(`playIndex ${index} ${prefetched ? "blob" : "network"}`);
     this._resetPositionOnPlay = true;
     this._needsInitialResync = true;
     this._trackStartWallMs = performance.now();
@@ -333,8 +310,9 @@ export class PlayerEngine extends EventTarget {
   _tryPlay(audio) {
     const p = audio.play();
     if (p && p.catch) {
-      p.catch(() => {
+      p.catch((err) => {
         if (audio !== this.audio) return;
+        this._log(`play() rejected ${err && err.name}`);
         this._intentionalPause = true;
         this._emit("playstate", { playing: !audio.paused });
       });
@@ -357,10 +335,6 @@ export class PlayerEngine extends EventTarget {
   pause() {
     this._intentionalPause = true;
     this.audio.pause();
-    // 사용자가 일시정지를 누른 제스처 안에서, 재생 중인 곡과 겹치지 않을 때만 다음 곡용
-    // 엘리먼트를 잠금 해제한다(곡 재생과 동시에 하면 iOS가 오디오 세션을 놓쳐 "재생
-    // 중으로 보이는데 소리가 안 나는" 증상이 났다).
-    this.unlockAudio();
   }
 
   // UI/미디어 세션이 실제 오디오 엘리먼트 상태와 어긋났을 때 다시 맞추기 위해 호출.
@@ -459,6 +433,7 @@ export class PlayerEngine extends EventTarget {
   }
 
   _onEnded() {
+    this._log("ended");
     this._emit("ended", {});
     if (!this.autoAdvance) return;
     if (this.repeatMode === "one") {
@@ -469,8 +444,8 @@ export class PlayerEngine extends EventTarget {
     }
   }
 
-  // 재생 중인 곡이 얼마 남지 않으면 다음 곡을 백그라운드 <audio>에 미리
-  // 로드해 둔다. "one" 반복은 항상 같은 곡을 재시작하므로 대상이 아니다.
+  // 재생 중인 곡이 얼마 남지 않으면 다음 곡을 통째로 내려받아 Blob으로 들고 있는다.
+  // "one" 반복은 항상 같은 곡을 재시작하므로 대상이 아니다.
   _maybePreloadNext() {
     if (this.repeatMode === "one") return;
     const dur = this.audio.duration;
@@ -478,14 +453,28 @@ export class PlayerEngine extends EventTarget {
     if (dur - this.audio.currentTime > this._estimatedPreloadLeadSec(dur)) return;
     const nextIndex = this._computeNextIndex();
     if (nextIndex === null || nextIndex === this.currentIndex) return;
-    if (this._preloadIndex === nextIndex) return;
+    if (this._prefetch && this._prefetch.index === nextIndex) return;
 
+    this._cancelPrefetch();
     const track = this.playlist.tracks[nextIndex];
-    const el = this._ensurePreloadElement();
-    if (el._unlocking) return;
-    this._preloadIndex = nextIndex;
-    el.src = `/api/tracks/${track.track_id}/audio`;
-    el.load();
+    const controller = new AbortController();
+    const pf = { index: nextIndex, url: null, controller, failed: false };
+    this._prefetch = pf;
+    fetch(`/api/tracks/${track.track_id}/audio`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (this._prefetch !== pf) return; // 그 사이 취소/교체됨
+        pf.url = URL.createObjectURL(blob);
+        this._log(`prefetch ok index=${nextIndex} bytes=${blob.size}`);
+      })
+      .catch((err) => {
+        // 실패해도 같은 곡을 계속 재시도하지 않는다(재생 시 일반 URL로 폴백).
+        pf.failed = true;
+        if (err && err.name !== "AbortError") this._log(`prefetch fail index=${nextIndex} ${err.message}`);
+      });
   }
 
   // 지금 곡이 실제로 받아지는 속도(=재생 1초당 몇 초 분량이 버퍼링되는지)를
@@ -512,100 +501,23 @@ export class PlayerEngine extends EventTarget {
     return dur;
   }
 
-  // 사용자가 일시정지를 누를 때 호출(pause() 참고) — 프리로드용 <audio>를 무음으로 한 번 재생해
-  // 두어 이후엔 제스처 없이도 play()가 허용되게 한다(iOS는 엘리먼트마다 따로 잠금).
-  unlockAudio() {
-    if (!this.audio.paused) return; // 재생 중인 곡과 겹치지 않게 일시정지 중일 때만
-    const el = this._ensurePreloadElement();
-    if (el._unlocked || el._unlocking || el.getAttribute("src")) return;
-    el._unlocking = true;
-    // muted로 재생하면 Chrome이 "소리 없는 백그라운드 미디어"로 보고 곧바로 중단시킨다.
-    // 파일 자체가 무음이라 muted가 필요 없다.
-    const silentUrl = getSilentWavUrl();
-    el.src = silentUrl;
-    const done = (ok) => {
-      el._unlocking = false;
-      if (ok) el._unlocked = true;
-      // 그 사이 진짜 프리로드가 시작됐다면(src가 바뀜) 건드리지 않는다.
-      if (el.getAttribute("src") === silentUrl) {
-        el.pause();
-        el.removeAttribute("src");
-        el.load();
-      }
-    };
-    const p = el.play();
-    if (p && p.then) p.then(() => done(true), () => done(false));
-    else done(false);
-  }
-
-  // 화면이 꺼진/백그라운드 상태일 때만: 곡 끝 직전, 다음 곡이 준비돼 있으면 오디오가
-  // 아직 재생 중일 때 미리 갈아탄다(_swapToPreloaded). 조건이 안 맞으면 기존처럼
-  // ended 이벤트에서 같은 엘리먼트로 이어 재생한다.
-  _maybeEarlySwap() {
-    if (!document.hidden || !this.autoAdvance || this._seeking) return;
-    if (this.repeatMode === "one" || this.audio.paused) return;
-    const dur = this.audio.duration;
-    if (!Number.isFinite(dur) || dur <= 0) return;
-    if (dur - this.audio.currentTime > EARLY_SWAP_SEC) return;
-    const el = this._preloadAudio;
-    if (!el || !el._unlocked || this._preloadIndex < 0 || el.readyState < 3) return;
-    const index = this._computeNextIndex();
-    if (index === null || index !== this._preloadIndex) return;
-    this._swapToPreloaded(index);
-  }
-
-  // 미리 불러와 둔 다음 곡으로 즉시 전환한다. 기존 재생 엘리먼트는 비워서 다음
-  // 프리로드 슬롯으로 재사용한다(이미 제스처로 재생된 적이 있어 잠금 해제 상태).
-  _swapToPreloaded(index) {
-    const promoted = this._preloadAudio;
-    const demoted = this.audio;
-
-    this._preloadAudio = demoted;
-    this._preloadIndex = -1;
-    demoted._unlocked = true;
-    this.audio = promoted;
-    demoted.pause();
-    demoted.removeAttribute("src");
-    demoted.load();
-
-    promoted.volume = demoted.volume;
-    promoted.style.display = "";
-    demoted.style.display = "none";
-
-    this.currentIndex = index;
-    if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
-    const track = this.playlist.tracks[index];
-
-    this._intentionalPause = false;
-    this._resetPositionOnPlay = true;
-    this._needsInitialResync = true;
-    this._trackStartWallMs = performance.now();
-    this._playWhenReady(promoted);
-    this._emit("trackchange", { track, index });
-    this._emit("durationchange", { durationMs: this.duration() });
-    this._emit("buffered", { bufferedMs: this.bufferedMs() });
-  }
-
-  _ensurePreloadElement() {
-    if (!this._preloadAudio) {
-      const el = document.createElement("audio");
-      el.preload = "auto";
-      el.style.display = "none";
-      document.body.appendChild(el);
-      this._bindAudioEvents(el);
-      this._preloadAudio = el;
-    }
-    return this._preloadAudio;
+  _cancelPrefetch() {
+    const pf = this._prefetch;
+    if (!pf) return;
+    pf.controller.abort();
+    if (pf.url) URL.revokeObjectURL(pf.url);
+    this._prefetch = null;
   }
 
   _resetPreload() {
-    // 잠금 해제용 무음 재생이 진행 중이면 끊지 않는다(같은 클릭에서 곧바로 곡 재생이
-    // 시작되며 호출돼 해제가 매번 취소되던 문제). 어차피 src는 무음 파일이다.
-    if (this._preloadAudio && !this._preloadAudio._unlocking) {
-      this._preloadAudio.pause();
-      this._preloadAudio.removeAttribute("src");
-      this._preloadAudio.load();
-    }
-    this._preloadIndex = -1;
+    this._cancelPrefetch();
+  }
+
+  // 원격 진단용: 클라이언트(특히 iOS 백그라운드)에서 일어난 일을 서버 로그로 남긴다.
+  _log(msg) {
+    const a = this.audio;
+    this._emit("debuglog", {
+      msg: `${msg} [vis=${document.visibilityState} paused=${a.paused} rs=${a.readyState} ns=${a.networkState} t=${a.currentTime.toFixed(1)}]`,
+    });
   }
 }
