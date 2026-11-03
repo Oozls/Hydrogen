@@ -15,11 +15,6 @@ const PRELOAD_MIN_SEC = 15;
 // 가깝게 둬서 "실제 디코딩이 시작된 뒤 첫 timeupdate" 시점에 최대한 앞당긴다
 // — 그 시점엔 아직 곡 초반이라 재-seek이 나도 거의 안 들린다.
 const INITIAL_RESYNC_AFTER_SEC = 0;
-// (특히 iOS 백그라운드에서) 네트워크가 막혀 데이터를 못 받으면 audio.paused는
-// 계속 false인 채로 소리만 안 나는 상태가 무한정 이어질 수 있다. 그 상태가 이
-// 시간(ms)을 넘기면 실제로 멈췄다고 보고 명시적으로 pause해, OS 잠금화면이
-// "재생 중"으로 계속 잘못 표시하는 것을 막는다.
-const STALL_TIMEOUT_MS = 8000;
 function shuffledIndices(count) {
   const arr = Array.from({ length: count }, (_, i) => i);
   for (let i = arr.length - 1; i > 0; i--) {
@@ -76,9 +71,15 @@ export class PlayerEngine extends EventTarget {
     // 현재 곡 재생이 시작된 시각(performance.now()) — 다운로드가 실제로
     // 재생 속도를 따라잡고 있는지(버퍼링된 초 / 경과한 실제 초) 재는 기준점.
     this._trackStartWallMs = null;
-    this._stallTimer = null;
+    // playIndex()로 새 곡을 시작한 뒤 아직 한 번도 실제 재생(playing 이벤트)에 도달하지
+    // 못한 동안 true. 화면이 꺼진 채 곡이 넘어갈 때 iOS가 백그라운드 play()를 거부하거나
+    // 로드 도중 페이지를 정지시키면 이 상태로 남는다 — 사용자가 화면을 다시 켰을 때
+    // (visible/pageshow) 이 플래그로 "시작하다 만 곡"만 골라 다시 시도한다.
+    this._pendingStart = false;
 
     this._bindAudioEvents(this.audio);
+    document.addEventListener("visibilitychange", () => this._recoverIfStuck());
+    window.addEventListener("pageshow", () => this._recoverIfStuck());
   }
 
   // 여러 <audio> 엘리먼트(현재 재생용 + 다음 곡 미리듣기용)에 동일한 이벤트
@@ -90,11 +91,12 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("timeupdate", () => {
       if (audio !== this.audio) return;
       if (!this._seeking) {
-        this._clearStallTimer();
         this._emit("tick", { positionMs: this.position() });
         if (this._needsInitialResync && audio.currentTime >= INITIAL_RESYNC_AFTER_SEC) {
           this._needsInitialResync = false;
-          this.seek(this.position());
+          // 화면이 꺼진 상태의 곡 전환에서는 seek가 waiting/Range 재요청을 일으켜
+          // iOS가 페이지를 정지시키기 전의 짧은 실행 시간을 갉아먹는다 — 생략한다.
+          if (!document.hidden) this.seek(this.position());
         }
       }
       this._maybePreloadNext();
@@ -109,7 +111,6 @@ export class PlayerEngine extends EventTarget {
     });
     audio.addEventListener("pause", () => {
       if (audio !== this.audio) return;
-      this._clearStallTimer();
       this._emit("playstate", { playing: false });
       this._needsResyncOnPlay = true;
       // OS가 전화/Siri/이어폰 분리/잠금화면 조작 등으로 멈춘 경우에도 되살리지 않는다 —
@@ -126,19 +127,21 @@ export class PlayerEngine extends EventTarget {
     audio.addEventListener("waiting", () => {
       if (audio !== this.audio) return;
       this._emit("buffering", { buffering: true });
-      this._armStallTimer(audio);
     });
     audio.addEventListener("playing", () => {
       if (audio !== this.audio) return;
-      this._clearStallTimer();
+      this._pendingStart = false;
       this._emit("playstate", { playing: true });
       this._emit("buffering", { buffering: false });
+      // 화면이 꺼져 있거나(위와 같은 이유), 곡 전체가 이미 메모리에 있는 Blob이면
+      // (버퍼 부족으로 초반을 건너뛸 일이 없다) 보정 seek를 하지 않는다.
+      const skipSeek = document.hidden;
       if (this._resetPositionOnPlay) {
         this._resetPositionOnPlay = false;
-        this.seek(0);
+        if (!skipSeek && !this._currentBlobUrl) this.seek(0);
       } else if (this._needsResyncOnPlay) {
         this._needsResyncOnPlay = false;
-        this.seek(this.position());
+        if (!skipSeek) this.seek(this.position());
       }
     });
     audio.addEventListener("canplay", () => {
@@ -153,24 +156,17 @@ export class PlayerEngine extends EventTarget {
     });
   }
 
-  _armStallTimer(audio) {
-    this._clearStallTimer();
-    this._stallTimer = setTimeout(() => {
-      if (audio !== this.audio || this._seeking) return;
-      // 실제로는 멈춰 있었음을 반영해 명시적으로 pause한다 — 잠금화면/알림의
-      // 재생 버튼을 다시 누르면(백그라운드에서도 허용되는 사용자 제스처) 거기서
-      // 새로 재생을 시도하게 된다.
-      this._log("stall timeout -> pause");
-      this._intentionalPause = true;
-      audio.pause();
-    }, STALL_TIMEOUT_MS);
-  }
-
-  _clearStallTimer() {
-    if (this._stallTimer != null) {
-      clearTimeout(this._stallTimer);
-      this._stallTimer = null;
-    }
+  // 화면을 다시 켰을 때(visible/pageshow) 새 곡 시작이 도중에 끊긴 상태면 다시 시도한다.
+  // 예전에는 waiting이 8초 넘게 이어지면 pause()로 강제 정지시켰지만, 정지된 페이지에서는
+  // 그 타이머가 돌지 않아 "재생 중인데 소리 없음"을 못 잡았고, 돌 때는 복구 없이 재생을
+  // 확정적으로 멈출 뿐이었다. 사용자가 직접 멈춘 곡과 구분하기 위해 _pendingStart를 쓴다.
+  _recoverIfStuck() {
+    if (document.hidden || !this._pendingStart || !this.currentTrack) return;
+    if (!this.audio.paused && this.audio.readyState >= 3) return;
+    this._log("recover stuck start");
+    this._intentionalPause = false;
+    this.audio.load();
+    this._tryPlay(this.audio);
   }
 
   // 지금 재생 위치가 속한 버퍼 구간의 끝(ms) — 그 구간에 없으면(탐색 등)
@@ -291,6 +287,7 @@ export class PlayerEngine extends EventTarget {
     this._resetPositionOnPlay = true;
     this._needsInitialResync = true;
     this._trackStartWallMs = performance.now();
+    this._pendingStart = true;
     this._playWhenReady(this.audio);
     this._emit("trackchange", { track, index });
   }
@@ -333,6 +330,7 @@ export class PlayerEngine extends EventTarget {
   }
 
   pause() {
+    this._pendingStart = false;
     this._intentionalPause = true;
     this.audio.pause();
   }
@@ -348,6 +346,7 @@ export class PlayerEngine extends EventTarget {
   }
 
   stop() {
+    this._pendingStart = false;
     this._intentionalPause = true;
     this.audio.pause();
   }
@@ -450,7 +449,10 @@ export class PlayerEngine extends EventTarget {
     if (this.repeatMode === "one") return;
     const dur = this.audio.duration;
     if (!Number.isFinite(dur) || dur <= 0) return;
-    if (dur - this.audio.currentTime > this._estimatedPreloadLeadSec(dur)) return;
+    // 화면이 꺼지면 백그라운드 fetch가 멈출 수 있으므로, 현재 곡을 이미 끝까지 받았으면
+    // (대역폭 경쟁 없음) 곡 초반에 바로 다음 곡을 받아 둔다. 아직 다 못 받았으면 예전처럼
+    // 끝이 가까워진 뒤에 시작한다.
+    if (!this._currentFullyBuffered(dur) && dur - this.audio.currentTime > this._estimatedPreloadLeadSec(dur)) return;
     const nextIndex = this._computeNextIndex();
     if (nextIndex === null || nextIndex === this.currentIndex) return;
     if (this._prefetch && this._prefetch.index === nextIndex) return;
@@ -485,6 +487,11 @@ export class PlayerEngine extends EventTarget {
   // 있다는 뜻이라, 다음 곡까지 같은 대역폭을 두고 경쟁시키면 지금 곡이 더
   // 나빠질 수 있지만, 어차피 지금 곡은 이미 끊기는 중이므로 다음 곡이라도
   // 미리 받아두는 쪽이 낫다는 판단이다.
+  _currentFullyBuffered(dur) {
+    const buffered = this.audio.buffered;
+    return buffered.length > 0 && buffered.end(buffered.length - 1) >= dur - 0.5;
+  }
+
   _estimatedPreloadLeadSec(dur) {
     if (!this._trackStartWallMs) return PRELOAD_MIN_SEC;
     const buffered = this.audio.buffered;
