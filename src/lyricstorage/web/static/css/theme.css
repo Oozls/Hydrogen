@@ -465,6 +465,24 @@ textarea {
   width: 18px;
   height: 18px;
 }
+.play-btn {
+  position: relative;
+}
+.play-btn.buffering .icon {
+  opacity: 0;
+}
+.play-btn.buffering::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--icon-on-accent);
+  border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
 
 .repeat-badge {
   position: absolute;

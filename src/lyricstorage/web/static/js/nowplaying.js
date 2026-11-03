@@ -48,7 +48,6 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
 
   let seeking = false;
   let lastVolume = Number(volumeSlider.value) || 80;
-  let bufferingStopSpin = null;
 
   // OS/브라우저의 미디어 알림(잠금화면, 알림창, 하드웨어 미디어 키 등)에
   // 현재 재생 중인 곡의 제목/아티스트/앨범아트를 노출하고, 그쪽에서 들어오는
@@ -272,15 +271,12 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
 
 
 
-  // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 커버 위에 로딩 스피너를 겹쳐 보여준다.
+  // 트랙 전환/버퍼링으로 재생이 잠시 멎는 동안 재생 버튼에 로딩 스피너를 보여준다.
+  // 커버 위 스피너는 커버 이미지 로딩 전용이다 — 같은 스피너를 오디오 대기에도
+  // 쓰면 커버가 다 받아졌는데도 스피너가 남아 "커버 때문에 재생이 늦다"로 보인다.
   player.addEventListener("buffering", (e) => {
-    if (e.detail.buffering) {
-      if (!bufferingStopSpin) bufferingStopSpin = showArtSpinner(artEl.parentElement);
-    } else {
-      if (bufferingStopSpin) {
-        bufferingStopSpin();
-        bufferingStopSpin = null;
-      }
+    playPauseBtn.classList.toggle("buffering", e.detail.buffering);
+    if (!e.detail.buffering) {
       // trackchange 시점(오디오가 아직 로드도 안 된 상태)에 세팅한 메타데이터를
       // iOS 잠금화면이 놓치는 경우가 있어, 실제로 재생 가능해진 시점에 한 번 더
       // 반영한다.
