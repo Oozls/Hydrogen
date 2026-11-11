@@ -140,6 +140,40 @@ def name_resolver(path: Path) -> dict[str, str]:
     return resolver
 
 
+class Registry:
+    """저장 파일 경로(지연 평가)에 바인딩된 레지스트리 핸들. artists/circles가 공유한다."""
+
+    def __init__(self, path_fn) -> None:
+        self._path_fn = path_fn
+
+    def load(self) -> list[Identity]:
+        return load(self._path_fn())
+
+    def save(self, identities: list[Identity]) -> None:
+        save(self._path_fn(), identities)
+
+    def find_by_id(self, identity_id: str) -> Optional[Identity]:
+        return find_by_id(self._path_fn(), identity_id)
+
+    def find_by_name(self, name: str) -> Optional[Identity]:
+        return find_by_name(self._path_fn(), name)
+
+    def get_or_create(self, name: str) -> Identity:
+        return get_or_create(self._path_fn(), name)
+
+    def rename(self, identity_id: str, new_name: str) -> Optional[Identity]:
+        return rename(self._path_fn(), identity_id, new_name)
+
+    def add_alias(self, identity_id: str, alias: str) -> Optional[Identity]:
+        return add_alias(self._path_fn(), identity_id, alias)
+
+    def remove_alias(self, identity_id: str, alias: str) -> Optional[Identity]:
+        return remove_alias(self._path_fn(), identity_id, alias)
+
+    def name_resolver(self) -> dict[str, str]:
+        return name_resolver(self._path_fn())
+
+
 def _demo() -> None:
     import tempfile
 

@@ -11,8 +11,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from lyricstorage import identity_registry as registry
 from lyricstorage import storage
 from lyricstorage.identity_registry import Identity as Artist
@@ -31,37 +29,14 @@ __all__ = [
 ]
 
 
-def load_artists() -> list[Artist]:
-    return registry.load(storage.artists_path())
+_registry = registry.Registry(lambda: storage.artists_path())
 
-
-def save_artists(artists: list[Artist]) -> None:
-    registry.save(storage.artists_path(), artists)
-
-
-def find_artist_by_id(artist_id: str) -> Optional[Artist]:
-    return registry.find_by_id(storage.artists_path(), artist_id)
-
-
-def find_artist_by_name(name: str) -> Optional[Artist]:
-    return registry.find_by_name(storage.artists_path(), name)
-
-
-def get_or_create_artist(name: str) -> Artist:
-    return registry.get_or_create(storage.artists_path(), name)
-
-
-def rename_artist(artist_id: str, new_name: str) -> Optional[Artist]:
-    return registry.rename(storage.artists_path(), artist_id, new_name)
-
-
-def add_alias(artist_id: str, alias: str) -> Optional[Artist]:
-    return registry.add_alias(storage.artists_path(), artist_id, alias)
-
-
-def remove_alias(artist_id: str, alias: str) -> Optional[Artist]:
-    return registry.remove_alias(storage.artists_path(), artist_id, alias)
-
-
-def name_resolver() -> dict[str, str]:
-    return registry.name_resolver(storage.artists_path())
+load_artists = _registry.load
+save_artists = _registry.save
+find_artist_by_id = _registry.find_by_id
+find_artist_by_name = _registry.find_by_name
+get_or_create_artist = _registry.get_or_create
+rename_artist = _registry.rename
+add_alias = _registry.add_alias
+remove_alias = _registry.remove_alias
+name_resolver = _registry.name_resolver
