@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask, g, request
 
-from lyricstorage import applog, lyrics_io
+from lyricstorage import applog, lyrics_io, storage
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 
@@ -47,7 +47,16 @@ def create_app() -> Flask:
         g._log_start = time.monotonic()
 
     @app.after_request
+    def _invalidate_data_size(response):
+        # 업로드/삭제/표지 변경 등 쓰기 API 뒤에는 data 폴더 용량 캐시를 비운다.
+        if request.method != "GET" and request.path.startswith("/api/"):
+            storage.invalidate_data_size_cache()
+        return response
+
+    @app.after_request
     def _log_request_end(response):
+        if request.path.startswith("/static/"):
+            return response
         started = getattr(g, "_log_start", None)
         duration_ms = int((time.monotonic() - started) * 1000) if started is not None else 0
         applog.log_info(

@@ -22,6 +22,7 @@ resolve_weights 참고). 어느 모드든 실제로 쓰인 가중치는 새로�
 from __future__ import annotations
 
 import random
+import threading
 from datetime import date, datetime
 from typing import Any
 
@@ -68,15 +69,6 @@ MIN_EXPOSURES_TO_LEARN = 8
 # 매번 replay하지 않도록).
 MAX_EXPOSURES_FOR_LEARNING = 400
 WEIGHT_MIN, WEIGHT_MAX = 0.05, 0.6
-
-FEATURE_LABELS: dict[str, str] = {
-    "rating": "평점",
-    "artist": "아티스트",
-    "album": "앨범",
-    "never_played": "미청취",
-    "explicit": "명시적 관심",
-    "freshness": "신선도",
-}
 
 # 아티스트/앨범 선호도는 과거 재생을 전부 동일하게 취급하지 않고, 이 기간(일)마다
 # 절반씩 영향력이 줄어드는 지수 감쇠를 적용한다 — 예전엔 좋아했지만 요즘 안 듣는
@@ -222,7 +214,66 @@ def _track_outcome(
     return max(0.0, min(1.0, OUTCOME_PLAY_WEIGHT * play_score + OUTCOME_RATING_WEIGHT * rating_score))
 
 
+# 학습 결과 캐시(가장 최근 1건). 키는 _learn_weights_uncached가 실제로 읽는 입력
+# (최근 노출 전체 내용, 그 노출 곡들의 재생 기록, 그 곡들의 평점/길이)을 그대로
+# 담으므로, 키가 같으면 결과도 항상 같다.
+_learn_cache_lock = threading.Lock()
+_learn_cache: tuple[Any, dict[str, float]] | None = None
+
+
+def _learn_cache_key(
+    recent: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    rating_by_track: dict[str, float],
+    duration_by_track: dict[str, int],
+) -> Any:
+    exposed_ids = {exp.get("track_id") for exp in recent}
+    exposure_key = tuple(
+        (
+            exp.get("track_id"),
+            exp.get("logged_at") or "",
+            tuple(sorted((exp.get("features") or {}).items())),
+        )
+        for exp in recent
+    )
+    history_key = tuple(
+        (entry.get("track_id"), entry.get("played_at") or "", entry.get("listened_ms") or 0)
+        for entry in history
+        if entry.get("track_id") in exposed_ids
+    )
+    rating_key = tuple(sorted(((tid, rating_by_track.get(tid) or 0) for tid in exposed_ids), key=repr))
+    duration_key = tuple(sorted(((tid, duration_by_track.get(tid) or 0) for tid in exposed_ids), key=repr))
+    return (exposure_key, history_key, rating_key, duration_key)
+
+
 def _learn_weights(
+    exposures: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    rating_by_track: dict[str, float],
+    duration_by_track: dict[str, int],
+) -> dict[str, float]:
+    """_learn_weights_uncached의 결과를 입력이 같으면 재사용한다(200 에폭 학습을
+    /today, /queue 호출마다 반복하지 않도록)."""
+    global _learn_cache
+    recent = exposures[-MAX_EXPOSURES_FOR_LEARNING:]
+    if len(recent) < MIN_EXPOSURES_TO_LEARN:
+        return dict(DEFAULT_WEIGHTS)
+    try:
+        key = _learn_cache_key(recent, history, rating_by_track, duration_by_track)
+        hash(key)
+    except TypeError:
+        return _learn_weights_uncached(exposures, history, rating_by_track, duration_by_track)
+    with _learn_cache_lock:
+        cached = _learn_cache
+    if cached is not None and cached[0] == key:
+        return dict(cached[1])
+    weights = _learn_weights_uncached(exposures, history, rating_by_track, duration_by_track)
+    with _learn_cache_lock:
+        _learn_cache = (key, dict(weights))
+    return weights
+
+
+def _learn_weights_uncached(
     exposures: list[dict[str, Any]],
     history: list[dict[str, Any]],
     rating_by_track: dict[str, float],

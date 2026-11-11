@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import stats
+from lyricstorage import lyrics_io, stats
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.serialize import track_to_json
 
@@ -70,7 +70,8 @@ def get_recent():
     except ValueError:
         limit = 12
     playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    stems = lyrics_io.lyrics_stems()
+    tracks = [track_to_json(t, stems) for t in playlist.tracks]
     return jsonify({"items": stats.recent_tracks(limit, tracks=tracks)})
 
 
@@ -113,5 +114,6 @@ def get_top():
         if parsed_limit is not None:
             limit = None if parsed_limit <= 0 else parsed_limit
     playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    stems = lyrics_io.lyrics_stems()
+    tracks = [track_to_json(t, stems) for t in playlist.tracks]
     return jsonify(stats.top(period, group, offset, limit=limit, tracks=tracks))
