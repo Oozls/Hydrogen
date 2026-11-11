@@ -26,6 +26,6 @@ export function openImageLightbox(url) {
   overlayEl.hidden = false;
 }
 
-export function closeImageLightbox() {
+function closeImageLightbox() {
   if (overlayEl) overlayEl.hidden = true;
 }

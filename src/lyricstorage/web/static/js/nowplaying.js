@@ -4,6 +4,8 @@ import { createMarqueeClip, applyMarquee } from "./marquee.js";
 import { showArtSpinner } from "./artspinner.js";
 import { openImageLightbox } from "./imageLightbox.js";
 import { buildArtistCell } from "./songArtist.js";
+import { store } from "./store.js";
+import { isTypingTarget } from "./dom.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 
@@ -88,6 +90,12 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   // 앨범 연도는 트랙 정보에 없어서(앨범 쪽에만 저장됨) 앨범 단건 조회로 따로
   // 받아와야 한다 — 같은 앨범을 반복 재생할 때 매번 다시 부르지 않도록 캐싱한다.
   const albumYearCache = new Map();
+  // 스토어에 이미 받아둔 앨범 목록에서 먼저 찾고, 없을 때만(undefined 반환) API로 폴백한다.
+  function lookupAlbumYear(albumId) {
+    const album = (store.getAlbums() || []).find((a) => a.id === albumId);
+    if (album) return album.year || null;
+    return albumYearCache.get(albumId);
+  }
   function resolveAlbumYear(albumId) {
     if (albumYearCache.has(albumId)) return Promise.resolve(albumYearCache.get(albumId));
     return api
@@ -108,7 +116,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     if (!track) return;
     if (track.artist) sublineEl.appendChild(buildArtistCell("now-playing-artist", track.artist, onOpenArtist));
     if (track.album) {
-      const cachedYear = track.album_id ? albumYearCache.get(track.album_id) : null;
+      const cachedYear = track.album_id ? lookupAlbumYear(track.album_id) : null;
       const albumClip = createMarqueeClip(
         "now-playing-album",
         "",
@@ -123,7 +131,7 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
         });
       }
       sublineEl.appendChild(albumClip);
-      if (track.album_id && !albumYearCache.has(track.album_id)) {
+      if (track.album_id && lookupAlbumYear(track.album_id) === undefined) {
         resolveAlbumYear(track.album_id).then((year) => {
           // 응답이 오는 동안 곡이 바뀌었으면(이 클립은 더 이상 화면에 없음) 버린다.
           if (!year || player.currentTrack !== track) return;
@@ -207,9 +215,15 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
   // 잠금화면 등) 위치 갱신처럼 그 정도 빈도로도 충분한 용도에만 남겨둔다.
   function updateProgressUI() {
     const posMs = player.position();
-    seekSlider.value = String(posMs);
-    elapsedLabel.textContent = fmtTime(posMs);
-    updateRangeFill(seekSlider);
+    // 표시값이 그대로면 DOM 쓰기를 건너뛴다(rAF마다 호출되므로).
+    const max = Number(seekSlider.max) || 0;
+    const sliderStr = String(Math.max(0, Math.min(Math.round(posMs), max)));
+    if (seekSlider.value !== sliderStr) {
+      seekSlider.value = String(posMs);
+      updateRangeFill(seekSlider);
+    }
+    const label = fmtTime(posMs);
+    if (elapsedLabel.textContent !== label) elapsedLabel.textContent = label;
   }
   let progressRafId = null;
   function progressStep() {
@@ -324,14 +338,29 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
     updateRangeFill(seekSlider);
   });
 
+  let volumeSaveTimer = null;
+  function flushVolumeSave() {
+    if (volumeSaveTimer == null) return;
+    clearTimeout(volumeSaveTimer);
+    volumeSaveTimer = null;
+    api.updateSettings({ volume: Number(volumeSlider.value) }).catch(() => {});
+  }
+  function scheduleVolumeSave() {
+    clearTimeout(volumeSaveTimer);
+    volumeSaveTimer = setTimeout(flushVolumeSave, 300);
+  }
+
   volumeSlider.addEventListener("input", () => {
     const value = Number(volumeSlider.value);
     player.setVolume(value);
     setIcon(muteBtn.querySelector(".icon"), value === 0 ? "volume-x" : "volume-2");
     if (value > 0) lastVolume = value;
     updateRangeFill(volumeSlider);
-    api.updateSettings({ volume: value }).catch(() => {});
+    scheduleVolumeSave();
   });
+  // 서버 저장은 드래그 중 매 input마다 보내지 않고 잠시 뒤 마지막 값만 보낸다.
+  volumeSlider.addEventListener("change", flushVolumeSave);
+  window.addEventListener("pagehide", flushVolumeSave);
 
   muteBtn.addEventListener("click", () => {
     if (Number(volumeSlider.value) === 0) {
@@ -347,12 +376,6 @@ export function setupNowPlaying(player, onOpenAlbum, onOpenArtist) {
 
   // 검색창/가사 편집/페이지 번호 입력 등 텍스트를 입력 중일 때는 스페이스바/
   // 화살표 키가 그 입력에 쓰여야 하므로 단축키를 발동하지 않는다.
-  function isTypingTarget(el) {
-    if (!el) return false;
-    const tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-  }
-
   window.addEventListener("keydown", (e) => {
     if (isTypingTarget(document.activeElement)) return;
     if (e.key === " " || e.code === "Space") {
