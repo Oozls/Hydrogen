@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { alertDialog } from "./dialog.js";
-import { showArtSpinner } from "./artspinner.js";
+import { makeArtShower, artVersionQuery, bumpArtVersion } from "./artDisplay.js";
 
 export function setupAlbumInfo(onSaved) {
   const dialog = document.getElementById("album-info-dialog");
@@ -17,20 +17,7 @@ export function setupAlbumInfo(onSaved) {
   let currentAlbumId = null;
   let pendingArtFile = null;
 
-  function showArt(url) {
-    const stopSpin = showArtSpinner(artPreview.parentElement);
-    artPreview.onerror = () => {
-      stopSpin();
-      artPreview.style.display = "none";
-      artPlaceholder.style.display = "";
-    };
-    artPreview.onload = () => {
-      stopSpin();
-      artPreview.style.display = "";
-      artPlaceholder.style.display = "none";
-    };
-    artPreview.src = url;
-  }
+  const showArt = makeArtShower(artPreview, artPlaceholder);
 
   function open(group) {
     currentAlbumId = group.id;
@@ -38,7 +25,7 @@ export function setupAlbumInfo(onSaved) {
     albumInput.value = group.album || "";
     artistInput.value = group.artist || "";
     yearInput.value = group.year || "";
-    showArt(`${api.albumArtUrl(group.id)}?t=${Date.now()}`);
+    showArt(`${api.albumArtUrl(group.id)}${artVersionQuery(group.id)}`);
 
     dialog.showModal();
   }
@@ -65,6 +52,7 @@ export function setupAlbumInfo(onSaved) {
       const result = await api.updateAlbum(currentAlbumId, { name, artist, year });
       if (pendingArtFile) {
         await api.uploadAlbumArt(currentAlbumId, pendingArtFile);
+        bumpArtVersion(currentAlbumId);
       }
       dialog.close();
       onSaved(result.tracks);

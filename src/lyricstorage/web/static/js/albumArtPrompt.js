@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { alertDialog } from "./dialog.js";
+import { bumpArtVersion } from "./artDisplay.js";
 
 // 업로드 직후, 표지가 없는 상태로 남은 앨범들에 대해 "곡 내부 표지 사용" 또는
 // "직접 업로드" 중 하나를 고르게 하는 다이얼로그. onResolved는 앨범 표지가
@@ -85,6 +86,7 @@ export function setupAlbumArtPrompt() {
     if (!file || !albumId) return;
     try {
       await api.uploadAlbumArt(albumId, file);
+      bumpArtVersion(albumId);
       const li = listEl.querySelector(`[data-album-id="${albumId}"]`);
       if (li) markResolved(li);
       if (onResolved) onResolved();
