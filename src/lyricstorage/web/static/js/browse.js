@@ -8,21 +8,19 @@ import { applyMarquee, applyColumnPriority, createMarqueeClip } from "./marquee.
 import { openImageLightbox } from "./imageLightbox.js";
 import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
+import { artVersionQuery } from "./artDisplay.js";
+import { CIRCLE_ENDPOINTS } from "./circleEndpoints.js";
+import { triggerDownload } from "./download.js";
 import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { setupRebuildResultDialog } from "./rebuildResultDialog.js";
 import { setupTrashCompareDialog } from "./trashCompareDialog.js";
 import { fillArtistArt } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
+import { fmtDuration } from "./formatters.js";
+import { createRatingBadge } from "./ratingBadge.js";
 import { splitArtists, buildArtistNameResolver, buildCircleNameFinder, buildArtistCell } from "./songArtist.js";
 import { searchAll } from "./search.js";
-
-function fmtDuration(ms) {
-  const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
 
 // 앨범 평균 평점: 평가되지 않은(0점) 곡은 제외하고, 평가된 곡끼리만 평균을 낸다.
 // 한 곡도 평가되지 않았으면 null(빈칸 처리용).
@@ -41,18 +39,6 @@ function matchesSong(track, q, field = "all") {
   if (field === "album") return (track.album || "").toLowerCase().includes(q);
   if (field === "artist") return (track.artist || "").toLowerCase().includes(q);
   return `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(q);
-}
-
-// 가사 유무 아이콘과 같은 이유로 레이팅이 없는 곡도 배지 자리를 항상 차지하게
-// 만들고 visibility로만 숨긴다(폭 고정은 CSS .playlist-row-rating이 담당) —
-// 그래야 레이팅 있는 행과 없는 행에서 라벨(제목/앨범/아티스트) 폭이 똑같이
-// 남아 컬럼이 어긋나지 않는다.
-function createRatingBadge(rating) {
-  const badge = document.createElement("span");
-  badge.className = "playlist-row-rating" + (rating ? "" : " empty");
-  badge.appendChild(iconSpan("heart-filled", "icon-sm"));
-  badge.appendChild(document.createTextNode(String(rating || 0)));
-  return badge;
 }
 
 const LONG_PRESS_MS = 500;
@@ -862,7 +848,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   function fillAlbumDetailHeader(group) {
     albumDetailTitle.textContent = group.album || "(앨범 없음)";
     albumDetailArtist.textContent = [group.artist, group.year].filter(Boolean).join(" · ");
-    showAlbumDetailArt(`${api.albumArtUrl(group.id)}?t=${Date.now()}`);
+    showAlbumDetailArt(`${api.albumArtUrl(group.id)}${artVersionQuery(group.id)}`);
     requestAnimationFrame(() => applyMarquee(albumDetailTitleClip));
   }
 
@@ -962,12 +948,6 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
 
   // 서클(앨범 아티스트) 정체성 편집은 곡 아티스트와 같은 다이얼로그를 재사용하되,
   // API만 circles.js 쪽으로 갈아 끼운다(identity_registry.py를 공유하므로 로직은 동일).
-  const CIRCLE_ENDPOINTS = {
-    rename: (id, name) => api.renameCircle(id, name),
-    addAlias: (id, alias) => api.addCircleAlias(id, alias),
-    removeAlias: (id, alias) => api.removeCircleAlias(id, alias),
-  };
-
   async function openCircleIdentityEditor(name) {
     const identity = await api.resolveCircle(name || "(서클 없음)");
     identityDialogApi.open(identity, {
@@ -1388,14 +1368,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   btnAlbumDetailBack.addEventListener("click", closeAlbumDetail);
   btnAlbumDetailDownload.addEventListener("click", () => {
     if (!currentAlbumGroup) return;
-    // <a download>를 잠깐 만들어 클릭한 뒤 치운다 — 실제 zip 파일명은 서버의
-    // Content-Disposition 헤더가 정해주므로 download 속성은 비워둔다.
-    const a = document.createElement("a");
-    a.href = api.albumDownloadUrl(currentAlbumGroup.id);
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    triggerDownload(api.albumDownloadUrl(currentAlbumGroup.id));
   });
   btnAlbumDetailEdit.addEventListener("click", () => {
     if (currentAlbumGroup) onEditAlbum(currentAlbumGroup);
@@ -1686,7 +1659,11 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       closeSearchResults();
       return;
     }
-    store.ensureLoaded().then(() => renderSearchResults(q));
+    // 키 입력마다 ensureLoaded()를 부르면 배경 refresh가 매번 돌고 그 notify로
+    // 검색 결과가 두 번 그려진다 — 이미 로드됐으면 현재 캐시로 바로 그린다
+    // (화면 진입 시 ensureLoaded가 이미 배경 refresh를 걸어둔다).
+    if (store.isLoaded()) renderSearchResults(q);
+    else store.ensureLoaded().then(() => renderSearchResults(q));
   });
   // 한글 입력처럼 조합 중에는 input 이벤트가 아직 완성되지 않은 글자를 검색할
   // 수 있으므로, 엔터로 입력을 마치면 그 시점의 값으로 결과를 다시 확실히 띄운다.

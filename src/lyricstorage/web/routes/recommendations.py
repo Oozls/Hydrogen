@@ -7,7 +7,7 @@ from datetime import date
 
 from flask import Blueprint, jsonify, request
 
-from lyricstorage import applog, recommend, storage
+from lyricstorage import applog, recommend
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
@@ -107,58 +107,3 @@ def save_auto_playlist(auto_id: str):
     new_playlist.save()
     applog.log_info("ACTION", f"자동 플레이리스트 저장: {auto_id} -> {name} ({len(new_playlist.tracks)}곡)")
     return jsonify(playlist_to_json(new_playlist)), 201
-
-
-@bp.get("/weights")
-def get_weights():
-    playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
-    history = storage.load_play_history()
-    rating_by_track = {t.get("track_id"): t.get("rating") or 0 for t in tracks}
-    duration_by_track = {t.get("track_id"): t.get("duration_ms") or 0 for t in tracks}
-
-    config = storage.load_recommend_config()
-    mode = config.get("mode") if config.get("mode") in ("auto", "manual") else "auto"
-    manual_weights = {
-        k: recommend.clamp_weight(float((config.get("manual_weights") or {}).get(k, recommend.DEFAULT_WEIGHTS[k])))
-        for k in recommend.FEATURE_KEYS
-    }
-    active_manual = manual_weights if mode == "manual" else None
-    weights, source = recommend.resolve_weights(history, rating_by_track, duration_by_track, active_manual)
-
-    return jsonify(
-        {
-            "mode": mode,
-            "source": source,
-            "weights": weights,
-            "manual_weights": manual_weights,
-            "labels": recommend.FEATURE_LABELS,
-            "min": recommend.WEIGHT_MIN,
-            "max": recommend.WEIGHT_MAX,
-            "history": storage.load_recommend_weight_history(),
-        }
-    )
-
-
-@bp.put("/weights")
-def update_weights():
-    data = request.get_json(silent=True) or {}
-    config = storage.load_recommend_config()
-
-    if data.get("mode") in ("auto", "manual"):
-        config["mode"] = data["mode"]
-
-    incoming = data.get("manual_weights")
-    if isinstance(incoming, dict):
-        manual_weights = dict(config.get("manual_weights") or recommend.DEFAULT_WEIGHTS)
-        for key in recommend.FEATURE_KEYS:
-            if key not in incoming:
-                continue
-            try:
-                manual_weights[key] = recommend.clamp_weight(float(incoming[key]))
-            except (TypeError, ValueError):
-                continue
-        config["manual_weights"] = manual_weights
-
-    storage.save_recommend_config(config)
-    return jsonify(config)

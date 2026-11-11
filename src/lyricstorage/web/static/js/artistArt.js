@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 
-export function pickRandomAlbums(list, n) {
+function pickRandomAlbums(list, n) {
   const copy = (list || []).slice();
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

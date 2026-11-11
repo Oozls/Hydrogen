@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from dataclasses import dataclass, field, asdict
+import threading
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -22,6 +23,21 @@ from lyricstorage import applog, lyrics_io, storage
 
 GLOBAL_PLAYLIST_NAME = "글로벌 플레이리스트"
 SUPPORTED_EXTENSIONS = (".mp3", ".wav", ".m4a")
+
+# PlaylistModel.save()가 호출될 때마다 올라가는 카운터. 플레이리스트 내용을 캐시하는
+# 쪽(web/lookup.py)이 "저장이 있었는지"를 값싸게 확인하는 데 쓴다.
+_save_generation = 0
+_save_generation_lock = threading.Lock()
+
+
+def playlist_save_generation() -> int:
+    return _save_generation
+
+
+def _bump_save_generation() -> None:
+    global _save_generation
+    with _save_generation_lock:
+        _save_generation += 1
 
 
 def _copy_into_library(path: str) -> str:
@@ -238,20 +254,26 @@ class PlaylistModel:
         # library_path 파일명 자체가 내용 해시이므로, 경로 일치 여부만으로
         # 완전히 동일한 파일이 이미 추가돼 있는지 판단할 수 있다(재해싱 불필요).
         # 이 검사는 self(호출 대상 플레이리스트)의 트랙 목록만 기준으로 하므로,
-        # add_file/add_folder가 라이브러리(글로벌) 플레이리스트가 아닌 다른
+        # add_file이 라이브러리(글로벌) 플레이리스트가 아닌 다른
         # 플레이리스트에서 직접 호출되면 그 플레이리스트 기준으로 중복이 판단된다.
-        if any(t.path == library_path for t in self.tracks):
+        # 업로드처럼 add_file을 연속 호출할 때 매번 전체 목록을 훑지 않도록 경로
+        # 집합을 캐시한다(트랙 목록 객체/길이가 달라졌으면 다시 만든다).
+        paths = self._known_paths()
+        if library_path in paths:
             raise ValueError("이미 라이브러리에 있는 파일입니다")
         track = Track.from_file(library_path)
         self.tracks.append(track)
+        paths.add(track.path)
+        self._paths_cache = (self.tracks, len(self.tracks), paths)
         return track
 
-    def add_folder(self, folder: str) -> list[Track]:
-        added: list[Track] = []
-        found = [p for ext in SUPPORTED_EXTENSIONS for p in Path(folder).rglob(f"*{ext}")]
-        for audio_path in sorted(found):
-            added.append(self.add_file(str(audio_path)))
-        return added
+    def _known_paths(self) -> set[str]:
+        cache = getattr(self, "_paths_cache", None)
+        if cache is not None and cache[0] is self.tracks and cache[1] == len(self.tracks):
+            return cache[2]
+        paths = {t.path for t in self.tracks}
+        self._paths_cache = (self.tracks, len(self.tracks), paths)
+        return paths
 
     def remove(self, index: int) -> None:
         if 0 <= index < len(self.tracks):
@@ -289,6 +311,7 @@ class PlaylistModel:
     def save(self) -> Path:
         path = storage.playlists_dir() / f"{self._slug()}.json"
         storage.write_json_atomic(path, self.to_dict())
+        _bump_save_generation()
         return path
 
     @classmethod
@@ -297,22 +320,24 @@ class PlaylistModel:
         return cls.from_dict(data)
 
     @staticmethod
-    def list_saved() -> list[Path]:
-        return sorted(storage.playlists_dir().glob("*.json"))
-
-    @staticmethod
-    def list_saved_names() -> list[tuple[str, Path]]:
-        result: list[tuple[str, Path]] = []
+    def list_saved_with_data():
+        """저장된 플레이리스트를 (이름, 경로, 파싱된 dict)로 하나씩 돌려준다(파일명
+        정렬 순). 읽지 못한 파일은 로그만 남기고 건너뛴다. 호출자가 곧바로
+        from_dict()로 쓸 수 있어 파일을 두 번 파싱하지 않아도 된다."""
         for path in sorted(storage.playlists_dir().glob("*.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                result.append((data.get("name", path.stem), path))
+                name = data.get("name", path.stem)
             except (json.JSONDecodeError, OSError) as exc:
                 # 손상된 파일을 "없는 파일"로 조용히 취급하면 곧바로 빈 플레이리스트로
                 # 덮어써지는 사고가 재발한다(글로벌 플레이리스트 유실 사고 참고).
                 applog.log_error("PLAYLIST", f"플레이리스트 파일을 읽지 못했습니다: {path} ({exc})")
                 continue
-        return result
+            yield name, path, data
+
+    @staticmethod
+    def list_saved_names() -> list[tuple[str, Path]]:
+        return [(name, path) for name, path, _data in PlaylistModel.list_saved_with_data()]
 
 
 @dataclass
@@ -322,7 +347,7 @@ class LyricLine:
 
 
 class LyricTrack:
-    """한 트랙에 대한 동기화 가사 데이터. 라이브 캡처와 탭싱크가 공유한다."""
+    """한 트랙에 대한 동기화 가사(LRC) 데이터."""
 
     def __init__(self, track_path: str, lines: Optional[list[LyricLine]] = None):
         self.track_path = track_path
@@ -334,30 +359,6 @@ class LyricTrack:
         lines = [LyricLine(ms, text) for ms, text in raw]
         return cls(track_path, lines)
 
-    def add_line(self, timestamp_ms: int, text: str) -> None:
-        text = text.strip()
-        if not text:
-            return
-        self.lines.append(LyricLine(timestamp_ms, text))
-        self.lines.sort(key=lambda line: line.timestamp_ms)
-
-    def clear(self) -> None:
-        self.lines.clear()
-
     def save(self) -> Optional[Path]:
         raw = [(line.timestamp_ms, line.text) for line in self.lines]
         return lyrics_io.save_lyrics(self.track_path, raw)
-
-    def current_index(self, position_ms: int) -> int:
-        """현재 재생 위치에 해당하는 줄 인덱스 (이진 탐색). 없으면 -1."""
-        if not self.lines:
-            return -1
-        lo, hi, result = 0, len(self.lines) - 1, -1
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            if self.lines[mid].timestamp_ms <= position_ms:
-                result = mid
-                lo = mid + 1
-            else:
-                hi = mid - 1
-        return result

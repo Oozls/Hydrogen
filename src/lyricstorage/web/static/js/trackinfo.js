@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { store } from "./store.js";
 import { alertDialog, confirmDialog } from "./dialog.js";
 import { distinctValues, buildAutocomplete } from "./autocomplete.js";
-import { showArtSpinner } from "./artspinner.js";
+import { makeArtShower, artVersionQuery, bumpArtVersion } from "./artDisplay.js";
 
 export function setupTrackInfo(onSaved, onDeleted) {
   const dialog = document.getElementById("track-info-dialog");
@@ -33,20 +33,7 @@ export function setupTrackInfo(onSaved, onDeleted) {
     () => artistValues
   );
 
-  function showArt(url) {
-    const stopSpin = showArtSpinner(artPreview.parentElement);
-    artPreview.onerror = () => {
-      stopSpin();
-      artPreview.style.display = "none";
-      artPlaceholder.style.display = "";
-    };
-    artPreview.onload = () => {
-      stopSpin();
-      artPreview.style.display = "";
-      artPlaceholder.style.display = "none";
-    };
-    artPreview.src = url;
-  }
+  const showArt = makeArtShower(artPreview, artPlaceholder);
 
   async function open(track) {
     trackId = track.track_id;
@@ -54,7 +41,7 @@ export function setupTrackInfo(onSaved, onDeleted) {
     titleInput.value = track.title || "";
     artistInput.value = track.artist || "";
     albumText.textContent = track.album || "(앨범 없음)";
-    showArt(`${api.artUrl(trackId)}?t=${Date.now()}`);
+    showArt(`${api.artUrl(trackId)}${artVersionQuery(trackId)}`);
     dialog.showModal();
 
     await store.ensureLoaded();
@@ -111,6 +98,7 @@ export function setupTrackInfo(onSaved, onDeleted) {
       });
       if (pendingArtFile) {
         await api.uploadTrackArt(trackId, pendingArtFile);
+        bumpArtVersion(trackId);
       }
       dialog.close();
       onSaved(trackId, updated);

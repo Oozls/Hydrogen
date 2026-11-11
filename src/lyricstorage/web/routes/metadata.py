@@ -11,12 +11,10 @@ from lyricstorage import applog, storage
 from lyricstorage.models import write_album_art, write_tags
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
-from lyricstorage.web.routes.media import _sniff_image_mimetype
+from lyricstorage.web.image_utils import read_art_upload
 from lyricstorage.web.serialize import track_to_json
 
 bp = Blueprint("metadata", __name__, url_prefix="/api/tracks")
-
-_ALLOWED_ART_MIME = {"image/jpeg", "image/png"}
 
 
 @bp.put("/<track_id>/metadata")
@@ -91,25 +89,29 @@ def update_metadata_batch():
 
     updated = []
     errors = []
-    for track_id in dict.fromkeys(track_ids):  # 중복 제거, 순서 유지
-        track = find_track_by_id(track_id)
-        if track is None:
-            errors.append({"track_id": track_id, "reason": "트랙을 찾을 수 없습니다."})
-            continue
-        try:
-            write_tags(
-                track.path,
-                title=fields.get("title", track.title),
-                artist=fields.get("artist", track.artist),
-                album=fields.get("album", track.album),
-            )
-        except OSError as exc:
-            errors.append({"track_id": track_id, "reason": str(exc)})
-            continue
-        playlist_repo.update_track_in_all_playlists(track.path, **fields)
-        for key, value in fields.items():
-            setattr(track, key, value)
-        updated.append(track_to_json(track))
+    pending: dict[str, dict] = {}  # 태그 쓰기에 성공한 곡의 path -> fields (플레이리스트는 한 번에 갱신)
+    try:
+        for track_id in dict.fromkeys(track_ids):  # 중복 제거, 순서 유지
+            track = find_track_by_id(track_id)
+            if track is None:
+                errors.append({"track_id": track_id, "reason": "트랙을 찾을 수 없습니다."})
+                continue
+            try:
+                write_tags(
+                    track.path,
+                    title=fields.get("title", track.title),
+                    artist=fields.get("artist", track.artist),
+                    album=fields.get("album", track.album),
+                )
+            except OSError as exc:
+                errors.append({"track_id": track_id, "reason": str(exc)})
+                continue
+            pending[track.path] = fields
+            for key, value in fields.items():
+                setattr(track, key, value)
+            updated.append(track_to_json(track))
+    finally:
+        playlist_repo.update_tracks_in_all_playlists(pending)
 
     applog.log_info(
         "ACTION",
@@ -123,14 +125,17 @@ def delete_tracks_batch():
     data = request.get_json(silent=True) or {}
     track_ids = data.get("track_ids") or []
     deleted, errors = [], []
+    paths: list[str] = []
     for track_id in dict.fromkeys(track_ids):  # 중복 제거, 순서 유지
         track = find_track_by_id(track_id)
         if track is None:
             errors.append({"track_id": track_id, "reason": "트랙을 찾을 수 없습니다."})
             continue
-        playlist_repo.remove_track_from_all_playlists(track.path)
-        storage.unlink_retrying(Path(track.path), missing_ok=True)
+        paths.append(track.path)
         deleted.append(track_id)
+    playlist_repo.remove_tracks_from_all_playlists(paths)
+    for path in paths:
+        storage.unlink_retrying(Path(path), missing_ok=True)
     applog.log_info("ACTION", f"곡 일괄 삭제: {len(deleted)}곡 성공, {len(errors)}곡 실패")
     return jsonify({"deleted": deleted, "errors": errors})
 
@@ -141,14 +146,9 @@ def upload_art(track_id: str):
     if track is None:
         return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
 
-    file_storage = request.files.get("art")
-    if not file_storage or not file_storage.filename:
-        return jsonify({"error": "이미지 파일이 필요합니다."}), 400
-
-    image_bytes = file_storage.read()
-    mime = _sniff_image_mimetype(image_bytes)
-    if mime not in _ALLOWED_ART_MIME:
-        return jsonify({"error": "JPEG 또는 PNG 이미지만 지원합니다."}), 400
+    image_bytes, mime, error = read_art_upload()
+    if error is not None:
+        return error
 
     try:
         write_album_art(track.path, image_bytes, mime)

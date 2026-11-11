@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { setIcon } from "./icons.js";
+import { isTypingTarget } from "./dom.js";
 
 // 표시 전용 분:초.밀리초 클럭. 태깅 정밀도가 이 기능의 핵심이라 밀리초까지 보여준다.
 function fmtClock(ms) {
@@ -9,12 +10,6 @@ function fmtClock(ms) {
   const s = totalSeconds % 60;
   const millis = total % 1000;
   return `${m}:${String(s).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
-}
-
-function isTypingTarget(el) {
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
 // 가사 상세 편집: (1) 가사 텍스트를 줄 단위로 먼저 입력 → (2) 곡을 재생하며

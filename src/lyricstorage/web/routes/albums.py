@@ -13,12 +13,11 @@ from lyricstorage import albums as albums_repo
 from lyricstorage import applog
 from lyricstorage.models import read_album_art, resize_image_bytes, write_tags
 from lyricstorage.web import playlist_repo
-from lyricstorage.web.routes.media import _sniff_image_mimetype, sanitize_filename
+from lyricstorage.web.image_utils import read_art_upload, sniff_image_ext
+from lyricstorage.web.routes.media import sanitize_filename
 from lyricstorage.web.serialize import album_to_json, track_to_json
 
 bp = Blueprint("albums", __name__, url_prefix="/api/albums")
-
-_ALLOWED_ART_MIME = {"image/jpeg", "image/png"}
 
 
 def _track_count(album_id: str) -> int:
@@ -99,14 +98,9 @@ def upload_album_art(album_id: str):
     if album is None:
         return jsonify({"error": "앨범을 찾을 수 없습니다."}), 404
 
-    file_storage = request.files.get("art")
-    if not file_storage or not file_storage.filename:
-        return jsonify({"error": "이미지 파일이 필요합니다."}), 400
-
-    image_bytes = file_storage.read()
-    mime = _sniff_image_mimetype(image_bytes)
-    if mime not in _ALLOWED_ART_MIME:
-        return jsonify({"error": "JPEG 또는 PNG 이미지만 지원합니다."}), 400
+    image_bytes, mime, error = read_art_upload()
+    if error is not None:
+        return error
 
     ext = "png" if mime == "image/png" else "jpg"
     albums_repo.write_album_cover(album_id, image_bytes, ext)
@@ -123,7 +117,7 @@ def use_track_art_for_album(album_id: str):
     for track in playlist_repo.find_tracks_by_album_id(album_id):
         art_bytes = read_album_art(track.path)
         if art_bytes:
-            ext = albums_repo.sniff_image_ext(art_bytes)
+            ext = sniff_image_ext(art_bytes)
             albums_repo.write_album_cover(album_id, art_bytes, ext)
             applog.log_info("ACTION", f"앨범 표지를 곡 내부 표지로 설정: {album_id}")
             return jsonify(album_to_json(albums_repo.find_album_by_id(album_id), _track_count(album_id)))

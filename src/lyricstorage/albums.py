@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -38,22 +39,50 @@ class Album:
         )
 
 
+# albums.json 파싱 결과 캐시: (mtime_ns, size) -> 앨범 dict 리스트. 호출자가 반환된
+# Album을 수정해도 캐시가 오염되지 않도록, 캐시에는 dict만 두고 호출마다 새 Album을 만든다.
+_cache_lock = threading.Lock()
+_cache: tuple[tuple[int, int], list[dict]] | None = None
+
+
+def _file_signature(path: Path) -> tuple[int, int] | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
 def load_albums() -> list[Album]:
+    global _cache
     path = storage.albums_path()
-    if not path.exists():
+    signature = _file_signature(path)
+    if signature is None:
         return []
+    with _cache_lock:
+        cached = _cache
+    if cached is not None and cached[0] == signature:
+        return [Album.from_dict(item) for item in cached[1]]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
-    return [Album.from_dict(item) for item in data if isinstance(item, dict)]
+    items = [item for item in data if isinstance(item, dict)]
+    with _cache_lock:
+        _cache = (signature, items)
+    return [Album.from_dict(item) for item in items]
 
 
 def save_albums(albums: list[Album]) -> None:
-    storage.albums_path().write_text(
+    global _cache
+    path = storage.albums_path()
+    path.write_text(
         json.dumps([a.to_dict() for a in albums], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # 다음 load_albums()가 새 mtime/size로 파일을 다시 읽도록 캐시를 비운다.
+    with _cache_lock:
+        _cache = None
 
 
 def find_album_by_id(album_id: str) -> Optional[Album]:
@@ -103,15 +132,6 @@ def album_art_path(album_id: str, ext: str) -> Path:
     return storage.album_art_dir() / f"{album_id}.{ext}"
 
 
-def read_album_cover(album: Album) -> Optional[bytes]:
-    if not album.art_ext:
-        return None
-    path = album_art_path(album.id, album.art_ext)
-    if not path.exists():
-        return None
-    return path.read_bytes()
-
-
 def write_album_cover(album_id: str, image_bytes: bytes, ext: str) -> None:
     delete_album_cover(album_id)
     album_art_path(album_id, ext).write_bytes(image_bytes)
@@ -121,9 +141,3 @@ def write_album_cover(album_id: str, image_bytes: bytes, ext: str) -> None:
 def delete_album_cover(album_id: str) -> None:
     for existing in storage.album_art_dir().glob(f"{album_id}.*"):
         existing.unlink(missing_ok=True)
-
-
-def sniff_image_ext(data: bytes) -> str:
-    if data[:8] == b"\x89PNG\r\n\x1a\n":
-        return "png"
-    return "jpg"

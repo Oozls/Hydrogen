@@ -25,7 +25,7 @@ from lyricstorage.models import (
 )
 from lyricstorage.web import library as library_adapter
 from lyricstorage.web import playlist_repo
-from lyricstorage.web.routes.media import _MIME_BY_EXT
+from lyricstorage.web.image_utils import AUDIO_MIME_BY_EXT
 from lyricstorage.web.serialize import playlist_to_json, track_to_json
 
 bp = Blueprint("library", __name__, url_prefix="/api/library")
@@ -363,7 +363,7 @@ def get_song_file_audio(filename: str):
     중복 검토처럼, 아직 어느 플레이리스트에도 속하지 않은(그래서 track_id로는
     못 찾는) 파일을 미리듣기할 때 쓴다."""
     path = _resolve_song_path(filename)
-    mimetype = _MIME_BY_EXT.get(path.suffix.lower(), "application/octet-stream")
+    mimetype = AUDIO_MIME_BY_EXT.get(path.suffix.lower(), "application/octet-stream")
     return send_file(path, mimetype=mimetype, conditional=True)
 
 
@@ -382,6 +382,7 @@ def reimport_artists():
     files = request.files.getlist("files[]") or request.files.getlist("files")
 
     updated, unmatched, ambiguous = [], [], []
+    pending: dict[str, dict] = {}  # path -> fields (플레이리스트는 마지막에 한 번에 갱신)
     for file_storage in files:
         if not file_storage or not file_storage.filename:
             continue
@@ -423,9 +424,11 @@ def reimport_artists():
         except OSError as exc:
             unmatched.append(f"{file_storage.filename} ({exc})")
             continue
-        playlist_repo.update_track_in_all_playlists(track.path, artist=new_artist)
+        pending[track.path] = {"artist": new_artist}
         track.artist = new_artist
         updated.append({"title": track.title, "album": track.album, "artist": new_artist})
+
+    playlist_repo.update_tracks_in_all_playlists(pending)
 
     applog.log_info(
         "ACTION",
@@ -443,6 +446,7 @@ def normalize_artists():
     playlist = playlist_repo.load_or_create_global()
     updated = []
     failed = []
+    pending: dict[str, dict] = {}
     for track in playlist.tracks:
         normalized = normalize_artist_text(track.artist)
         if normalized == track.artist:
@@ -452,9 +456,11 @@ def normalize_artists():
         except OSError as exc:
             failed.append({"title": track.title, "artist": track.artist, "reason": str(exc)})
             continue
-        playlist_repo.update_track_in_all_playlists(track.path, artist=normalized)
+        pending[track.path] = {"artist": normalized}
         updated.append({"title": track.title, "before": track.artist, "after": normalized})
         track.artist = normalized
+
+    playlist_repo.update_tracks_in_all_playlists(pending)
 
     applog.log_info("ACTION", f"아티스트 구분자 정리: {len(updated)}곡 갱신, 실패 {len(failed)}개")
     return jsonify({"updated": updated, "failed": failed})

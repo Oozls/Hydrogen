@@ -5,7 +5,10 @@ import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 import { fillArtistArt } from "./artistArt.js";
 import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
+import { CIRCLE_ENDPOINTS } from "./circleEndpoints.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
+import { fmtDuration } from "./formatters.js";
+import { createRatingBadge } from "./ratingBadge.js";
 
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
 const TRACK_PAGE_SIZE_FALLBACK = 50;
@@ -24,13 +27,6 @@ function formatRange(startIso, endIso, period) {
   if (period === "day") return ymd(start);
   const end = new Date(new Date(endIso).getTime() - 1);
   return `${ymd(start)} ~ ${ymd(end)}`;
-}
-
-function fmtDuration(ms) {
-  const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 // 게임 플레이타임처럼 "N시간 M분" 형태로 사용 시간을 보여준다(1시간 미만이면
@@ -59,16 +55,6 @@ function fmtRelativeTime(iso) {
   const diffDay = Math.floor(diffHour / 24);
   if (diffDay < 7) return `${diffDay}일 전`;
   return ymd(new Date(then));
-}
-
-// 가사 유무 아이콘과 같은 이유로 레이팅이 없는 곡도 배지 자리를 항상 차지하게
-// 만들고 visibility로만 숨긴다(브라우즈/재생목록과 동일한 패턴).
-function createRatingBadge(rating) {
-  const badge = document.createElement("span");
-  badge.className = "playlist-row-rating" + (rating ? "" : " empty");
-  badge.appendChild(iconSpan("heart-filled", "icon-sm"));
-  badge.appendChild(document.createTextNode(String(rating || 0)));
-  return badge;
 }
 
 const VALID_PERIODS = ["day", "week", "month"];
@@ -771,12 +757,6 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
 
   // 서클(앨범 아티스트) 정체성 편집은 곡 아티스트와 같은 다이얼로그를 재사용하되,
   // API만 circles.js 쪽으로 갈아 끼운다(브라우즈의 서클 편집과 동일한 패턴).
-  const CIRCLE_ENDPOINTS = {
-    rename: (id, name) => api.renameCircle(id, name),
-    addAlias: (id, alias) => api.addCircleAlias(id, alias),
-    removeAlias: (id, alias) => api.removeCircleAlias(id, alias),
-  };
-
   function buildCircleDetailAlbumCard(album, trackCount) {
     const card = document.createElement("div");
     card.className = "media-card media-card-clickable";

@@ -165,12 +165,15 @@ def top(
     artist_resolver = artists_repo.name_resolver() if group == "artist" else {}
 
     buckets: dict[Any, dict[str, Any]] = {}
-    for entry in history:
-        try:
-            datetime.fromisoformat(entry["played_at"])
-        except (KeyError, TypeError, ValueError):
-            continue
 
+    def bump(bucket: dict[str, Any], listened_ms: int, played_at_str: str) -> None:
+        bucket["count"] += 1
+        bucket["listened_ms"] += listened_ms
+        if played_at_str > bucket["last_played_at"]:
+            bucket["last_played_at"] = played_at_str
+
+    for entry in history:
+        # load_play_history_range가 played_at이 유효한 ISO 문자열인 엔트리만 돌려준다.
         live = current_by_id.get(entry.get("track_id"))
         title = (live.get("title") if live else None) or entry.get("title") or ""
         artist = (live.get("artist") if live else None) or entry.get("artist") or ""
@@ -178,12 +181,6 @@ def top(
         album_id = live.get("album_id") if live else None
         listened_ms = entry.get("listened_ms") or 0
         played_at_str = entry["played_at"]
-
-        def bump(bucket: dict[str, Any]) -> None:
-            bucket["count"] += 1
-            bucket["listened_ms"] += listened_ms
-            if played_at_str > bucket["last_played_at"]:
-                bucket["last_played_at"] = played_at_str
 
         if group == "track":
             key = entry.get("track_id")
@@ -202,7 +199,7 @@ def top(
             bucket["title"] = title
             bucket["artist"] = artist
             bucket["album"] = album
-            bump(bucket)
+            bump(bucket, listened_ms, played_at_str)
         elif group == "artist":
             # 한 곡에 아티스트가 여럿(쉼표 구분)이면 각 아티스트에게 개별로 집계하되,
             # 이명이 등록된 이름은 대표 이름으로 바꿔서 같은 사람으로 묶는다.
@@ -212,7 +209,7 @@ def top(
                 bucket = buckets.setdefault(
                     name, {"artist": name, "count": 0, "listened_ms": 0, "last_played_at": played_at_str}
                 )
-                bump(bucket)
+                bump(bucket, listened_ms, played_at_str)
         else:  # album
             album_label = album or "(앨범 없음)"
             # 아직 라이브러리에 있는 트랙이면 album_id(불변)로 묶어서, 앨범명을
@@ -233,7 +230,7 @@ def top(
             )
             bucket["album"] = album_label
             bucket["artist"] = artist
-            bump(bucket)
+            bump(bucket, listened_ms, played_at_str)
 
     # "곡" 그룹은 재생 횟수가 많은 순으로 보여주되, 횟수가 같으면 최근에 들은 곡을 먼저 보여준다.
     sort_key = (lambda b: (b["count"], b["last_played_at"])) if group == "track" else (lambda b: b["count"])

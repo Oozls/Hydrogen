@@ -3,17 +3,7 @@ import { iconSpan, setIcon } from "./icons.js";
 import { buildArtEl } from "./artspinner.js";
 import { buildArtistCell } from "./songArtist.js";
 import { createMarqueeClip, applyMarquee } from "./marquee.js";
-
-// playlist.js의 레이팅 배지와 동일한 구조(하트 아이콘 + 숫자) — 목록 행이
-// 아니라 매치 카드에서 쓰는 것이라 그쪽 헬퍼를 export해서 끌어오는 대신
-// 그대로 복제한다.
-function createRatingBadge(rating) {
-  const badge = document.createElement("span");
-  badge.className = "playlist-row-rating" + (rating ? "" : " empty");
-  badge.appendChild(iconSpan("heart-filled", "icon-sm"));
-  badge.appendChild(document.createTextNode(String(rating || 0)));
-  return badge;
-}
+import { createRatingBadge } from "./ratingBadge.js";
 
 // 취향 기준이 곡 하나만 듣고 매길 때보다 두 곡을 나란히 비교해서 들을 때 더
 // 일관되게 잡힌다는 전제로 만든 화면. 라이브러리 전체(또는 체크박스로 이미

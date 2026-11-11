@@ -123,7 +123,6 @@ export const api = {
   songFileAudioUrl: (filename) => `/api/library/songs/${encodeURIComponent(filename)}/audio`,
   // 휴지통(data/trash) 파일들을 현재 라이브러리의 대응 곡과 나란히 비교하기 위한 목록.
   getTrashComparisons: () => request("GET", "/api/library/trash"),
-  getSettings: () => request("GET", "/api/settings"),
   updateSettings: (patch) => request("PUT", "/api/settings", { json: patch }),
   getDataSize: () => request("GET", "/api/settings/data-size"),
   getLyrics: (trackId) => request("GET", `/api/tracks/${trackId}/lyrics`),
@@ -153,7 +152,6 @@ export const api = {
     formData.append("art", file);
     return request("POST", `/api/tracks/${trackId}/art`, { formData });
   },
-  audioUrl: (trackId) => `/api/tracks/${trackId}/audio`,
   artUrl: (trackId, size) => `/api/tracks/${trackId}/art` + (size ? `?size=${size}` : ""),
   downloadUrl: (trackId) => `/api/tracks/${trackId}/download`,
   getAlbums: () => request("GET", "/api/albums"),

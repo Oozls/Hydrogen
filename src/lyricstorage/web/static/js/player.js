@@ -37,11 +37,6 @@ export class PlayerEngine extends EventTarget {
     this.queueMode = "list";
     this.shuffleOrder = [];
     this._seeking = false;
-    // 우리 코드가 의도적으로 pause()를 호출한 경우에만 true로 두고, 그 밖의
-    // 경우(모바일 OS가 백그라운드/오디오 포커스 상실 등으로 임의로 멈춘 경우)
-    // 발생하는 pause 이벤트는 자동으로 재생을 재개해 "화면 꺼짐/다른 앱 사용 중
-    // 재생이 멈추는" 문제를 완화한다.
-    this._intentionalPause = true;
     // 일부 오디오 파일(특히 정확한 탐색 인덱스가 없는 VBR mp3)은 브라우저가
     // currentTime을 근사치로만 추적해, 정지 후 재생을 반복하면 실제 소리와
     // 표시되는 위치가 조금씩 어긋날 수 있다. 재생이 실제로 재개되는 시점마다
@@ -116,7 +111,6 @@ export class PlayerEngine extends EventTarget {
       // OS가 전화/Siri/이어폰 분리/잠금화면 조작 등으로 멈춘 경우에도 되살리지 않는다 —
       // 예전엔 의도치 않은 pause를 자동 재개해, 기기는 정지로 인식하는데 소리는
       // 계속 나는 불일치가 생겼다. 항상 실제 상태를 그대로 UI/미디어 세션에 반영한다.
-      this._intentionalPause = true;
     });
     audio.addEventListener("ended", () => {
       if (audio !== this.audio) return;
@@ -164,7 +158,6 @@ export class PlayerEngine extends EventTarget {
     if (document.hidden || !this._pendingStart || !this.currentTrack) return;
     if (!this.audio.paused && this.audio.readyState >= 3) return;
     this._log("recover stuck start");
-    this._intentionalPause = false;
     this.audio.load();
     this._tryPlay(this.audio);
   }
@@ -278,7 +271,6 @@ export class PlayerEngine extends EventTarget {
     // 번만(플레이리스트당) 앵커를 확정해 그 문제를 막는다.
     if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
     const track = this.playlist.tracks[index];
-    this._intentionalPause = false;
     const previousBlobUrl = this._currentBlobUrl;
     this._currentBlobUrl = prefetched ? prefetched.url : null;
     this.audio.src = prefetched ? prefetched.url : `/api/tracks/${track.track_id}/audio`;
@@ -310,7 +302,6 @@ export class PlayerEngine extends EventTarget {
       p.catch((err) => {
         if (audio !== this.audio) return;
         this._log(`play() rejected ${err && err.name}`);
-        this._intentionalPause = true;
         this._emit("playstate", { playing: !audio.paused });
       });
     }
@@ -325,13 +316,11 @@ export class PlayerEngine extends EventTarget {
       this.playIndex(this.currentIndex);
       return;
     }
-    this._intentionalPause = false;
     this._tryPlay(this.audio);
   }
 
   pause() {
     this._pendingStart = false;
-    this._intentionalPause = true;
     this.audio.pause();
   }
 
@@ -346,9 +335,7 @@ export class PlayerEngine extends EventTarget {
   }
 
   stop() {
-    this._pendingStart = false;
-    this._intentionalPause = true;
-    this.audio.pause();
+    this.pause();
   }
 
   seek(ms) {

@@ -18,8 +18,8 @@ bp = Blueprint("playlists", __name__, url_prefix="/api/playlists")
 @bp.get("")
 def list_playlists():
     result = []
-    for name, path in PlaylistModel.list_saved_names():
-        playlist = PlaylistModel.load(path)
+    for name, _path, data in PlaylistModel.list_saved_with_data():
+        playlist = PlaylistModel.from_dict(data)
         result.append(
             {
                 "name": name,

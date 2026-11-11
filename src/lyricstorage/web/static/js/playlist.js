@@ -9,25 +9,8 @@ import { groupAlbums, matchesAlbum } from "./albumGroup.js";
 import { showArtSpinner } from "./artspinner.js";
 import { buildArtistCell } from "./songArtist.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
-
-function fmtDuration(ms) {
-  const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-
-// 가사 유무 아이콘과 같은 이유로 레이팅이 없는 곡도 배지 자리를 항상 차지하게
-// 만들고 visibility로만 숨긴다(폭 고정은 CSS .playlist-row-rating이 담당) —
-// 그래야 레이팅 있는 행과 없는 행에서 라벨(제목/앨범/아티스트) 폭이 똑같이
-// 남아 컬럼이 어긋나지 않는다.
-function createRatingBadge(rating) {
-  const badge = document.createElement("span");
-  badge.className = "playlist-row-rating" + (rating ? "" : " empty");
-  badge.appendChild(iconSpan("heart-filled", "icon-sm"));
-  badge.appendChild(document.createTextNode(String(rating || 0)));
-  return badge;
-}
+import { fmtDuration } from "./formatters.js";
+import { createRatingBadge } from "./ratingBadge.js";
 
 const EMPTY_PLAYLIST = { name: null, is_global: false, tracks: [] };
 const MARQUEE_RESIZE_DEBOUNCE_MS = 150;
@@ -154,8 +137,12 @@ export function setupPlaylist(
       return;
     }
 
+    const indexByTrack = new Map();
+    currentPlaylist.tracks.forEach((t, i) => {
+      if (!indexByTrack.has(t)) indexByTrack.set(t, i);
+    });
     sortedTracks().forEach((track) => {
-      const index = currentPlaylist.tracks.indexOf(track);
+      const index = indexByTrack.has(track) ? indexByTrack.get(track) : -1;
       const li = document.createElement("li");
       li.className = "playlist-row";
       li.dataset.trackId = track.track_id;
