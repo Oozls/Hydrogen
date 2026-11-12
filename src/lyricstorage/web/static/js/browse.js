@@ -15,7 +15,7 @@ import { setupAlbumArtPrompt } from "./albumArtPrompt.js";
 import { setupAlbumArtistPrompt } from "./albumArtistPrompt.js";
 import { setupRebuildResultDialog } from "./rebuildResultDialog.js";
 import { setupTrashCompareDialog } from "./trashCompareDialog.js";
-import { fillArtistArt } from "./artistArt.js";
+import { fillArtistArt, resetArtistArtPicks } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { fmtDuration } from "./formatters.js";
 import { createRatingBadge } from "./ratingBadge.js";
@@ -1725,6 +1725,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       panelEl.classList.add("active");
       filterQuery = "";
       filterField = "all";
+      resetArtistArtPicks(); // 진입마다 새 랜덤, 진입 중 재렌더에선 같은 커버 유지
       syncFromStore();
 
       // 목표 탭을 먼저 정해서 지금 있는 캐시로(콜드 스타트라 비어있어도) 즉시

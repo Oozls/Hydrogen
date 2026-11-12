@@ -2,13 +2,33 @@ import { api } from "./api.js";
 import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 
+// 같은 앨범 집합에 대한 무작위 선택을 화면 진입 동안 고정해 둔다. 브라우즈는
+// 캐시로 먼저 그린 뒤 배경 새로고침이 끝나면 다시 그리는데, 그때마다 커버를 새로
+// 뽑으면 방금 보인 커버가 다른 것으로 바뀌어 "두 번 로드"처럼 보인다.
+// 키는 앨범 id 집합이라 라이브러리가 실제로 바뀐 아티스트만 새로 뽑힌다.
+const pickCache = new Map();
+
+// 화면에 새로 들어올 때 호출해 이번 진입에서 새 무작위 커버를 뽑게 한다.
+export function resetArtistArtPicks() {
+  pickCache.clear();
+}
+
 function pickRandomAlbums(list, n) {
-  const copy = (list || []).slice();
+  const src = list || [];
+  const key = src.map((a) => a.id).sort().join("|") + `#${n}`;
+  const cached = pickCache.get(key);
+  if (cached) {
+    const byId = new Map(src.map((a) => [a.id, a]));
+    return cached.map((id) => byId.get(id));
+  }
+  const copy = src.slice();
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-  return copy.slice(0, n);
+  const picked = copy.slice(0, n);
+  pickCache.set(key, picked.map((a) => a.id));
+  return picked;
 }
 
 // artWrap(.media-card-art-wrap, 이미 만들어진 빈 컨테이너)에 아티스트의 앨범 커버
