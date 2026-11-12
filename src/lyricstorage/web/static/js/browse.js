@@ -918,15 +918,12 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     );
     const soloIds = new Set(soloAlbums.map((a) => a.id));
     const trackCount = tracks.filter((t) => soloIds.has(t.album_id)).length;
-    let message = `'${entry.name || "(서클 없음)"}' 서클을 삭제할까요?
-`;
+    let message = `'${entry.name || "(서클 없음)"}' 서클을 삭제할까요?\n`;
     message += `단독 앨범 ${soloAlbums.length}개(수록곡 ${trackCount}곡)는 음원 파일, 가사, 재생 기록까지 완전히 삭제됩니다.`;
     if (entry.partialCount) {
-      message += `
-다른 서클과 함께한 앨범 ${entry.partialCount}개는 남기고 서클 이름만 뺍니다.`;
+      message += `\n다른 서클과 함께한 앨범 ${entry.partialCount}개는 남기고 서클 이름만 뺍니다.`;
     }
-    message += "
-되돌릴 수 없습니다.";
+    message += "\n되돌릴 수 없습니다.";
     if (!(await confirmDialog(message))) return;
     try {
       const identity = await api.resolveCircle(entry.name || "(서클 없음)");
@@ -1417,8 +1414,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     if (!currentAlbumGroup) return;
     const group = currentAlbumGroup;
     const ok = await confirmDialog(
-      `'${group.album || "(앨범 없음)"}' 앨범과 수록곡 ${group.tracks.length}곡을 완전히 삭제할까요?
-` +
+      `'${group.album || "(앨범 없음)"}' 앨범과 수록곡 ${group.tracks.length}곡을 완전히 삭제할까요?\n` +
         "음원 파일, 가사, 재생 기록이 모두 지워지며 되돌릴 수 없습니다."
     );
     if (!ok) return;
