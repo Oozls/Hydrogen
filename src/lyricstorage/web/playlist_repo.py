@@ -103,6 +103,44 @@ def load_or_create_global() -> PlaylistModel:
     return playlist
 
 
+_global_json_cache: tuple[tuple, list[dict]] | None = None
+_global_json_path: Path | None = None
+
+
+def global_tracks_json() -> list[dict]:
+    """글로벌 플레이리스트의 트랙을 track_to_json 형태로 돌려준다(읽기 전용으로
+    다룰 것). load_or_create_global()은 저장된 모든 플레이리스트 JSON을 파싱해
+    이름을 찾고 곡마다 해시/가사 존재 확인까지 하므로, 홈 화면 API 여러 개가
+    요청마다 반복하면 느리다. 글로벌 파일의 mtime/size와 가사 폴더 mtime이 같으면
+    직전 결과를 재사용한다(gunicorn workers=1 전제의 모듈 전역 캐시)."""
+    global _global_json_cache, _global_json_path
+    from lyricstorage import lyrics_io
+    from lyricstorage.web.serialize import track_to_json
+
+    path = _global_json_path
+    if path is None or not path.exists():
+        load_or_create_global()
+        path = find_playlist_path(GLOBAL_PLAYLIST_NAME)
+        _global_json_path = path
+    if path is None:
+        return []
+    try:
+        st = path.stat()
+        lyrics_mtime = storage.lyrics_dir().stat().st_mtime_ns
+    except OSError:
+        _global_json_cache = None
+        return [track_to_json(t, lyrics_io.lyrics_stems()) for t in load_or_create_global().tracks]
+    sig = (str(path), st.st_mtime_ns, st.st_size, lyrics_mtime)
+    cached = _global_json_cache
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+    playlist = load_or_create_global()
+    stems = lyrics_io.lyrics_stems()
+    tracks = [track_to_json(t, stems) for t in playlist.tracks]
+    _global_json_cache = (sig, tracks)
+    return tracks
+
+
 def update_tracks_in_all_playlists(updates: dict[str, dict]) -> None:
     """update_track_in_all_playlists의 배치 버전. updates는 {track_path: {필드: 값}}.
     플레이리스트당 로드/저장을 한 번만 한다."""

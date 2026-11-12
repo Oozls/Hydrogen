@@ -212,12 +212,30 @@ def append_play_history(entry: dict[str, Any]) -> None:
     _append_jsonl(_play_history_file_for(_entry_day(entry)), [entry])
 
 
+_play_history_cache: tuple[tuple, list[dict[str, Any]]] | None = None
+
+
 def load_play_history() -> list[dict[str, Any]]:
+    """전체 재생 기록. 날짜 파일들의 (이름, mtime, size)가 그대로면 직전에 파싱한
+    결과를 재사용한다 — 홈 화면 API 여러 개가 매번 전부 다시 파싱하지 않게.
+    반환 리스트는 호출자가 바꿔도 캐시가 오염되지 않도록 얕은 복사본이다(엔트리
+    dict는 공유되니 수정하지 말 것)."""
+    global _play_history_cache
     _migrate_legacy_play_history()
+    paths = sorted(play_history_dir().glob("*.jsonl"))
+    try:
+        sig = tuple((p.name, (s := p.stat()).st_mtime_ns, s.st_size) for p in paths)
+    except OSError:
+        sig = None
+    cached = _play_history_cache
+    if sig is not None and cached is not None and cached[0] == sig:
+        return list(cached[1])
     entries: list[dict[str, Any]] = []
-    for path in sorted(play_history_dir().glob("*.jsonl")):
+    for path in paths:
         entries.extend(_read_jsonl(path))
-    return entries
+    if sig is not None:
+        _play_history_cache = (sig, entries)
+    return list(entries)
 
 
 def iter_play_history_desc() -> Iterator[dict[str, Any]]:
