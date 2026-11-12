@@ -34,7 +34,8 @@ bp = Blueprint("library", __name__, url_prefix="/api/library")
 def _circle_name_for(track: Track, album_by_id: dict, circle_resolver: dict) -> str:
     album = album_by_id.get(track.album_id)
     artist = album.artist if album else track.artist
-    return circle_resolver.get(artist, artist)
+    # 여러 서클이 참여한 앨범("A, B")은 서클별로 대표 이름을 구해 다시 쉼표로 잇는다.
+    return ", ".join(circles_repo.resolve_names(artist, circle_resolver))
 
 
 @bp.get("")

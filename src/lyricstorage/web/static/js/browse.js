@@ -19,7 +19,7 @@ import { fillArtistArt, resetArtistArtPicks } from "./artistArt.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { fmtDuration } from "./formatters.js";
 import { createRatingBadge } from "./ratingBadge.js";
-import { splitArtists, buildArtistNameResolver, buildCircleNameFinder, buildArtistCell } from "./songArtist.js";
+import { splitArtists, buildArtistNameResolver, buildCircleNameFinder, buildArtistCell, resolveCircleNames } from "./songArtist.js";
 import { searchAll } from "./search.js";
 
 // 앨범 평균 평점: 평가되지 않은(0점) 곡은 제외하고, 평가된 곡끼리만 평균을 낸다.
@@ -807,7 +807,10 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   }
 
   function closeAlbumDetail() {
-    const artist = currentAlbumGroup ? currentAlbumGroup.artist : "";
+    // 여러 서클이 참여한 앨범이면, 들어올 때 보던 서클 목록이 있으면 그리로, 없으면
+    // 첫 서클 목록으로 돌아간다.
+    const circleList = currentAlbumGroup ? splitArtists(currentAlbumGroup.artist) : [];
+    const artist = circleList.includes(filterQuery.trim()) ? filterQuery.trim() : circleList[0] || "";
     albumDetailPanel.classList.remove("active");
     currentAlbumGroup = null;
     if (artist) {
@@ -939,7 +942,9 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     const meta = document.createElement("div");
     meta.className = "media-card-meta";
     const albumCount = document.createElement("span");
-    albumCount.textContent = `앨범 ${entry.albums.length}개`;
+    albumCount.textContent = entry.partialCount
+      ? `앨범 ${entry.soloCount}개 · 참여 ${entry.partialCount}개`
+      : `앨범 ${entry.albums.length}개`;
     meta.appendChild(albumCount);
     card.appendChild(meta);
 
@@ -965,7 +970,32 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 빠져 있다. renderArtists와 동일하게 앨범에서 직접 뽑아야 전체 목록이 된다.
   function getCircleNames() {
     const resolveCircleName = buildArtistNameResolver(circlesRegistry);
-    return new Set(albums.map((a) => resolveCircleName(a.artist || "")));
+    return new Set(albums.flatMap((a) => circleNamesOf(a.artist, resolveCircleName)));
+  }
+
+  // 앨범 아티스트 문자열 -> 서클 이름 배열. 여러 서클이 참여한 앨범은 쉼표로
+  // 나뉘고, 서클이 비어 있는 앨범은 ""(서클 없음) 하나로 취급한다.
+  function circleNamesOf(artistString, resolveCircleName) {
+    const names = resolveCircleNames(artistString, resolveCircleName);
+    return names.length ? names : [""];
+  }
+
+  // 서클 하나의 항목({name, albums, soloCount, partialCount}). 서클이 단독인 앨범과
+  // 다른 서클과 함께 참여한 앨범을 구분해 센다 — 카드의 개수 표기에 쓴다.
+  function buildCircleEntries() {
+    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
+    const byName = new Map();
+    for (const album of albums) {
+      const names = circleNamesOf(album.artist, resolveCircleName);
+      for (const name of names) {
+        if (!byName.has(name)) byName.set(name, { name, albums: [], soloCount: 0, partialCount: 0 });
+        const entry = byName.get(name);
+        entry.albums.push(album);
+        if (names.length > 1) entry.partialCount += 1;
+        else entry.soloCount += 1;
+      }
+    }
+    return byName;
   }
 
   // 이름(또는 그 이명)이 서클과 겹치면 그 서클의 대표 이름을, 아니면 null을
@@ -984,17 +1014,8 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     const q = filterQuery.trim().toLowerCase();
     artistsList.innerHTML = "";
 
-    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
-    const byArtist = new Map();
-    for (const album of albums) {
-      const name = resolveCircleName(album.artist || "");
-      if (!byArtist.has(name)) byArtist.set(name, []);
-      byArtist.get(name).push(album);
-    }
-    let entries = [...byArtist.entries()].map(([name, albumsForArtist]) => ({
-      name,
-      albums: albumsForArtist,
-    }));
+    // 여러 서클이 참여한 앨범은 참여한 서클 각각의 항목에 모두 들어간다.
+    let entries = [...buildCircleEntries().values()];
     entries = entries.filter((e) => !q || (e.name || "(서클 없음)").toLowerCase().includes(q));
     entries.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
 
@@ -1179,26 +1200,52 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     // group.artist를 서클 이명 레지스트리로 대표 이름으로 바꿔서 검색/표시한다 —
     // 그래야 표기가 다른 앨범도 아티스트 탭에서 넘어온 대표 이름으로 필터링된다.
     const resolveCircleName = buildArtistNameResolver(circlesRegistry);
-    const groups = groupAlbums(tracks, albums)
-      .map((g) => ({ ...g, artist: resolveCircleName(g.artist || "") }))
-      .filter((g) => matchesAlbum(g, q, field));
-    renderedAlbumGroups = groups;
-    if (!groups.length) {
+    // 여러 서클이 참여한 앨범은 artist를 "A, B"처럼 대표 이름들의 쉼표 목록으로
+    // 보여주고, 서클별 판정용으로 circles 배열을 따로 달아둔다.
+    let groups = groupAlbums(tracks, albums).map((g) => {
+      const circles = resolveCircleNames(g.artist, resolveCircleName);
+      return { ...g, artist: circles.join(", "), circles };
+    });
+
+    // 검색어가 정확히 서클 이름이고 범위가 아티스트(서클)면 그 서클 목록 화면이다 —
+    // 단독 앨범과, 다른 서클과 함께 참여한 앨범을 구획으로 나눠 보여준다.
+    const circleFilterName =
+      field === "artist" && q ? [...getCircleNames()].find((n) => n.toLowerCase() === q) : null;
+    let partialGroups = [];
+    if (circleFilterName != null) {
+      const own = groups.filter((g) => g.circles.some((n) => n.toLowerCase() === q));
+      groups = own.filter((g) => g.circles.length <= 1);
+      partialGroups = own.filter((g) => g.circles.length > 1);
+    } else {
+      groups = groups.filter((g) => matchesAlbum(g, q, field));
+    }
+    // 드래그 정렬 인덱스가 화면의 카드 순서와 맞도록 단독 -> 참여 순으로 이어 붙인다.
+    renderedAlbumGroups = [...groups, ...partialGroups];
+    if (!renderedAlbumGroups.length) {
       renderEmpty(albumsList);
       return;
     }
 
     groups.forEach((group) => albumsList.appendChild(buildAlbumCard(group)));
+    if (partialGroups.length) {
+      const heading = document.createElement("div");
+      heading.className = "card-grid-heading";
+      heading.textContent = `참여한 앨범 (${partialGroups.length})`;
+      albumsList.appendChild(heading);
+      partialGroups.forEach((group) => albumsList.appendChild(buildAlbumCard(group)));
+    }
 
     albumsSortable = window.Sortable.create(albumsList, {
       animation: 150,
       forceFallback: true,
       handle: ".media-card-drag-handle",
+      // 구획 제목은 드래그 대상이 아니며 인덱스 계산에서도 빠져야 한다.
+      draggable: ".media-card",
       onEnd: async (evt) => {
-        if (evt.oldIndex === evt.newIndex) return;
+        if (evt.oldDraggableIndex === evt.newDraggableIndex) return;
         albumsSortable.option("disabled", true);
-        const moved = renderedAlbumGroups.splice(evt.oldIndex, 1)[0];
-        renderedAlbumGroups.splice(evt.newIndex, 0, moved);
+        const moved = renderedAlbumGroups.splice(evt.oldDraggableIndex, 1)[0];
+        renderedAlbumGroups.splice(evt.newDraggableIndex, 0, moved);
         const reorderedTrackIds = renderedAlbumGroups.flatMap((g) => g.tracks.map((t) => t.track_id));
 
         // 아티스트/검색으로 필터링된 상태라면 이 그리드엔 라이브러리 트랙의 일부만
@@ -1483,8 +1530,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   // 항목({name, albums} / {name, count, albums})을 다시 만든다 — 카드 자체는
   // buildArtistCard/buildSongArtistCard를 그대로 재사용하기 위함.
   function findCircleEntry(name) {
-    const resolveCircleName = buildArtistNameResolver(circlesRegistry);
-    return { name, albums: albums.filter((a) => resolveCircleName(a.artist || "") === name) };
+    return buildCircleEntries().get(name) || { name, albums: [], soloCount: 0, partialCount: 0 };
   }
 
   function findSongArtistEntry(name) {

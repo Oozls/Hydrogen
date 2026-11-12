@@ -22,7 +22,20 @@ __all__ = [
     "add_alias",
     "remove_alias",
     "name_resolver",
+    "split_names",
+    "resolve_names",
 ]
+
+
+def split_names(raw: str | None) -> list[str]:
+    """Album.artist를 쉼표로 나눠 서클 목록으로 만든다(곡 아티스트의 split_artists와
+    같은 규칙). 여러 서클이 참여한 앨범은 'A, B'처럼 한 문자열에 담겨 있다."""
+    return [n.strip() for n in (raw or "").split(",") if n.strip()]
+
+
+def resolve_names(raw: str | None, resolver: dict[str, str]) -> list[str]:
+    """서클 문자열을 이명 레지스트리로 대표 이름들로 바꾼다(중복 제거, 순서 유지)."""
+    return list(dict.fromkeys(resolver.get(n, n) for n in split_names(raw)))
 
 
 _registry = registry.Registry(lambda: storage.circles_path())

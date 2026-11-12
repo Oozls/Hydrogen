@@ -4,7 +4,7 @@ import { buildArtEl } from "./artspinner.js";
 import { getDisplayQueue } from "./queue.js";
 import { attachScrollAutoHide } from "./scrollAutoHide.js";
 import { createMarqueeClip, applyMarquee } from "./marquee.js";
-import { buildArtistCell, buildArtistNameResolver } from "./songArtist.js";
+import { buildArtistCell, buildArtistNameResolver, resolveCircleNames } from "./songArtist.js";
 import { iconSpan } from "./icons.js";
 
 const SLOT_PCT = 25; // 한 칸 옮길 때의 translateX(%) — 커질수록 CD 사이 간격이 넓어진다
@@ -521,11 +521,13 @@ export function setupExpandedPlayer(player, { onOpen, onOpenAlbum, onOpenArtist 
 
     // 서클명은 앨범 아티스트를 서클 레지스트리에서 찾아 정식 명칭으로 바꾼
     // 값이다. 곡 아티스트와 같으면(흔한 경우) 중복 표시를 피한다.
-    const circleName = album ? buildArtistNameResolver(store.getCircles())(album.artist) : null;
+    // 여러 서클이 참여한 앨범은 쉼표로 이어 표시하고, 클릭하면 첫 서클로 이동한다.
+    const circleNames = album ? resolveCircleNames(album.artist, buildArtistNameResolver(store.getCircles())) : [];
+    const circleName = circleNames.join(", ");
     if (circleName && circleName !== track.artist) {
       circleEl.textContent = circleName;
       circleEl.classList.remove("is-empty");
-      if (onOpenArtist) circleEl.onclick = () => onOpenArtist(circleName);
+      if (onOpenArtist) circleEl.onclick = () => onOpenArtist(circleNames[0]);
     }
 
     fetchAndRenderStats(track);

@@ -4,7 +4,7 @@ import { iconSpan } from "./icons.js";
 import { showArtSpinner } from "./artspinner.js";
 import { createMarqueeClip, applyMarquee, applyColumnPriority } from "./marquee.js";
 import { fillArtistArt } from "./artistArt.js";
-import { splitArtists, buildArtistNameResolver, buildArtistCell } from "./songArtist.js";
+import { splitArtists, buildArtistNameResolver, buildArtistCell, resolveCircleNames } from "./songArtist.js";
 import { CIRCLE_ENDPOINTS } from "./circleEndpoints.js";
 import { patchPlayingRow, patchRatingBadge } from "./rowPatch.js";
 import { fmtDuration } from "./formatters.js";
@@ -578,12 +578,15 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
       // 곡 아티스트(item.artist)가 아니라 앨범의 대표 아티스트(album.artist)로
       // 묶는다 — 여러 곡 아티스트가 섞인 컴필레이션 앨범도 앨범 아티스트 기준
       // 하나로만 잡혀야 브라우즈의 앨범 아티스트 탭과 일관된다.
-      const name = resolveCircleName((album ? album.artist : item.artist) || "");
-      if (!byArtist.has(name)) byArtist.set(name, { albums: [], count: 0, listened_ms: 0 });
-      const entry = byArtist.get(name);
-      if (album) entry.albums.push(album);
-      entry.count += item.count || 0;
-      entry.listened_ms += item.listened_ms || 0;
+      // 여러 서클이 참여한 앨범은 참여 서클 각각의 집계에 모두 더한다.
+      const names = resolveCircleNames((album ? album.artist : item.artist) || "", resolveCircleName);
+      for (const name of names.length ? names : [""]) {
+        if (!byArtist.has(name)) byArtist.set(name, { albums: [], count: 0, listened_ms: 0 });
+        const entry = byArtist.get(name);
+        if (album) entry.albums.push(album);
+        entry.count += item.count || 0;
+        entry.listened_ms += item.listened_ms || 0;
+      }
     }
     let entries = [...byArtist.entries()].map(([name, v]) => ({
       name,
@@ -797,7 +800,8 @@ export function setupStats(player, onOpenAlbum, identityDialogApi, onOpenArtist,
   // 전체에서 뽑는다(재생 순위가 아니라 그 서클의 전체 앨범을 훑어보는 화면).
   function renderCircleDetailFromLibrary(albums, tracks, identity) {
     const matchNames = new Set([identity.name, ...identity.aliases]);
-    const matched = albums.filter((a) => matchNames.has(a.artist || ""));
+    // 여러 서클이 참여한 앨범("A, B")도 참여한 서클의 상세에 포함한다.
+    const matched = albums.filter((a) => splitArtists(a.artist).some((n) => matchNames.has(n)));
     matched.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
 
     const trackCountByAlbumId = new Map();

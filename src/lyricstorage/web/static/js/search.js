@@ -1,5 +1,5 @@
 import { store } from "./store.js";
-import { splitArtists, buildArtistNameResolver } from "./songArtist.js";
+import { splitArtists, buildArtistNameResolver, resolveCircleNames } from "./songArtist.js";
 
 // store.js의 캐시 위에서 곡/앨범/서클/곡아티스트 네 종류를 한 번에 훑는 통합
 // 검색. 브라우즈 화면의 탭별 필터(filterQuery/filterField)는 "지금 보고 있는
@@ -27,8 +27,8 @@ export function searchAll(query) {
   const resolveCircle = buildArtistNameResolver(store.getCircles());
   const circleNames = new Set();
   for (const album of albums) {
-    const name = resolveCircle(album.artist || "");
-    if (name) circleNames.add(name);
+    // 여러 서클이 참여한 앨범은 서클마다 따로 찾아질 수 있어야 한다.
+    for (const name of resolveCircleNames(album.artist, resolveCircle)) circleNames.add(name);
   }
   const circlesMatch = [...circleNames]
     .filter((name) => name.toLowerCase().includes(q))

@@ -2398,6 +2398,16 @@ textarea.file-content-body:disabled {
 }
 
 /* -- 카드형 그리드(재생 통계 / 앨범 브라우즈 공용) ----------------------- */
+/* 그리드 안에서 한 줄을 다 차지하는 구획 제목(예: 서클의 "참여한 앨범"). */
+.card-grid-heading {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-top: 8px;
+  border-top: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+}
+
 .card-grid {
   flex: 1;
   overflow-y: auto;

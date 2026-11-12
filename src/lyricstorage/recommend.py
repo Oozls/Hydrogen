@@ -539,9 +539,10 @@ def _auto_playlist_context(tracks: list[dict[str, Any]]) -> dict[str, Any]:
         raw = split_artists(track.get("artist") or "")
         return list(dict.fromkeys(artist_resolver.get(n, n) for n in raw))
 
-    def circle_name(track: dict[str, Any]) -> str | None:
+    def circle_names(track: dict[str, Any]) -> list[str]:
+        # 여러 서클이 참여한 앨범은 참여 서클 모두의 서클 테마에 속한다.
         raw = circle_by_album_id.get(track.get("album_id") or "")
-        return circle_resolver.get(raw, raw) if raw else None
+        return circles_repo.resolve_names(raw, circle_resolver)
 
     has_unheard = False
     has_frequent = False
@@ -560,17 +561,16 @@ def _auto_playlist_context(tracks: list[dict[str, Any]]) -> dict[str, Any]:
         for name in artist_names(t):
             artist_totals[name] = artist_totals.get(name, 0) + pc
             artist_sample_track.setdefault(name, track_id)
-        c_name = circle_name(t)
-        if c_name:
+        for c_name in circle_names(t):
             circle_totals[c_name] = circle_totals.get(c_name, 0) + pc
             circle_sample_track.setdefault(c_name, track_id)
 
-    all_circle_names = {circle_resolver.get(raw, raw) for raw in circle_by_album_id.values()}
+    all_circle_names = {n for raw in circle_by_album_id.values() for n in circles_repo.resolve_names(raw, circle_resolver)}
 
     return {
         "play_count": play_count,
         "artist_names": artist_names,
-        "circle_name": circle_name,
+        "circle_names": circle_names,
         "has_unheard": has_unheard,
         "has_frequent": has_frequent,
         "artist_totals": artist_totals,
@@ -647,7 +647,7 @@ def get_auto_playlist(auto_id: str, tracks: list[dict[str, Any]]) -> dict[str, A
         pool = [t for t in tracks if key in ctx["artist_names"](t)]
         title = f"아티스트 · {key}"
     elif kind == "circle" and key:
-        pool = [t for t in tracks if ctx["circle_name"](t) == key]
+        pool = [t for t in tracks if key in ctx["circle_names"](t)]
         title = f"서클 · {key}"
     else:
         return None

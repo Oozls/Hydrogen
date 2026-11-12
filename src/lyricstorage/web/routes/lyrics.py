@@ -71,7 +71,7 @@ def fetch_external_lyrics(track_id: str):
         return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
 
     album = albums_repo.find_album_by_id(track.album_id) if track.album_id else None
-    circle = circles.name_resolver().get(album.artist, album.artist) if album and album.artist else ""
+    circle = ", ".join(circles.resolve_names(album.artist, circles.name_resolver())) if album and album.artist else ""
 
     candidates = lyrics_providers.fetch_lyrics_candidates(track.title, track.artist, circle)
     if not candidates:

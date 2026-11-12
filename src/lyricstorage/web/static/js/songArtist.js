@@ -72,6 +72,14 @@ export function buildArtistNameResolver(artists) {
   return (name) => lookup.get(name) || name;
 }
 
+// 앨범 아티스트(서클) 문자열도 곡 아티스트처럼 쉼표로 여러 서클이 참여할 수
+// 있다("A, B"). 쉼표로 나눈 뒤 이명 레지스트리로 대표 이름으로 바꿔(중복 제거)
+// 서클 이름 배열을 돌려준다 — 서클을 다루는 모든 화면이 이 함수를 거친다.
+// resolve는 buildArtistNameResolver가 만든 함수.
+export function resolveCircleNames(artistString, resolve) {
+  return [...new Set(splitArtists(artistString).map((n) => resolve(n)))];
+}
+
 // 서클명과 곡 아티스트명이 같은 경우, 서클을 우선한다 — 이 함수는 이름(대표
 // 이름 또는 별칭)이 서클 레지스트리에 등록돼 있는지 확인한다. 못 찾으면
 // buildArtistNameResolver처럼 입력값을 그대로 돌려주지 않고 null을 돌려준다 —
