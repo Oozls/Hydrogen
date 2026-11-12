@@ -11,7 +11,7 @@ from lyricstorage import applog, recommend
 from lyricstorage.models import GLOBAL_PLAYLIST_NAME, PlaylistModel
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
-from lyricstorage.web.serialize import playlist_to_json, track_to_json
+from lyricstorage.web.serialize import playlist_to_json
 
 bp = Blueprint("recommendations", __name__, url_prefix="/api/recommendations")
 
@@ -31,8 +31,7 @@ def get_today():
     # record=0으로 넘겨, 노출 로그/가중치 그래프에 남기지 않는다.
     record = request.args.get("record", "1") != "0"
 
-    playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    tracks = playlist_repo.global_tracks_json()
     items = recommend.pick_today_songs(
         tracks, limit=limit, seed=seed, record_exposure=record and not reroll, record_weights=record
     )
@@ -54,8 +53,7 @@ def get_queue():
         familiar_count = 0
     exclude_ids = {tid for tid in request.args.get("exclude", "").split(",") if tid}
 
-    playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    tracks = playlist_repo.global_tracks_json()
     items = recommend.pick_queue_songs(
         tracks, seed_track_id=seed_track_id, exclude_ids=exclude_ids, count=count, familiar_count=familiar_count
     )
@@ -64,15 +62,13 @@ def get_queue():
 
 @bp.get("/auto-playlists")
 def list_auto_playlists():
-    playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    tracks = playlist_repo.global_tracks_json()
     return jsonify({"playlists": recommend.list_auto_playlists(tracks)})
 
 
 @bp.get("/auto-playlists/<auto_id>")
 def get_auto_playlist(auto_id: str):
-    playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    tracks = playlist_repo.global_tracks_json()
     result = recommend.get_auto_playlist(auto_id, tracks)
     if result is None:
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404
@@ -84,8 +80,7 @@ def save_auto_playlist(auto_id: str):
     """카드를 사이드바에 남는 진짜 플레이리스트로 저장한다 — 지금 이 순간의 테마
     구성을 그대로 스냅샷으로 굳히는 것이라, 저장 후에는 재생 기록이 바뀌어도
     자동으로 갱신되지 않는다(사이드바의 다른 플레이리스트와 동일하게 동작)."""
-    playlist = playlist_repo.load_or_create_global()
-    tracks = [track_to_json(t) for t in playlist.tracks]
+    tracks = playlist_repo.global_tracks_json()
     theme = recommend.get_auto_playlist(auto_id, tracks)
     if theme is None:
         return jsonify({"error": "플레이리스트를 찾을 수 없습니다."}), 404

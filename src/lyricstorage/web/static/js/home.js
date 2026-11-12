@@ -20,6 +20,7 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
   let recentItems = [];
   let quickpickItems = [];
   let autoPlaylistItems = [];
+  let loadSeq = 0;
 
   function buildRecentCard(item) {
     const card = document.createElement("div");
@@ -175,22 +176,41 @@ export function setupHome(player, onOpenAlbum, onOpenArtist, onOpenAutoPlaylist)
     }, 150);
   });
 
-  async function load() {
+  function load() {
     // reroll에 매번 새 무작위 토큰을 넘겨서, "오늘의 곡"처럼 하루 종일 고정되지
     // 않고 홈 화면을 새로 볼 때마다(새로고침 포함) 빠른 선곡 구성이 바뀌게 한다.
     const reroll = Math.random().toString(36).slice(2);
-    const [recentResult, quickpicksResult, autoPlaylistsResult] = await Promise.all([
-      api.getRecentPlays(RECENT_LIMIT).catch(() => ({ items: [] })),
-      api.getTodaySongs(QUICKPICK_LIMIT, reroll, false).catch(() => ({ items: [] })),
-      api.getAutoPlaylists().catch(() => ({ playlists: [] })),
-      store.ensureLoaded().catch(() => null),
-    ]);
-    recentItems = recentResult.items;
-    quickpickItems = quickpicksResult.items;
-    autoPlaylistItems = autoPlaylistsResult.playlists;
-    renderRecent();
-    renderQuickpicks();
-    renderAutoPlaylists();
+    // 가장 느린 요청을 기다리지 않고 섹션마다 응답이 오는 대로 바로 그린다.
+    // 라이브러리 store는 렌더에 필요 없고(카드 클릭 때만 getTracks()로 조회)
+    // 첫 진입 시 전체 재조회가 끝나길 기다리면 홈이 그만큼 늦게 뜨므로 배경에서만
+    // 불러둔다. 홈을 빠르게 다시 열었을 때 이전 호출의 늦은 응답이 최신 화면을
+    // 덮어쓰지 않도록 호출 번호로 걸러낸다.
+    const myLoad = ++loadSeq;
+    store.ensureLoaded().catch(() => null);
+    api
+      .getRecentPlays(RECENT_LIMIT)
+      .catch(() => ({ items: [] }))
+      .then((result) => {
+        if (myLoad !== loadSeq) return;
+        recentItems = result.items;
+        renderRecent();
+      });
+    api
+      .getTodaySongs(QUICKPICK_LIMIT, reroll, false)
+      .catch(() => ({ items: [] }))
+      .then((result) => {
+        if (myLoad !== loadSeq) return;
+        quickpickItems = result.items;
+        renderQuickpicks();
+      });
+    api
+      .getAutoPlaylists()
+      .catch(() => ({ playlists: [] }))
+      .then((result) => {
+        if (myLoad !== loadSeq) return;
+        autoPlaylistItems = result.playlists;
+        renderAutoPlaylists();
+      });
   }
 
   return {

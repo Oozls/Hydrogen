@@ -69,10 +69,7 @@ def get_recent():
         limit = max(1, int(request.args.get("limit", 12)))
     except ValueError:
         limit = 12
-    playlist = playlist_repo.load_or_create_global()
-    stems = lyrics_io.lyrics_stems()
-    tracks = [track_to_json(t, stems) for t in playlist.tracks]
-    return jsonify({"items": stats.recent_tracks(limit, tracks=tracks)})
+    return jsonify({"items": stats.recent_tracks(limit, tracks=playlist_repo.global_tracks_json())})
 
 
 @bp.get("/track/<track_id>/totals")
