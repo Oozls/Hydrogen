@@ -14,6 +14,7 @@ from lyricstorage import applog
 from lyricstorage.models import read_album_art, resize_image_bytes, write_tags
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.image_utils import read_art_upload, sniff_image_ext
+from lyricstorage.web.purge import purge_album
 from lyricstorage.web.routes.media import sanitize_filename
 from lyricstorage.web.serialize import album_to_json, track_to_json
 
@@ -90,6 +91,19 @@ def update_album(album_id: str):
             "tracks": [track_to_json(t) for t in tracks],
         }
     )
+
+
+@bp.delete("/<album_id>")
+def delete_album(album_id: str):
+    """앨범과 그 곡들을 파일/가사/재생기록까지 완전 삭제한다(되돌릴 수 없음)."""
+    album = albums_repo.find_album_by_id(album_id)
+    if album is None:
+        return jsonify({"error": "앨범을 찾을 수 없습니다."}), 404
+    deleted, errors = purge_album(album_id)
+    applog.log_info("ACTION", f"앨범 완전 삭제: {album.name} ({album.artist}), {len(deleted)}곡 삭제, {len(errors)}곡 실패")
+    if errors:
+        return jsonify({"error": f"{len(errors)}곡은 삭제하지 못했습니다: {errors[0]['reason']}", "deleted": deleted}), 500
+    return jsonify({"ok": True, "deleted": deleted})
 
 
 @bp.post("/<album_id>/art")

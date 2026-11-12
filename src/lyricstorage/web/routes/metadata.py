@@ -11,6 +11,7 @@ from lyricstorage import applog, storage
 from lyricstorage.models import write_album_art, write_tags
 from lyricstorage.web import playlist_repo
 from lyricstorage.web.lookup import find_track_by_id
+from lyricstorage.web.purge import purge_tracks
 from lyricstorage.web.image_utils import read_art_upload
 from lyricstorage.web.serialize import track_to_json
 
@@ -124,18 +125,16 @@ def update_metadata_batch():
 def delete_tracks_batch():
     data = request.get_json(silent=True) or {}
     track_ids = data.get("track_ids") or []
-    deleted, errors = [], []
-    paths: list[str] = []
+    errors = []
+    tracks = []
     for track_id in dict.fromkeys(track_ids):  # 중복 제거, 순서 유지
         track = find_track_by_id(track_id)
         if track is None:
             errors.append({"track_id": track_id, "reason": "트랙을 찾을 수 없습니다."})
             continue
-        paths.append(track.path)
-        deleted.append(track_id)
-    playlist_repo.remove_tracks_from_all_playlists(paths)
-    for path in paths:
-        storage.unlink_retrying(Path(path), missing_ok=True)
+        tracks.append(track)
+    deleted, purge_errors = purge_tracks(tracks)
+    errors += purge_errors
     applog.log_info("ACTION", f"곡 일괄 삭제: {len(deleted)}곡 성공, {len(errors)}곡 실패")
     return jsonify({"deleted": deleted, "errors": errors})
 
@@ -165,7 +164,8 @@ def delete_track(track_id: str):
     if track is None:
         return jsonify({"error": "트랙을 찾을 수 없습니다."}), 404
 
-    playlist_repo.remove_track_from_all_playlists(track.path)
-    storage.unlink_retrying(Path(track.path), missing_ok=True)
-    applog.log_info("ACTION", f"곡 완전 삭제(파일 포함): {track_id} ({track.title})")
+    _, errors = purge_tracks([track])
+    if errors:
+        return jsonify({"error": f"파일을 삭제하지 못했습니다: {errors[0]['reason']}"}), 500
+    applog.log_info("ACTION", f"곡 완전 삭제(파일/가사/재생기록 포함): {track_id} ({track.title})")
     return jsonify({"ok": True})

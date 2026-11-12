@@ -129,6 +129,16 @@ def remove_alias(path: Path, identity_id: str, alias: str) -> Optional[Identity]
     return target
 
 
+def delete(path: Path, identity_id: str) -> bool:
+    """정체성 하나(대표 이름 + 이명)를 레지스트리에서 통째로 제거한다."""
+    identities = load(path)
+    kept = [i for i in identities if i.id != identity_id]
+    if len(kept) == len(identities):
+        return False
+    save(path, kept)
+    return True
+
+
 def name_resolver(path: Path) -> dict[str, str]:
     """이름 문자열 -> 대표 이름 매핑 전체를 한 번에 반환한다. 통계 집계처럼 많은
     이름을 반복해서 찾아볼 때 매번 파일을 다시 읽지 않도록 일괄 조회용으로 쓴다."""
@@ -169,6 +179,9 @@ class Registry:
 
     def remove_alias(self, identity_id: str, alias: str) -> Optional[Identity]:
         return remove_alias(self._path_fn(), identity_id, alias)
+
+    def delete(self, identity_id: str) -> bool:
+        return delete(self._path_fn(), identity_id)
 
     def name_resolver(self) -> dict[str, str]:
         return name_resolver(self._path_fn())

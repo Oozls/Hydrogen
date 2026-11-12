@@ -90,6 +90,7 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
   const btnAlbumDetailBack = document.getElementById("btn-album-detail-back");
   const btnAlbumDetailDownload = document.getElementById("btn-album-detail-download");
   const btnAlbumDetailEdit = document.getElementById("btn-album-detail-edit");
+  const btnAlbumDetailDelete = document.getElementById("btn-album-detail-delete");
   const manageBtn = document.getElementById("btn-browse-manage");
   const manageDialog = document.getElementById("browse-manage-dialog");
   const manageCloseBtn = document.getElementById("browse-manage-close");
@@ -909,6 +910,36 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     });
   }
 
+  // 서클 삭제: 이 서클 단독 앨범은 곡 파일까지 완전 삭제하고, 다른 서클과 함께
+  // 참여한 앨범은 남기되 앨범 아티스트에서 이 서클 이름만 뺀다(서버 purge_circle).
+  async function deleteCircle(entry) {
+    const soloAlbums = entry.albums.filter(
+      (a) => resolveCircleNames(a.artist, buildArtistNameResolver(circlesRegistry)).length <= 1
+    );
+    const soloIds = new Set(soloAlbums.map((a) => a.id));
+    const trackCount = tracks.filter((t) => soloIds.has(t.album_id)).length;
+    let message = `'${entry.name || "(서클 없음)"}' 서클을 삭제할까요?
+`;
+    message += `단독 앨범 ${soloAlbums.length}개(수록곡 ${trackCount}곡)는 음원 파일, 가사, 재생 기록까지 완전히 삭제됩니다.`;
+    if (entry.partialCount) {
+      message += `
+다른 서클과 함께한 앨범 ${entry.partialCount}개는 남기고 서클 이름만 뺍니다.`;
+    }
+    message += "
+되돌릴 수 없습니다.";
+    if (!(await confirmDialog(message))) return;
+    try {
+      const identity = await api.resolveCircle(entry.name || "(서클 없음)");
+      const result = await api.deleteCircle(identity.id);
+      await afterPurge(result.deleted_tracks);
+      render();
+    } catch (err) {
+      await alertDialog(err.message);
+      await loadLibraryAndAlbums();
+      render();
+    }
+  }
+
   // 아티스트 카드의 커버는 '앨범 아티스트'의 앨범 중 무작위로 최대 4개를 골라
   // 콜라주로 채운다(fillArtistArt, 재생 통계 아티스트 탭과 공유).
   function buildArtistCard(entry) {
@@ -936,6 +967,18 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
       openCircleIdentityEditor(entry.name);
     });
     titleRow.appendChild(editBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "icon-btn media-card-drag-handle";
+    deleteBtn.title = "서클 삭제";
+    deleteBtn.appendChild(iconSpan("trash-2", "icon-sm"));
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteCircle(entry);
+    });
+    // 이름 없는 "(서클 없음)" 묶음은 실제 서클이 아니라 삭제 대상이 아니다.
+    if (entry.name) titleRow.appendChild(deleteBtn);
 
     card.appendChild(titleRow);
 
@@ -1360,6 +1403,41 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     if (!currentAlbumGroup) return;
     triggerDownload(api.albumDownloadUrl(currentAlbumGroup.id));
   });
+  // 앨범/서클 삭제 후 공통 정리: 재생 중인 곡이 지워졌으면 멈추고, 재생목록/브라우즈를
+  // 서버 상태로 다시 맞춘다.
+  async function afterPurge(deletedTrackIds) {
+    const ids = new Set(deletedTrackIds || []);
+    if (player.currentTrack && ids.has(player.currentTrack.track_id)) player.stop();
+    selectedTrackIds.clear();
+    await playlistApi.refreshCurrent();
+    await loadLibraryAndAlbums();
+  }
+
+  btnAlbumDetailDelete.addEventListener("click", async () => {
+    if (!currentAlbumGroup) return;
+    const group = currentAlbumGroup;
+    const ok = await confirmDialog(
+      `'${group.album || "(앨범 없음)"}' 앨범과 수록곡 ${group.tracks.length}곡을 완전히 삭제할까요?
+` +
+        "음원 파일, 가사, 재생 기록이 모두 지워지며 되돌릴 수 없습니다."
+    );
+    if (!ok) return;
+    try {
+      const result = await api.deleteAlbum(group.id);
+      await afterPurge(result.deleted);
+      // 삭제된 앨범 화면을 닫고 목록으로 돌아간다(곡이 없어진 앨범은 refresh로 사라진다).
+      albumDetailPanel.classList.remove("active");
+      currentAlbumGroup = null;
+      albumsPanel.classList.add("active");
+      if (refs && refs.router) refs.router.setUrl("/browse/albums");
+      render();
+    } catch (err) {
+      await alertDialog(err.message);
+      await loadLibraryAndAlbums();
+      render();
+    }
+  });
+
   btnAlbumDetailEdit.addEventListener("click", () => {
     if (currentAlbumGroup) onEditAlbum(currentAlbumGroup);
   });

@@ -164,6 +164,15 @@ def delete_lyrics(track_path: str) -> None:
             pass
 
 
+def purge_lyrics(track_path: str) -> None:
+    """곡 완전 삭제용: delete_lyrics와 달리 백업을 남기지 않고, 가사 파일(구버전
+    위치 포함)과 그 곡의 백업 폴더까지 전부 지운다."""
+    for candidate in (lyrics_path(track_path), *_legacy_paths(track_path)):
+        storage.unlink_retrying(candidate, missing_ok=True)
+    # _backup_dir()은 폴더를 만들어버리므로 쓰지 않고 경로만 계산한다.
+    shutil.rmtree(storage.lyrics_backups_dir() / Path(track_path).stem, ignore_errors=True)
+
+
 def save_lyrics(track_path: str, lines: list[tuple[int, str]]) -> Path | None:
     """가사를 data/lyrics/에 저장. lines가 비어있으면 기존 파일을 새로 만드는 대신
     지운다(빈 사이드카 방지). 실제로 덮어쓰기/삭제하기 직전에는 이전 내용을

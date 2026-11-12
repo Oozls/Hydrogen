@@ -138,6 +138,17 @@ def write_album_cover(album_id: str, image_bytes: bytes, ext: str) -> None:
     update_album(album_id, art_ext=ext)
 
 
+def delete_album(album_id: str) -> bool:
+    """앨범 레코드(albums.json)와 전용 표지 파일을 제거한다. 곡 정리는 호출자 몫."""
+    albums = load_albums()
+    kept = [a for a in albums if a.id != album_id]
+    delete_album_cover(album_id)
+    if len(kept) == len(albums):
+        return False
+    save_albums(kept)
+    return True
+
+
 def delete_album_cover(album_id: str) -> None:
     for existing in storage.album_art_dir().glob(f"{album_id}.*"):
         existing.unlink(missing_ok=True)

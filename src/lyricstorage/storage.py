@@ -277,6 +277,37 @@ def load_play_history_range(start: datetime, end: datetime) -> list[dict[str, An
     return _read_range(_play_history_file_for, start, end)
 
 
+def purge_play_history(track_ids: set[str]) -> int:
+    """곡 완전 삭제용: 해당 track_id의 재생 기록 줄을 날짜 파일들에서 전부 제거한다.
+    다 비게 되는 날짜 파일은 지운다. 제거한 줄 수를 돌려준다."""
+    if not track_ids:
+        return 0
+    _migrate_legacy_play_history()
+    removed = 0
+    for path in sorted(play_history_dir().glob("*.jsonl")):
+        entries = _read_jsonl(path)
+        kept = [e for e in entries if e.get("track_id") not in track_ids]
+        if len(kept) == len(entries):
+            continue
+        removed += len(entries) - len(kept)
+        if kept:
+            write_text_atomic(path, "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in kept))
+        else:
+            unlink_retrying(path, missing_ok=True)
+    return removed
+
+
+def purge_recommend_exposures(track_ids: set[str]) -> int:
+    """곡 완전 삭제용: 추천 노출 이력에서 해당 곡의 기록을 제거한다."""
+    if not track_ids:
+        return 0
+    exposures = load_recommend_exposures()
+    kept = [e for e in exposures if e.get("track_id") not in track_ids]
+    if len(kept) != len(exposures):
+        write_json_atomic(recommend_exposures_path(), kept)
+    return len(exposures) - len(kept)
+
+
 def usage_pings_dir() -> Path:
     path = app_data_dir() / "usage_pings"
     path.mkdir(parents=True, exist_ok=True)

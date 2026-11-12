@@ -22,6 +22,7 @@ __all__ = [
     "add_alias",
     "remove_alias",
     "name_resolver",
+    "delete_circle",
     "split_names",
     "resolve_names",
 ]
@@ -49,3 +50,4 @@ rename_circle = _registry.rename
 add_alias = _registry.add_alias
 remove_alias = _registry.remove_alias
 name_resolver = _registry.name_resolver
+delete_circle = _registry.delete
