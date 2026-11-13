@@ -22,6 +22,54 @@ async function request(method, url, { json, formData } = {}) {
   return null;
 }
 
+// 진단 로그 큐(localStorage). 백그라운드에서 페이지가 정지되면 전송이 유실되므로 서버가
+// 받았다고 응답한 항목만 지우고, 화면 복귀/온라인 복귀 때 남은 것을 다시 보낸다.
+const LOG_QUEUE_KEY = "hydrogen.clientLogQueue";
+let logFlushing = false;
+
+function readLogQueue() {
+  try {
+    const q = JSON.parse(localStorage.getItem(LOG_QUEUE_KEY) || "[]");
+    return Array.isArray(q) ? q : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLogQueue(q) {
+  try {
+    localStorage.setItem(LOG_QUEUE_KEY, JSON.stringify(q));
+  } catch {
+    /* 저장소 불가 환경 */
+  }
+}
+
+async function flushClientLogs() {
+  if (logFlushing) return;
+  const sent = readLogQueue();
+  if (!sent.length) return;
+  logFlushing = true;
+  try {
+    const r = await fetch("/api/logs/client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries: sent }),
+      keepalive: true,
+    });
+    if (r.ok) writeLogQueue(readLogQueue().slice(sent.length));
+  } catch {
+    /* 다음 기회에 재전송 */
+  } finally {
+    logFlushing = false;
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) flushClientLogs();
+});
+window.addEventListener("pageshow", flushClientLogs);
+window.addEventListener("online", flushClientLogs);
+
 export const api = {
   listPlaylists: () => request("GET", "/api/playlists"),
   createPlaylist: (name) => request("POST", "/api/playlists", { json: { name } }),
@@ -194,11 +242,11 @@ export const api = {
   // 넘어간다 — 사용 시간 집계 하나 놓치는 건 치명적이지 않다).
   // 클라이언트 쪽 진단 메시지를 서버 로그(/logs)에 남긴다. 실패해도 무시.
   clientLog: (msg) => {
-    const body = JSON.stringify({ msg });
-    if (navigator.sendBeacon && navigator.sendBeacon("/api/logs/client", new Blob([body], { type: "application/json" }))) {
-      return;
-    }
-    request("POST", "/api/logs/client", { json: { msg } }).catch(() => {});
+    // 먼저 localStorage 큐에 쌓고 전송한다 — 화면이 꺼져 페이지가 정지되면 전송이 유실되므로,
+    // 서버가 받았다고 응답한 뒤에야 큐에서 지우고 화면 복귀 시 남은 것을 다시 보낸다.
+    const t = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+    writeLogQueue([...readLogQueue(), `[c ${t}] ${msg}`].slice(-150));
+    flushClientLogs();
   },
   pingUsage: (durationMs) => {
     const body = JSON.stringify({ duration_ms: durationMs });

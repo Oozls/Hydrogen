@@ -1,7 +1,15 @@
 // 데스크톱 player.py의 PlayerEngine(QMediaPlayer 래퍼)을 <audio> 기반으로 이식.
 // 셔플/반복/이전-다음 계산 로직은 원본과 동일하게 유지한다.
 
+import { GaplessStream, gaplessSupported } from "./gaplessStream.js";
+
 const REPEAT_ORDER = ["off", "all", "one"];
+// 다음 곡 추가(append)가 실패했을 때 다시 시도하기까지 기다리는 시간(ms).
+const STREAM_RETRY_MS = 3000;
+// 다음 곡을 SourceBuffer에 실제로 붙이는 시점 — 현재 곡이 끝나기 이 시간(초) 전.
+// 곡 전체를 미리 붙여 두면 브라우저의 SourceBuffer 용량 한도(크롬은 오디오 약 12MB)를
+// 넘기므로, 내려받기는 미리 해 두되(메모리) 붙이기는 끝이 가까워진 뒤에 한다.
+const STREAM_APPEND_LEAD_SEC = 45;
 // 다음 곡 종료 이 시간(초) 전부터 미리 다음 곡을 백그라운드로 불러 둔다 —
 // 연결이 넉넉해서 다운로드가 재생 속도를 따라잡고 있을 때 쓰는 기본 여유분
 // (디코더 초기화 등). 연결이 느려 다운로드가 재생을 못 따라가는 중이면
@@ -72,8 +80,26 @@ export class PlayerEngine extends EventTarget {
     // (visible/pageshow) 이 플래그로 "시작하다 만 곡"만 골라 다시 시도한다.
     this._pendingStart = false;
 
+    // 연속 스트림(MSE) 재생 세션: { gs, segs: [{index,start,end}], cur, filling, ... }.
+    // 활성 중에는 곡이 바뀌어도 <audio>가 ended되지 않는다(iOS 백그라운드 전환 문제 회피).
+    this._stream = null;
+    // MSE 재생이 한 번이라도 실패하면 이 페이지 세션에서는 기존 방식(곡마다 src 교체)으로 돌린다.
+    this._streamDisabled = false;
+    // 서버가 fMP4로 못 묶는 곡(ALAC 등, 415) — 이 곡은 일반 재생으로만 돌린다.
+    this._noStreamIds = new Set();
+
+    // iOS 16.4+: 재생을 "미디어 재생"으로 분류해 무음 스위치/백그라운드에서 세션이 덜 끊기게 한다.
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+    } catch {
+      /* 미지원 환경 */
+    }
+
     this._bindAudioEvents(this.audio);
-    document.addEventListener("visibilitychange", () => this._recoverIfStuck());
+    document.addEventListener("visibilitychange", () => {
+      this._log(`visibility -> ${document.visibilityState}`);
+      this._recoverIfStuck();
+    });
     window.addEventListener("pageshow", () => this._recoverIfStuck());
   }
 
@@ -94,7 +120,14 @@ export class PlayerEngine extends EventTarget {
           if (!document.hidden) this.seek(this.position());
         }
       }
-      this._maybePreloadNext();
+      if (this._stream) this._streamTick();
+      else this._maybePreloadNext();
+    });
+    // MSE 파이프라인이 디코드/로드 오류를 내면 기존 재생 방식으로 되돌려 곡을 이어간다.
+    audio.addEventListener("error", () => {
+      if (audio !== this.audio || !this._stream) return;
+      this._log("audio error in stream mode, falling back");
+      this._streamFallback();
     });
     audio.addEventListener("durationchange", () => {
       if (audio !== this.audio) return;
@@ -135,7 +168,7 @@ export class PlayerEngine extends EventTarget {
         if (!skipSeek && !this._currentBlobUrl) this.seek(0);
       } else if (this._needsResyncOnPlay) {
         this._needsResyncOnPlay = false;
-        if (!skipSeek) this.seek(this.position());
+        if (!skipSeek && !this._stream) this.seek(this.position());
       }
     });
     audio.addEventListener("canplay", () => {
@@ -155,7 +188,20 @@ export class PlayerEngine extends EventTarget {
   // 그 타이머가 돌지 않아 "재생 중인데 소리 없음"을 못 잡았고, 돌 때는 복구 없이 재생을
   // 확정적으로 멈출 뿐이었다. 사용자가 직접 멈춘 곡과 구분하기 위해 _pendingStart를 쓴다.
   _recoverIfStuck() {
-    if (document.hidden || !this._pendingStart || !this.currentTrack) return;
+    if (document.hidden || !this.currentTrack) return;
+    if (this._stream) {
+      // 스트림 모드: 다음 곡 추가가 멈춰 있었다면(백그라운드에서 fetch 중단 등) 바로 재시도한다.
+      this._stream.retryAt = 0;
+      this._streamFillAhead(this._stream);
+      if (!this._pendingStart) return;
+      if (!this.audio.paused && this.audio.readyState >= 3) return;
+      // 시작하다 만 스트림은 MediaSource가 붙은 채 load()하면 깨지므로 처음부터 다시 연다.
+      this._log("recover stuck start (stream)");
+      this._teardownStream();
+      this.playIndex(this.currentIndex);
+      return;
+    }
+    if (!this._pendingStart) return;
     if (!this.audio.paused && this.audio.readyState >= 3) return;
     this._log("recover stuck start");
     this.audio.load();
@@ -168,6 +214,13 @@ export class PlayerEngine extends EventTarget {
     const buffered = this.audio.buffered;
     if (!buffered.length) return 0;
     const t = this.audio.currentTime;
+    if (this._stream) {
+      // 스트림은 여러 곡이 한 타임라인에 있으므로 현재 곡 구간 안으로 잘라 보여 준다.
+      const seg = this._segAt(t);
+      if (!seg) return 0;
+      const end = Math.min(buffered.end(buffered.length - 1), seg.end);
+      return Math.max(0, Math.round((end - seg.start) * 1000));
+    }
     for (let i = 0; i < buffered.length; i++) {
       if (t <= buffered.end(i)) return Math.round(buffered.end(i) * 1000);
     }
@@ -186,6 +239,7 @@ export class PlayerEngine extends EventTarget {
     this.currentIndex = -1;
     this._resetPreload();
     this._rebuildShuffleOrder();
+    this._streamInvalidateAhead();
   }
 
   // 재생 대기 목록(큐) 끝에 추천 곡을 이어 붙인다 — queueMode가 "recommend"일 때
@@ -194,7 +248,17 @@ export class PlayerEngine extends EventTarget {
     if (!this.playlist || !tracks || !tracks.length) return;
     this.playlist.tracks.push(...tracks);
     if (this.shuffle) this._rebuildShuffleOrder();
-    this._maybePreloadNext();
+    if (this._stream) {
+      // 마지막 곡이라 스트림을 닫아 뒀더라도 새로 생긴 다음 곡을 다시 이어 붙인다.
+      // 셔플 순서가 다시 짜였다면 이미 붙여 둔 다음 곡도 달라질 수 있어 함께 갱신한다.
+      if (this.shuffle) this._streamInvalidateAhead();
+      else {
+        this._stream.eos = false;
+        this._streamFillAhead(this._stream);
+      }
+    } else {
+      this._maybePreloadNext();
+    }
     this._emit("queuechange", {});
   }
 
@@ -213,6 +277,7 @@ export class PlayerEngine extends EventTarget {
     if (playingTrackId) {
       this.currentIndex = playlist.tracks.findIndex((t) => t.track_id === playingTrackId);
     }
+    this._streamInvalidateAhead();
   }
 
   // avoidFirstIndex를 주면, 새로 섞은 순서의 첫 곡이 그 인덱스와 겹칠 때 0번과
@@ -239,6 +304,7 @@ export class PlayerEngine extends EventTarget {
     this.shuffle = enabled;
     this._resetPreload();
     if (enabled) this._rebuildShuffleOrder(null, this.currentIndex);
+    this._streamInvalidateAhead();
     this._emit("shufflechange", { shuffle: enabled });
   }
 
@@ -246,6 +312,7 @@ export class PlayerEngine extends EventTarget {
     const idx = REPEAT_ORDER.indexOf(this.repeatMode);
     this.repeatMode = REPEAT_ORDER[(idx + 1) % REPEAT_ORDER.length];
     this._resetPreload();
+    this._streamInvalidateAhead();
     this._emit("repeatchange", { repeatMode: this.repeatMode });
     return this.repeatMode;
   }
@@ -259,8 +326,12 @@ export class PlayerEngine extends EventTarget {
 
   playIndex(index) {
     if (!this.playlist || index < 0 || index >= this.playlist.tracks.length) return;
+    // 이미 스트림에 이어 붙여 둔 곡이면 src를 건드리지 않고 그 위치로 건너뛴다.
+    if (this._stream && this._streamJump(index)) return;
+    const streaming = this._canStream(this.playlist.tracks[index]);
     // 미리 받아 둔 다음 곡이 이 곡이면 그 Blob URL을 넘겨받고, 나머지 프리페치는 정리한다.
-    const prefetched = this._prefetch && this._prefetch.index === index && this._prefetch.url ? this._prefetch : null;
+    const prefetched =
+      !streaming && this._prefetch && this._prefetch.index === index && this._prefetch.url ? this._prefetch : null;
     if (prefetched) this._prefetch = null;
     this._resetPreload();
     this.currentIndex = index;
@@ -271,6 +342,11 @@ export class PlayerEngine extends EventTarget {
     // 번만(플레이리스트당) 앵커를 확정해 그 문제를 막는다.
     if (this.playlist._queueAnchor == null) this.playlist._queueAnchor = index;
     const track = this.playlist.tracks[index];
+    if (streaming) {
+      this._startStream(index, track);
+      return;
+    }
+    this._teardownStream();
     const previousBlobUrl = this._currentBlobUrl;
     this._currentBlobUrl = prefetched ? prefetched.url : null;
     this.audio.src = prefetched ? prefetched.url : `/api/tracks/${track.track_id}/audio`;
@@ -339,9 +415,22 @@ export class PlayerEngine extends EventTarget {
   }
 
   seek(ms) {
-    if (Number.isFinite(this.audio.duration)) {
-      this.audio.currentTime = Math.max(0, ms) / 1000;
+    // MSE 스트림은 endOfStream 전에는 audio.duration이 NaN/Infinity이므로 곡 구간 정보로 판단한다.
+    const seg = this._stream && this._segAt(this.audio.currentTime);
+    if (!seg && !Number.isFinite(this.audio.duration)) return;
+    if (seg) {
+      // 현재 곡 구간 안으로 한정 — 끝을 넘기면 의도치 않게 다음 곡으로 넘어가 버린다.
+      const t = Math.min(seg.start + Math.max(0, ms) / 1000, Math.max(seg.start, seg.end - 0.05));
+      if (!this._isBuffered(t)) {
+        // 용량 확보로 이미 비워진 앞부분으로 되감기 — 같은 곡을 그 위치에서 스트림부터 다시 연다.
+        this._log(`seek to unbuffered ${t.toFixed(1)}, restarting stream`);
+        this._startStream(this.currentIndex, this.currentTrack, Math.max(0, ms));
+        return;
+      }
+      this.audio.currentTime = t;
+      return;
     }
+    this.audio.currentTime = Math.max(0, ms) / 1000;
   }
 
   setSeeking(seeking) {
@@ -358,11 +447,260 @@ export class PlayerEngine extends EventTarget {
   }
 
   position() {
-    return Math.round((this.audio.currentTime || 0) * 1000);
+    const t = this.audio.currentTime || 0;
+    const seg = this._stream && this._segAt(t);
+    if (seg) return Math.max(0, Math.round((Math.min(t, seg.end) - seg.start) * 1000));
+    return Math.round(t * 1000);
   }
 
   duration() {
+    if (this._stream) {
+      const seg = this._segAt(this.audio.currentTime || 0);
+      if (seg) return Math.round((seg.end - seg.start) * 1000);
+      // 첫 곡이 아직 붙기 전에는 태그상의 길이를 대신 쓴다.
+      const track = this.currentTrack;
+      return track && track.duration_ms > 0 ? track.duration_ms : 0;
+    }
     return Math.round((this.audio.duration || 0) * 1000);
+  }
+
+  // ───── 연속 스트림(MSE) 재생 ─────
+
+  _canStream(track) {
+    return (
+      !this._streamDisabled &&
+      !!track &&
+      track.audio_ext === "m4a" &&
+      !this._noStreamIds.has(track.track_id) &&
+      gaplessSupported()
+    );
+  }
+
+  // 타임라인 t초가 속한 곡 구간(지난 곡은 제거돼 있으므로 끝이 t보다 큰 첫 구간).
+  _segAt(t) {
+    const st = this._stream;
+    if (!st || !st.segs.length) return null;
+    for (const seg of st.segs) {
+      if (t < seg.end) return seg;
+    }
+    return st.segs[st.segs.length - 1];
+  }
+
+  _isBuffered(t) {
+    const b = this.audio.buffered;
+    for (let i = 0; i < b.length; i++) {
+      if (t >= b.start(i) - 0.05 && t <= b.end(i)) return true;
+    }
+    return false;
+  }
+
+  _teardownStream() {
+    const st = this._stream;
+    if (!st) return;
+    this._stream = null;
+    st.gs.destroy();
+  }
+
+  async _fetchTrackBuffer(index) {
+    const track = this.playlist.tracks[index];
+    const r = await fetch(`/api/tracks/${track.track_id}/stream`);
+    if (r.status === 415) {
+      this._noStreamIds.add(track.track_id);
+      const err = new Error("unsupported for stream");
+      err.unsupported = true;
+      throw err;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.arrayBuffer();
+  }
+
+  // 곡 하나를 내려받아 타임라인 startSec 위치에 이어 붙이고 구간 정보를 기록한다.
+  async _streamAppend(st, index, startSec, prefetchedBuf = null) {
+    const buf = prefetchedBuf || (await this._fetchTrackBuffer(index));
+    if (st !== this._stream) return null;
+    let result;
+    try {
+      result = await st.gs.append(buf, startSec);
+    } catch (err) {
+      if (!(err && err.name === "QuotaExceededError")) throw err;
+      // 용량 초과: 이미 재생한 앞부분을 비우고 한 번 더 시도한다.
+      await st.gs.removeBefore(Math.max(0, (this.audio.currentTime || 0) - 1));
+      if (st !== this._stream) return null;
+      result = await st.gs.append(buf, startSec);
+    }
+    const { start, end } = result;
+    if (st !== this._stream) return null;
+    const seg = { index, start, end };
+    st.segs.push(seg);
+    this._log(`stream append index=${index} start=${start.toFixed(1)} end=${end.toFixed(1)} bytes=${buf.byteLength}`);
+    return seg;
+  }
+
+  _startStream(index, track, startMs = 0) {
+    this._teardownStream();
+    if (this._currentBlobUrl) {
+      URL.revokeObjectURL(this._currentBlobUrl);
+      this._currentBlobUrl = null;
+    }
+    const st = { gs: new GaplessStream(), segs: [], cur: null, filling: false, fillPromise: null, eos: false, retryAt: 0, pre: null };
+    this._stream = st;
+    this.audio.src = st.gs.url;
+    this._log(`playIndex ${index} stream`);
+    this._resetPositionOnPlay = false;
+    this._needsInitialResync = false;
+    this._needsResyncOnPlay = false;
+    this._trackStartWallMs = performance.now();
+    this._pendingStart = true;
+    // 데이터가 붙기 전에 play()를 먼저 걸어 둔다 — 클릭(사용자 제스처) 컨텍스트가 살아 있는 동안.
+    this._tryPlay(this.audio);
+    // 같은 곡을 위치만 바꿔 다시 여는 경우(startMs > 0)엔 trackchange를 다시 내지 않는다.
+    if (startMs === 0) this._emit("trackchange", { track, index });
+    this._streamAppend(st, index, 0)
+      .then((seg) => {
+        if (!seg) return;
+        st.cur = seg;
+        if (startMs > 0) this.audio.currentTime = seg.start + startMs / 1000;
+        this._emit("durationchange", { durationMs: this.duration() });
+        this._streamFillAhead(st);
+      })
+      .catch((err) => {
+        if (st !== this._stream) return;
+        this._log(`stream start failed ${err && err.message}`);
+        if (err && err.unsupported) {
+          // 이 곡만 못 묶는 경우 — 스트림 전체를 끄지 말고 이 곡만 일반 재생으로.
+          this._teardownStream();
+          this.playIndex(index);
+        } else {
+          this._streamFallback();
+        }
+      });
+  }
+
+  // 지금 곡 바로 뒤에 다음 곡이 이어 붙어 있도록 한다(없으면 내려받아 붙이고, 더 없으면 스트림을 닫는다).
+  _streamFillAhead(st) {
+    if (!st || st !== this._stream || !st.cur || st.filling) return;
+    if (st.segs[st.segs.length - 1] !== st.cur) return; // 이미 다음 곡이 붙어 있음
+    if (performance.now() < st.retryAt) return;
+    const nextIndex = this.repeatMode === "one" ? this.currentIndex : this._computeNextIndex();
+    const nextTrack = nextIndex === null || nextIndex < 0 ? null : this.playlist.tracks[nextIndex];
+    if (!nextTrack || !this._canStream(nextTrack)) {
+      // 더 이어 붙일 수 없는 곡(없음/mp3 아님)이면 닫아서, 이 곡이 끝날 때 평소처럼 ended 처리되게 한다.
+      if (!st.eos) {
+        st.eos = true;
+        st.gs.endOfStream().catch(() => {});
+      }
+      return;
+    }
+    st.eos = false;
+    // 1단계: 다음 곡 바이트를 미리 내려받아 메모리에 둔다(붙이기는 아직 안 함).
+    if (!st.pre || st.pre.index !== nextIndex) {
+      st.filling = true;
+      st.fillPromise = this._fetchTrackBuffer(nextIndex)
+        .then((buf) => {
+          if (st === this._stream) st.pre = { index: nextIndex, buf };
+        })
+        .catch((err) => {
+          this._log(`stream prefetch failed ${err && err.message}`);
+          st.retryAt = performance.now() + (err && err.unsupported ? 0 : STREAM_RETRY_MS);
+        })
+        .finally(() => {
+          st.filling = false;
+          this._streamFillAhead(st);
+        });
+      return;
+    }
+    // 2단계: 현재 곡 끝이 가까워지면 실제로 붙인다.
+    if (st.cur.end - (this.audio.currentTime || 0) > STREAM_APPEND_LEAD_SEC) return;
+    st.filling = true;
+    const { buf } = st.pre;
+    st.pre = null;
+    st.fillPromise = this._streamAppend(st, nextIndex, st.cur.end, buf)
+      .catch((err) => {
+        this._log(`stream fill failed ${err && err.message}`);
+        st.retryAt = performance.now() + STREAM_RETRY_MS;
+      })
+      .finally(() => {
+        st.filling = false;
+      });
+  }
+
+  // 셔플/반복/목록 변경으로 "다음 곡"이 달라졌을 수 있을 때, 미리 붙여 둔 뒷부분을 지우고 다시 채운다.
+  async _streamInvalidateAhead() {
+    const st = this._stream;
+    if (!st || !st.cur) return;
+    st.cur.index = this.currentIndex;
+    st.eos = false;
+    try {
+      await st.fillPromise;
+    } catch {
+      /* 이미 로그됨 */
+    }
+    if (st !== this._stream || !st.cur) return;
+    const at = st.segs.indexOf(st.cur);
+    if (at >= 0 && at < st.segs.length - 1) {
+      st.segs.length = at + 1;
+      try {
+        await st.gs.removeAfter(st.cur.end);
+      } catch (err) {
+        this._log(`stream trim failed ${err && err.message}`);
+      }
+    }
+    st.retryAt = 0;
+    this._streamFillAhead(st);
+  }
+
+  // 이미 붙어 있는 뒷 곡으로 바로 이동(수동 다음 곡 포함).
+  _streamJump(index) {
+    const st = this._stream;
+    if (!st || !st.cur) return false;
+    const at = st.segs.indexOf(st.cur);
+    const seg = st.segs.slice(at + 1).find((s) => s.index === index);
+    if (!seg) return false;
+    this._streamEnter(st, seg);
+    this.audio.currentTime = seg.start;
+    this._tryPlay(this.audio);
+    return true;
+  }
+
+  // 재생 위치가 다음 곡 구간으로 넘어간 것을 알아채 현재 곡 정보를 갱신하고 이벤트를 낸다.
+  _streamEnter(st, seg) {
+    st.cur = seg;
+    this.currentIndex = seg.index;
+    const track = this.currentTrack;
+    this._log(`stream boundary -> ${seg.index}`);
+    this._trackStartWallMs = performance.now();
+    if (this.playlist && this.playlist._queueAnchor == null) this.playlist._queueAnchor = seg.index;
+    this._emit("trackchange", { track, index: seg.index });
+    this._emit("durationchange", { durationMs: this.duration() });
+    // 지난 곡은 버퍼에서 비우고(메모리), 다음 곡을 이어 붙인다.
+    const at = st.segs.indexOf(seg);
+    if (at > 0) {
+      st.segs.splice(0, at);
+      st.gs.removeBefore(seg.start - 1).catch(() => {});
+    }
+    st.retryAt = 0;
+    this._streamFillAhead(st);
+  }
+
+  _streamTick() {
+    const st = this._stream;
+    if (!st || !st.cur) return;
+    const seg = this._segAt(this.audio.currentTime);
+    if (seg && seg !== st.cur) this._streamEnter(st, seg);
+    else this._streamFillAhead(st);
+  }
+
+  // MSE가 안 되는 환경/상황: 이 세션에서는 스트림을 끄고 지금 곡을 기존 방식으로 다시 시작한다.
+  _streamFallback() {
+    const index = this.currentIndex;
+    const posMs = this.position();
+    this._streamDisabled = true;
+    this._teardownStream();
+    if (index < 0) return;
+    this.playIndex(index);
+    if (posMs > 1000) {
+      this.audio.addEventListener("loadedmetadata", () => this.seek(posMs), { once: true });
+    }
   }
 
   isPlaying() {

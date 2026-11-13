@@ -30,7 +30,13 @@ def get_log(date: str, half: str):
 def client_log():
     """브라우저(특히 iOS 백그라운드 재생)에서 보내는 진단 메시지를 로그에 남긴다."""
     data = request.get_json(silent=True) or {}
-    msg = str(data.get("msg", ""))[:300]
-    if msg:
-        applog.log_info("PLAYER", msg)
+    # entries: 클라이언트가 큐에 모았다가 한꺼번에 보내는 형태(화면 꺼진 동안의 기록 포함).
+    # msg: 단건 형태(하위 호환).
+    entries = data.get("entries")
+    if not isinstance(entries, list):
+        entries = [data.get("msg", "")]
+    for entry in entries[:200]:
+        msg = str(entry)[:300]
+        if msg:
+            applog.log_info("PLAYER", msg)
     return ("", 204)

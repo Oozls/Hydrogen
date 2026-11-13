@@ -26,6 +26,8 @@ def track_to_json(track: Track, lyrics_stems: set[str] | None = None) -> dict:
         "has_lyrics": has_lyrics,
         "rating": track.rating,
         "added_at": track.added_at,
+        # 프런트 연속 스트림(MSE) 재생이 mp3만 이어 붙일 수 있어 확장자를 알려 준다.
+        "audio_ext": Path(track.path).suffix.lower().lstrip("."),
     }
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, abort, request, send_file
 
+from lyricstorage import fmp4
 from lyricstorage.models import read_album_art, resize_image_bytes
 from lyricstorage.web.image_utils import AUDIO_MIME_BY_EXT, sniff_image_mimetype
 from lyricstorage.web.lookup import find_track_by_id
@@ -35,6 +36,24 @@ def get_audio(track_id: str):
     # <audio> 탐색바가 정상 동작하려면 필수. max_age를 줘서 같은 곡을 다시 재생할
     # 때(반복재생 등) 매번 새로 안 받고 캐시에서 바로 재생되게 한다.
     return send_file(path, mimetype=mimetype, conditional=True, max_age=3600)
+
+
+@bp.get("/<track_id>/stream")
+def get_stream_audio(track_id: str):
+    """프런트 연속 재생(MSE)용 — m4a를 fMP4로 다시 묶어 내려준다. 못 묶는 파일은 415."""
+    track = find_track_by_id(track_id)
+    if track is None:
+        abort(404)
+    path = Path(track.path)
+    if not path.exists():
+        abort(404)
+    try:
+        body = fmp4.remux(path)
+    except fmp4.Unsupported:
+        abort(415)
+    resp = Response(body, mimetype="audio/mp4")
+    resp.headers["Cache-Control"] = "private, max-age=3600"
+    return resp
 
 
 @bp.get("/<track_id>/art")
