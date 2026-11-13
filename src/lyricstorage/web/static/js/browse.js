@@ -965,6 +965,25 @@ export function setupBrowse(player, playlistApi, onEditTrack, onEditAlbum, onBul
     });
     titleRow.appendChild(editBtn);
 
+    // 이름 없는 "(서클 없음)" 묶음은 실제 서클이 아니라 id가 없어 다운로드/삭제 대상이 아니다.
+    if (entry.name) {
+      const downloadBtn = document.createElement("button");
+      downloadBtn.type = "button";
+      downloadBtn.className = "icon-btn media-card-drag-handle";
+      downloadBtn.title = "서클 전체 다운로드";
+      downloadBtn.appendChild(iconSpan("download", "icon-sm"));
+      downloadBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          const identity = await api.resolveCircle(entry.name);
+          triggerDownload(api.circleDownloadUrl(identity.id));
+        } catch (err) {
+          await alertDialog(err.message);
+        }
+      });
+      titleRow.appendChild(downloadBtn);
+    }
+
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "icon-btn media-card-drag-handle";

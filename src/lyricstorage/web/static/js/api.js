@@ -159,6 +159,7 @@ export const api = {
   updateAlbum: (albumId, { name, artist, year }) =>
     request("PUT", `/api/albums/${albumId}`, { json: { name, artist, year } }),
   deleteAlbum: (albumId) => request("DELETE", `/api/albums/${albumId}`),
+  circleDownloadUrl: (circleId) => `/api/circles/${circleId}/download`,
   deleteCircle: (circleId) => request("DELETE", `/api/circles/${circleId}`),
   uploadAlbumArt: (albumId, file) => {
     const formData = new FormData();

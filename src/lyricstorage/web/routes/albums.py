@@ -21,6 +21,27 @@ from lyricstorage.web.serialize import album_to_json, track_to_json
 bp = Blueprint("albums", __name__, url_prefix="/api/albums")
 
 
+def add_tracks_to_zip(zf: zipfile.ZipFile, tracks, folder: str, used_names: set[str]) -> None:
+    """곡들을 zip의 folder(빈 문자열이면 루트) 아래에 담는다. 앨범/서클 다운로드 공용.
+
+    저장소의 실제 파일명은 해시라 그대로 넣지 않고 곡 제목으로 담는다. 제목이 같은
+    곡이 여러 개면 압축 파일 안에서 서로 덮어쓰지 않게 번호를 붙인다."""
+    prefix = f"{folder}/" if folder else ""
+    for track in tracks:
+        path = Path(track.path)
+        if not path.exists():
+            continue
+        name_base = sanitize_filename(track.title or path.stem)
+        name = f"{prefix}{name_base}{path.suffix}"
+        if name in used_names:
+            i = 2
+            while f"{prefix}{name_base} ({i}){path.suffix}" in used_names:
+                i += 1
+            name = f"{prefix}{name_base} ({i}){path.suffix}"
+        used_names.add(name)
+        zf.write(path, arcname=name)
+
+
 def _track_count(album_id: str) -> int:
     return len(playlist_repo.find_tracks_by_album_id(album_id))
 
@@ -186,23 +207,9 @@ def download_album(album_id: str):
         return jsonify({"error": "해당 앨범의 곡을 찾을 수 없습니다."}), 404
 
     buffer = io.BytesIO()
-    used_names = set()
+    used_names: set[str] = set()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as zf:
-        for track in matching:
-            path = Path(track.path)
-            if not path.exists():
-                continue
-            # 저장소의 실제 파일명은 해시라 그대로 넣지 않고 곡 제목으로 담는다.
-            # 제목이 같은 곡이 여러 개면 압축 파일 안에서 서로 덮어쓰지 않게 번호를 붙인다.
-            name_base = sanitize_filename(track.title or path.stem)
-            name = name_base + path.suffix
-            if name in used_names:
-                i = 2
-                while f"{name_base} ({i}){path.suffix}" in used_names:
-                    i += 1
-                name = f"{name_base} ({i}){path.suffix}"
-            used_names.add(name)
-            zf.write(path, arcname=name)
+        add_tracks_to_zip(zf, matching, "", used_names)
     buffer.seek(0)
 
     zip_name = sanitize_filename(album.name or "(앨범 없음)") + ".zip"
